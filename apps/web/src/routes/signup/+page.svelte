@@ -1,17 +1,17 @@
 <script lang="ts">
-  let name = '';
-  let email = '';
-  let password = '';
-  let confirmPassword = '';
+const name = "";
+const email = "";
+const password = "";
+const confirmPassword = "";
 
-  function handleSubmit() {
-    if (password !== confirmPassword) {
-      alert("Passwords do not match!");
-      return;
-    }
-    // Handle signup logic here
-    console.log({ name, email, password });
-  }
+function handleSubmit() {
+	if (password !== confirmPassword) {
+		alert("Passwords do not match!");
+		return;
+	}
+	// Handle signup logic here
+	console.log({ name, email, password });
+}
 </script>
 
 <div class="hero bg-base-200 min-h-screen">

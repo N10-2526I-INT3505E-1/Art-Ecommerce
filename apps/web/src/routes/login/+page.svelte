@@ -1,11 +1,11 @@
 <script lang="ts">
-  let email = '';
-  let password = '';
+const email = "";
+const password = "";
 
-  function handleSubmit() {
-    // Handle login logic here
-    console.log({ email, password });
-  }
+function handleSubmit() {
+	// Handle login logic here
+	console.log({ email, password });
+}
 </script>
 
 <div class="hero bg-base-200 min-h-screen">

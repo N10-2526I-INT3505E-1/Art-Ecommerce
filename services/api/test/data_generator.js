@@ -1,4 +1,4 @@
-import { faker } from "@faker-js/faker";
+import { faker } from '@faker-js/faker';
 
 export function createRandomUser() {
 	return {
@@ -8,6 +8,6 @@ export function createRandomUser() {
 		first_name: faker.person.firstName(),
 		last_name: faker.person.lastName(),
 		dob: faker.date.birthdate().toDateString(),
-		role: "user",
+		role: 'user',
 	};
 }

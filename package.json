@@ -11,11 +11,12 @@
 		"dev": "if [ ! -d 'services/api/drizzle' ] || [ -z \"$(ls -A services/api/drizzle)\" ]; then (cd services/api && bunx drizzle-kit generate && bunx drizzle-kit push); fi && concurrently \"bun --filter web dev\" \"bun --filter api dev\"",
 		"dev:api": "if [ ! -d 'services/api/drizzle' ] || [ -z \"$(ls -A services/api/drizzle)\" ]; then (cd services/api && bunx drizzle-kit generate && bunx drizzle-kit push); fi && bun --filter api dev",
 		"dev:web": "bun --filter web dev",
-		"lint": "biome check --write . && prettier . --write"
+		"lint": "biome check --write . && prettier . --write",
+		"rmdb": "rm -rf services/api/drizzle && cd services/api && bunx drizzle-kit generate && bunx drizzle-kit push"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.2.4",
-		"@types/bun": "^1.2.21",
+		"@types/bun": "^1.2.22",
 		"concurrently": "^9.2.1",
 		"prettier": "3.6.2",
 		"prettier-plugin-svelte": "^3.4.0",

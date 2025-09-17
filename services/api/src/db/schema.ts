@@ -1,5 +1,4 @@
 // Define database schema using Drizzle ORM for SQLite
-
 import { int, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 export const users = sqliteTable('users', {

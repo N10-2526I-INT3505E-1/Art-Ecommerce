@@ -5,7 +5,7 @@ config({ path: '.env' });
 
 export default defineConfig({
 	out: './drizzle',
-	schema: './src/db/schema.ts',
+	schema: ['./src/users/user.model.ts'],
 	dialect: 'turso',
 	dbCredentials: {
 		url: process.env.TURSO_DATABASE_URL as string,

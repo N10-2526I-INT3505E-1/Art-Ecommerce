@@ -1,5 +1,9 @@
 # User API Service
 
+ - db.ts: Database connection and schema definitions using Drizzle ORM and TypeBox.
+ - index.ts: Main server file setting up Elysia API
+ - user.model.ts: User model schema
+
 ## Technologies
 
 ### Elysia

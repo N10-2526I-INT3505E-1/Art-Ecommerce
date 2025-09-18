@@ -1,6 +1,7 @@
 // Define the User model and its schema using Drizzle ORM and Elysia
 
 import { int, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { sql } from 'drizzle-orm';
 import { createInsertSchema, createSelectSchema } from 'drizzle-typebox';
 import { t } from 'elysia';
 
@@ -15,9 +16,16 @@ export const usersTable = sqliteTable('users', {
 	role: text('role', { enum: ['admin', 'operator', 'user'] })
 		.notNull()
 		.default('user'),
+	created_at: text()
+		.notNull()
+		.default(sql`CURRENT_TIMESTAMP`),
+	updated_at: text()
+		.notNull()
+		.default(sql`(CURRENT_TIMESTAMP)`)
+		.$onUpdate(() => sql`(CURRENT_TIMESTAMP)`),
 });
 
-export const schema = { usersTable };
+export const schema = { usersTable } as const;
 
 export const SignUpSchema = createInsertSchema(usersTable, {
 	email: t.String({ format: 'email' }),
@@ -29,16 +37,6 @@ export const SignUpSchema = createInsertSchema(usersTable, {
 		t.Union([t.String({ format: 'date' }), t.Null(), t.String({ minLength: 0 })], {
 			default: null,
 		}),
-	),
-	role: t.Optional(
-		t.Enum(
-			{
-				user: 'user',
-				operator: 'operator',
-				admin: 'admin',
-			},
-			{ default: 'user' },
-		),
 	),
 });
 

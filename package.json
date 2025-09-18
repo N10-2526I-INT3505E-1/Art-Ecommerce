@@ -11,6 +11,7 @@
 		"dev": "node -e \"const fs = require('fs'); const path = 'services/api/drizzle'; if (!fs.existsSync(path) || fs.readdirSync(path).length === 0) { const { execSync } = require('child_process'); console.log('Drizzle directory not found or empty, running drizzle-kit...'); execSync('bunx drizzle-kit generate && bunx drizzle-kit push', { cwd: 'services/api', stdio: 'inherit' }); }\" && concurrently \"bun --filter web dev\" \"bun --filter api dev\"",
 		"dev:api": "node -e \"const fs = require('fs'); const path = 'services/api/drizzle'; if (!fs.existsSync(path) || fs.readdirSync(path).length === 0) { const { execSync } = require('child_process'); console.log('Drizzle directory not found or empty, running drizzle-kit...'); execSync('bunx drizzle-kit generate && bunx drizzle-kit push', { cwd: 'services/api', stdio: 'inherit' }); }\" && bun --filter api dev",
 		"dev:web": "bun --filter web dev",
+		"build": "bun --filter web build",
 		"lint": "biome check --write . && prettier . --write",
 		"rmdb": "rm -rf services/api/drizzle && cd services/api && bunx drizzle-kit generate && bunx drizzle-kit push"
 	},

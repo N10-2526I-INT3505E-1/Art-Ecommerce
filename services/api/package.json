@@ -3,6 +3,14 @@
 	"version": "1.0.50",
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
+		"db:generate:users": "drizzle-kit generate --config ./drizzle.config.users.ts",
+		"db:push:users": "drizzle-kit push --config ./drizzle.config.users.ts",
+		"db:generate:orders": "drizzle-kit generate --config ./drizzle.config.orders.ts",
+		"db:push:orders": "drizzle-kit push --config ./drizzle.config.orders.ts",
+		"db:generate:products": "drizzle-kit generate --config ./drizzle.config.products.ts",
+		"db:push:products": "drizzle-kit push --config ./drizzle.config.products.ts",
+		"db:generate:payments": "drizzle-kit generate --config ./drizzle.config.payments.ts",
+		"db:push:payments": "drizzle-kit push --config ./drizzle.config.payments.ts",
 		"dev": "bun run --watch src/index.ts"
 	},
 	"dependencies": {

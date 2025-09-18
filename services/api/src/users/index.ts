@@ -1,7 +1,5 @@
 // Elysia API server
 
-import { cors } from '@elysiajs/cors';
-// Auth deps
 import { jwt } from '@elysiajs/jwt';
 import { eq } from 'drizzle-orm';
 import { Elysia, t } from 'elysia';
@@ -27,7 +25,7 @@ export const usersPlugin = new Elysia({ prefix: '/api' })
 		app
 			.post(
 				'/login',
-				async ({ body, set, db, jwt }) => {
+				async ({ body, set, db, jwt, cookie }) => {
 					const [userFromDb] = await db
 						.select()
 						.from(usersTable)
@@ -43,6 +41,15 @@ export const usersPlugin = new Elysia({ prefix: '/api' })
 					}
 					const userPayload = { id: userFromDb.id, email: userFromDb.email, role: userFromDb.role };
 					const token = await jwt.sign(userPayload);
+
+					cookie.auth?.set({
+						value: token,
+						path: '/',
+						httpOnly: true,
+						sameSite: 'lax',
+						maxAge: 60 * 60 * 24 * 7, // 7 days
+					});
+
 					return { token };
 				},
 				{
@@ -120,7 +127,7 @@ export const usersPlugin = new Elysia({ prefix: '/api' })
 					return { user: newUser };
 				},
 				{
-					body: t.Omit(SignUpSchema, ['id', 'role']),
+					body: t.Omit(SignUpSchema, ['id', 'role', 'created_at', 'updated_at']),
 					response: {
 						201: t.Object({ user: t.Omit(UserResponseSchema, ['password']) }),
 						409: ErrorSchema,
@@ -264,7 +271,9 @@ export const usersPlugin = new Elysia({ prefix: '/api' })
 							},
 							{
 								params: t.Object({ id: t.Numeric() }),
-								body: t.Partial(t.Omit(SignUpSchema, ['id', 'password'])),
+								body: t.Partial(
+									t.Omit(SignUpSchema, ['id', 'password', 'role', 'created_at', 'updated_at']),
+								),
 								response: {
 									200: t.Object({ user: UserResponseSchema }),
 									404: ErrorSchema,

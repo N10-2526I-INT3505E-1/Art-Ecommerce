@@ -5,7 +5,7 @@ import {
   ordersTable,
   CreateOrderSchema,
   OrderResponseSchema,
-} from './orders.model';
+} from './order.model';
 import {
   orderItemsTable,
   CreateOrderItemSchema,

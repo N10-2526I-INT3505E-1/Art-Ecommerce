@@ -3,6 +3,7 @@ import { openapi } from '@elysiajs/openapi';
 import { Elysia } from 'elysia';
 
 import { usersPlugin } from './users';
+import { productsAPI } from './products';
 
 const app = new Elysia()
 	.use(
@@ -25,6 +26,7 @@ const app = new Elysia()
 	)
 
 	.use(usersPlugin)
+	.use(productsAPI)
 
 	.get('/', () => ({ status: 'ok' }), {
 		detail: { summary: 'Health check endpoint' },

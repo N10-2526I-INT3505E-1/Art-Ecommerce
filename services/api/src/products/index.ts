@@ -1,11 +1,6 @@
-import { Elysia, NotFoundError, t } from 'elysia';
-
+import { Elysia, t } from 'elysia';
 import { eq } from 'drizzle-orm';
-
-// Import 'db' TỪ FILE CÙNG THƯ MỤC
 import { db } from './db'; 
-
-// Import schema và schema cho OpenAPI
 import { 
     products, 
     selectProductSchema, 
@@ -22,15 +17,16 @@ export const productsAPI = new Elysia({ prefix: '/products' })
   .get(
     '/', 
     async () => {
+      console.log('--- 🚀 ĐÃ NHẬN REQUEST: GET /products ---');
       const allProducts = await db.select().from(products);
+      console.log(`---> 🔍 Đã tìm thấy ${allProducts.length} sản phẩm.`);
       return allProducts;
     },
     {
-      // Khai báo cho OpenAPI:
-      response: t.Array(selectProductSchema), // Trả về 1 mảng các sản phẩm
+      response: t.Array(selectProductSchema),
       detail: {
         summary: 'Get All Products',
-        tags: ['Products'], // Gom nhóm API trong OpenAPI
+        tags: ['Products'],
       },
     }
   )
@@ -42,29 +38,28 @@ export const productsAPI = new Elysia({ prefix: '/products' })
   .get(
     '/:id',
     async ({ params, set }) => {
+      console.log(`--- 🚀 ĐÃ NHẬN REQUEST: GET /products/${params.id} ---`);
       const { id } = params;
       const product = await db.query.products.findFirst({
         where: (products, { eq }) => eq(products.id, id),
-        // Ví dụ nếu bạn muốn join thêm category:
-        // with: {
-        //   category: true 
-        // }
       });
 
       if (!product) {
+        console.log(`---> ❌ LỖI: Không tìm thấy sản phẩm ID: ${id}`);
         set.status = 404;
         return { error: 'Product not found' };
       }
+      
+      console.log(`---> ✅ Đã tìm thấy sản phẩm: ${product.name}`);
       return product;
     },
     {
-      // Khai báo cho OpenAPI:
       params: t.Object({
-        id: t.Numeric(), // Yêu cầu 'id' phải là số
+        id: t.Numeric(),
       }),
       response: {
-        200: selectProductSchema, // Nếu thành công (200) thì trả về 1 sản phẩm
-        404: t.Object({ error: t.String() }) // Nếu lỗi (404)
+        200: selectProductSchema,
+        404: t.Object({ error: t.String() })
       },
       detail: {
         summary: 'Get Product by ID',
@@ -73,10 +68,19 @@ export const productsAPI = new Elysia({ prefix: '/products' })
     }
   )
 
+  /**
+   * Endpoint: POST /products
+   * Tạo sản phẩm mới
+   */
   .post(
     '/',
     async ({body, set}) => {
+        console.log('--- 🚀 ĐÃ NHẬN REQUEST: POST /products ---');
+        console.log('---> 📥 Body nhận được:', body);
+
         const newProduct = await db.insert(products).values(body).returning();
+        
+        console.log(`---> ✅ Đã tạo sản phẩm mới, ID: ${newProduct[0].id}`);
         set.status = 201;
         return newProduct[0];
     },
@@ -92,4 +96,83 @@ export const productsAPI = new Elysia({ prefix: '/products' })
     }
   )
   
-// Bạn có thể thêm .post(), .put(), .delete() ở đây
+  /**
+   * Endpoint: PUT /products/:id
+   * Cập nhật sản phẩm
+   */
+  .put(
+    '/:id',
+    async ({ params, body, set }) => {
+      console.log(`--- 🚀 ĐÃ NHẬN REQUEST: PUT /products/${params.id} ---`);
+      console.log('---> 📥 Body nhận được:', body);
+      
+      const { id } = params;
+      
+      const updatedProduct = await db
+        .update(products)
+        .set(body)
+        .where(eq(products.id, id))
+        .returning();
+
+      if (updatedProduct.length === 0) {
+        console.log(`---> ❌ LỖI: Không tìm thấy sản phẩm ID: ${id} để cập nhật.`);
+        set.status = 404;
+        return { error: 'Product not found' };
+      }
+
+      console.log(`---> ✅ Đã cập nhật sản phẩm ID: ${updatedProduct[0].id}`);
+      return updatedProduct[0];
+    },
+    {
+      params: t.Object({ id: t.Numeric() }),
+      body: t.Partial(insertProductSchema),
+      response: {
+        200: selectProductSchema,
+        404: t.Object({ error: t.String() })
+      },
+      detail: {
+        summary: 'Update a Product',
+        tags: ['Products'],
+      },
+    }
+  )
+
+  /**
+   * Endpoint: DELETE /products/:id
+   * Xóa sản phẩm
+   */
+  .delete(
+    '/:id',
+    async ({ params, set }) => {
+      console.log(`--- 🚀 ĐÃ NHẬN REQUEST: DELETE /products/${params.id} ---`);
+      const { id } = params;
+      
+      const deletedProduct = await db
+        .delete(products)
+        .where(eq(products.id, id))
+        .returning({ deletedId: products.id });
+      
+      if (deletedProduct.length === 0) {
+        console.log(`---> ❌ LỖI: Không tìm thấy sản phẩm ID: ${id} để xóa.`);
+        set.status = 404;
+        return { error: 'Product not found' };
+      }
+      
+      console.log(`---> ✅ Đã xóa sản phẩm ID: ${deletedProduct[0].deletedId}`);
+      return { success: true, deletedId: deletedProduct[0].deletedId };
+    },
+    {
+      params: t.Object({ id: t.Numeric() }),
+      response: {
+        200: t.Object({
+          success: t.Boolean(),
+          deletedId: t.Numeric(),
+        }),
+        404: t.Object({ error: t.String() })
+      },
+      detail: {
+        summary: 'Delete a Product',
+        tags: ['Products'],
+      },
+    }
+  );

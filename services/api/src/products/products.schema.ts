@@ -1,6 +1,6 @@
 // /services/api/src/products/products.schema.ts
 
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, primaryKey } from 'drizzle-orm/sqlite-core';
 import { createSelectSchema, createInsertSchema } from 'drizzle-typebox';
 import { t } from 'elysia';
 import { Intersect, Omit } from '@sinclair/typebox';
@@ -59,3 +59,29 @@ export const insertProductSchema = Omit(
 // Tạo schema TypeBox để validate dữ liệu trả về (response)
 export const selectProductSchema = createSelectSchema(products);
 export const selectCategorySchema = createSelectSchema(categories);
+
+export const tags = sqliteTable('tags', {
+  id: integer('id').primaryKey({autoIncrement:true}),
+  name: text('name').notNull().unique(),
+  type: text('type').notNull(),
+});
+
+export const product_tags = sqliteTable('product_tags', 
+  {
+    productId: integer('product_id').notNull().references(
+      () => products.id, { onDelete: 'cascade',}
+    ),
+    
+    tagId: integer('tag_id').notNull().references(
+      () => tags.id, {onDelete: 'cascade'}
+    ),
+  },
+  (table) => ({
+    pk: primaryKey({columns: [table.productId, table.tagId]}),
+  })
+);
+
+
+
+
+

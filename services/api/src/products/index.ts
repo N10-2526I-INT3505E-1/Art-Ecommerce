@@ -1,6 +1,6 @@
 // File: /services/api/src/products/index.ts
 
-import { and, desc, eq, like, sql } from 'drizzle-orm';
+import { and, desc, eq, like, sql, gte, lte, inArray } from 'drizzle-orm';
 import { Elysia, t } from 'elysia'
 import { db } from './db';
 import { categories, insertProductBody, product_tags, products, selectProductSchema, tags, updateProductBody } from './products.schema';
@@ -101,9 +101,14 @@ export const productsAPI = new Elysia({ prefix: '/products' })
         const search = query.search ? `%${query.search}%` : undefined;
         const categoryId = query.categoryId ? Number(query.categoryId) : undefined;
 
+        const minPrice = query.minPrice ? Number(query.minPrice) : undefined;
+        const maxPrice = query.maxPrice ? Number(query.maxPrice) : undefined;
+
         const conditions = [];
         if (search) conditions.push(like(products.name, search));
         if (categoryId) conditions.push(eq(products.categoryId, categoryId));
+        if (minPrice) conditions.push(gte(products.price, minPrice));
+        if (maxPrice) conditions.push(lte(products.price, maxPrice));
 
         const data = await db.query.products.findMany({
             where: conditions.length > 0 ? and(...conditions) : undefined,
@@ -115,7 +120,11 @@ export const productsAPI = new Elysia({ prefix: '/products' })
             }
         });
 
-        const allItems = await db.select({ count: sql<number>`count(*)` }).from(products);
+        const allItems = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(products)
+        .where(conditions.length > 0 ? and(...conditions) : undefined);
+
         const total = allItems[0]?.count ?? 0;
 
         return {
@@ -133,7 +142,9 @@ export const productsAPI = new Elysia({ prefix: '/products' })
             page: t.Optional(t.String()),
             limit: t.Optional(t.String()),
             search: t.Optional(t.String()),
-            categoryId: t.Optional(t.String())
+            categoryId: t.Optional(t.String()),
+            minPrice: t.Optional(t.String()),
+            maxPrice: t.Optional(t.String())
         }),
         detail: {
             tags: ["Products"],

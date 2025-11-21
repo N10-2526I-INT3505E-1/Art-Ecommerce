@@ -3,7 +3,6 @@ from bs4 import BeautifulSoup
 import time
 import random
 import json
-import unicode
 
 # Link trang danh mục (ví dụ: Tranh phong cảnh vùng cao)
 BASE_URL = "https://bantranh.com"
@@ -205,17 +204,14 @@ TOPIC_KEYS = [
     "thien_nhien", "canh_thien_nhien_chau_a"
 ]
 
-
-def normalize(txt: str):
-    return unidecode.unidecode(txt.lower())
-
 def generate_tags(text):
-    text = normalize(text)
+    text = text.lower()
     tags = []
 
     for key, keywords in TAG_RULES.items():
         for kw in keywords:
-            if normalize(kw) in text:
+            kw = kw.lower()
+            if kw in text:
 
                 # 1. Ngũ hành
                 if key in PHONG_THUY_KEYS:
@@ -285,7 +281,7 @@ def get_product_links(page):
             cnt += 1
     print(cnt)
         
-    return product_links[:1]
+    return product_links[:20]
 
 def get_product_detail(url):
     time.sleep(random.uniform(0.5, 1.5))

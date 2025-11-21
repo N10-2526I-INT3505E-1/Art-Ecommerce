@@ -69,8 +69,20 @@ export const productsRelations = relations(products, ({one, many}) => ({
   productTags: many(product_tags),
 })) 
 
+// connect Product and tag
 export const productTagsRelations = relations(product_tags, ({one}) => ({
   product: one(products, {
-    fields: []
-  })
-}))
+    fields: [product_tags.productId],
+    references: [products.id],
+  }),
+  tag: one(tags, {
+    fields: [product_tags.tagId],
+    references: [tags.id],
+  }),
+}));
+
+// category biet minh co bao nhieu san pham 
+export const categoriesRelations = relations(categories, ({many}) => ({
+  products: many(products),
+}));
+

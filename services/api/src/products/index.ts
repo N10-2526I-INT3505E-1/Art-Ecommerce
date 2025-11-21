@@ -4,6 +4,7 @@ import { Elysia } from 'elysia';
 import { db } from './db';
 import { products, categories, tags, product_tags, insertProductBody, selectProductSchema } from './products.schema';
 import { t } from 'elysia'
+import {like, eq, and, desc, sql} from 'drizzle-orm';
 
 export const productsAPI = new Elysia({ prefix: '/products' })
 
@@ -88,14 +89,139 @@ export const productsAPI = new Elysia({ prefix: '/products' })
       body: insertProductBody
   })
   
-  .get('/', async () => {
-      return await db.select().from(products);
-  },
-  {
-    response: t.Array(selectProductSchema),
+  /**
+   * 2. GET /product (Upgrade)
+   * Support : Pagination, Search, Filter Category
+   * Example : /products?page=1&limit=10&search=ngua&categoryId=5
+   */
+  .get('/', async ({query}) => {
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 12;
+    const offset = (page - 1) * limit;
+
+    const search = query.search ? `%${query.search}%` : undefined;
+    const categoryId = query.categoryId ? Number(query.categoryId): undefined;
+
+    const conditions = [];
+    if (search) conditions.push(like(products.name, search));
+    if (categoryId) conditions.push(eq(products.categoryId, categoryId));
+
+    const data = await db.query.products.findMany({
+        where: conditions.length > 0 ? and (...conditions): undefined,
+        limit: limit,
+        offset: offset,
+        orderBy: [desc(products.createdAt)],
+        with: {
+            category: true,
+        }
+    });
+
+    const allItems = await db.select({count: sql<number>`count(*)`}).from(products);
+    const total = allItems[0].count;
+
+    return {
+        data,
+        pagination: {
+            page,
+            limit,
+            total,
+            totalPages: Math.ceil(total/limit)
+        }
+    };
+  }, {
+    // Validate Query String
+    query: t.Object({
+        page: t.Optional(t.String()),
+        limit: t.Optional(t.String()),
+        search: t.Optional(t.String()),
+        categoryId: t.Optional(t.String())
+    }),
     detail: {
-      summary: 'Get all products', 
-      description: 'Lấy danh sách tất cả các sản phẩm đang có trong Database',
-      tags:['Products']
+        tags: ["Products"],
+        summary: 'List Products (Filter and Pagination)'}
+  })
+
+  // GET /product (details)
+  .get('/:id', async ({params, set}) => {
+    const id = Number(params.id);
+
+    const product = await db.query.products.findFirst({
+        where: eq(products.id, id),
+        with: {
+            category: true, // lay thong tin category
+            productTags: { // lay thong tin tag di kem
+                with: {
+                    tag: true
+                }
+            }
+        }
+    });
+    if (!product) {
+        set.status = 404;
+        return {error: 'Product not found'};
     }
+
+    // lam dep du lieu tags truoc khi tra ve 
+    // bien doi thanh cau truc long nhau thanh mang phang
+    const flatTags = product.productTags.map(pt => pt.tags);
+
+    return {
+        ...product,
+        tags: flatTags,
+        productTags: undefined
+    };
+
+  }, {
+    params: t.Object({
+        id: t.String()
+    }),
+    detail: {
+        tags: ["Products"],
+        summary: 'Get Product Detail'
+    }
+  })
+
+  /**
+   * GET /categories
+   * get category -> menu header
+   */
+  .get('/categories', async() => {
+    return await db.select().from(categories);
+  }, {
+    detail: {
+        tags: ["Products"],
+        summary: 'Get Menu Categories'}
+  })
+
+  /**
+   * GET /tags
+   * get tags -> Sidebar (Phong thuy)
+   */
+  .get('/tags', async() => {
+    return await db.select().from(tags);
+  }, {
+    tags: ["Products"],
+    detail: {summary: 'Get All tags (For filter)'}
+  })
+
+  /**
+   * admin 
+   * DELETE /products/:id
+   */
+  .delete('/:id', async({params, set}) => {
+    const id = Number(params.id);
+    await db.delete(products).where(eq(products.id, id))
+    return { success: true, message: `Deleted product ${id}`};
+
+  }, {
+    params: t.Object({
+        id: t.String()
+    }),
+    detail: {
+        tags: ["Products"],
+        summary: 'Delete Product',
+    },
   });
+
+
+

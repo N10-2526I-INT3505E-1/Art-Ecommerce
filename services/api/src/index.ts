@@ -1,9 +1,8 @@
 import { cors } from '@elysiajs/cors';
 import { openapi } from '@elysiajs/openapi';
 import { Elysia } from 'elysia';
-
-import { usersPlugin } from './users';
 import { productsAPI } from './products';
+import { usersPlugin } from './users';
 
 const app = new Elysia()
 	.use(

@@ -3,6 +3,7 @@ from bs4 import BeautifulSoup
 import time
 import random
 import json
+import unicode
 
 # Link trang danh mục (ví dụ: Tranh phong cảnh vùng cao)
 BASE_URL = "https://bantranh.com"
@@ -190,20 +191,76 @@ TAG_RULES = {
     ],
 }
 
+PHONG_THUY_KEYS = ["hoa", "thuy", "moc", "kim", "tho"]
+INTENT_KEYS = ["tai_loc", "cong_danh", "binh_an", "tinh_duyen", "suc_khoe"]
+STYLE_KEYS = ["hien_dai", "co_dien", "lang_man", "toi_gian"]
+SPACE_KEYS = ["phong_khach", "phong_ngu", "phong_lam_viec", "phong_an", "cau_thang"]
+COLOR_KEYS = ["mau_sac"]
+MOOD_KEYS = ["cam_xuc"]
+COMPOSITION_KEYS = ["bo_cuc"]
+MATERIAL_KEYS = ["chat_lieu"]
+TOPIC_KEYS = [
+    "phong_canh", "truu_tuong", "dong_vat", "phong_thuy",
+    "phat_giao", "dong_ho", "hoa_la", "thon_da",
+    "thien_nhien", "canh_thien_nhien_chau_a"
+]
 
+
+def normalize(txt: str):
+    return unidecode.unidecode(txt.lower())
 
 def generate_tags(text):
-    """Sinh tags từ tên danh mục/tên tranh"""
-    text = text.lower()
+    text = normalize(text)
     tags = []
+
     for key, keywords in TAG_RULES.items():
         for kw in keywords:
-            if kw in text:
-                if key in ["hoa", "thuy", "moc", "kim", "tho"]:
-                    tags.append(f"phong_thuy_{key}")
-                else:
-                    tags.append(f"cau_{key}")
-                break
+            if normalize(kw) in text:
+
+                # 1. Ngũ hành
+                if key in PHONG_THUY_KEYS:
+                    tags.append(f"menh_{key}")  # ví dụ: menh_moc, menh_hoa
+                    break
+
+                # 2. Ý nghĩa phong thủy
+                elif key in INTENT_KEYS:
+                    tags.append(f"y_nghia_{key}")
+                    break
+
+                # 3. Chủ đề
+                elif key in TOPIC_KEYS:
+                    tags.append(f"chu_de_{key}")
+                    break
+
+                # 4. Phong cách nội thất
+                elif key in STYLE_KEYS:
+                    tags.append(f"phong_cach_{key}")
+                    break
+
+                # 5. Không gian treo
+                elif key in SPACE_KEYS:
+                    tags.append(f"khong_gian_{key}")
+                    break
+
+                # 6. Màu sắc
+                elif key in COLOR_KEYS:
+                    tags.append(f"mau_{kw}")
+                    break
+
+                # 7. Cảm xúc
+                elif key in MOOD_KEYS:
+                    tags.append(f"cam_xuc_{kw}")
+                    break
+
+                # 8. Bố cục
+                    tags.append(f"bo_cuc_{key}")
+                    break
+
+                # 9. Chất liệu
+                elif key in MATERIAL_KEYS:
+                    tags.append(f"chat_lieu_{kw}")
+                    break
+
     return list(set(tags))
 
 # ----------------------------------------

@@ -1,8 +1,8 @@
 <script lang="ts">
-const name = "";
-const email = "";
-const password = "";
-const confirmPassword = "";
+let name = "";
+let email = "";
+let password = "";
+let confirmPassword = "";
 
 function handleSubmit() {
 	if (password !== confirmPassword) {

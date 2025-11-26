@@ -2,73 +2,9 @@ import { Elysia, t } from 'elysia';
 import { paymentsTable } from './payments.model';
 import { db } from './db';
 import { eq } from 'drizzle-orm';
-import { createPaymentUrlFromProvider } from './paymentHandle/vnpayPaymentHandle';
-// --- 3. Elysia Type Schemas for Validation & Documentation ---
+import { createPaymentUrl } from './paymentHandle/vnpayPaymentHandle';
+import { createPaymentBodySchema, paymentResponseSchema, errorResponseSchema, updatePaymentBodySchema, updatePaymentParamsSchema, updatePaymentResponseSchema } from './payments.model';
 
-// Schema for the incoming request body
-const createPaymentBodySchema = t.Object({
-	order_id: t.Integer({
-		minimum: 1,
-		error: "A valid 'orderId' is required."
-	}),
-	// We accept amount in cents (as an integer) to avoid float issues
-	amount: t.Integer({
-		minimum: 0,
-		error: "'amount' must be a integer >= 0."
-	}),
-	payment_gateway: t.String()
-});
-
-// Schema for a successful response
-const paymentResponseSchema = t.Object({
-	id: t.Integer(),
-	order_id: t.Integer(),
-	amount: t.String(), // Numeric is returned as a string
-	payment_gateway: t.String(),
-	status: t.String(),
-	paymentUrl: t.String()
-});
-
-// Schema for an error response
-const errorResponseSchema = t.Object({
-	error: t.String()
-});
-const paymentStatusSchema = t.Union([
-	t.Literal('completed'),
-	t.Literal('failed'),
-	t.Literal('cancelled')
-], {
-	error: "Status must be one of 'completed', 'failed', or 'cancelled'."
-});
-
-
-// --- 1. Schema for URL Parameters ---
-// This validates the '/:id' part of the route.
-export const updatePaymentParamsSchema = t.Object({
-	id: t.Numeric({ // t.Numeric is used for path parameters that should be numbers
-		minimum: 1,
-		error: "A valid payment 'id' is required in the URL."
-	})
-});
-
-
-// --- 2. Schema for the Request Body ---
-// This validates the JSON payload sent with the PATCH request.
-export const updatePaymentBodySchema = t.Object({
-	status: paymentStatusSchema
-});
-
-
-// --- 3. Schema for the Successful (200 OK) Response ---
-// This defines the structure of the object returned when the update is successful.
-export const updatePaymentResponseSchema = t.Object({
-	id: t.Integer(),
-	order_id: t.Integer(),
-	amount: t.String(), // The 'numeric' type from the DB is often returned as a string
-	payment_gateway: t.String(),
-	status: t.String() // You could also use paymentStatusSchema here for stricter typing
-});
-// --- 4. The Elysia API Endpoint ---
 
 export const paymentsPlugin = new Elysia({ prefix: '/api' })
 	.post('/payments', async ({ body, set }) => {
@@ -93,7 +29,7 @@ export const paymentsPlugin = new Elysia({ prefix: '/api' })
 				throw new Error('Payment initialization failed.');
 			}
 			set.status = 201; // 201 Created is the correct status for creating a resource
-			const getUrl = createPaymentUrlFromProvider(newPayment.amount);
+			const getUrl = createPaymentUrl(Number(newPayment.amount));
 			const apiResponse = {
 				id: newPayment.id,
 				order_id: newPayment.order_id,
@@ -101,7 +37,7 @@ export const paymentsPlugin = new Elysia({ prefix: '/api' })
 				payment_gateway: newPayment.payment_gateway,
 				status: newPayment.status,
 				// create payment
-				paymentUrl: (await getUrl).paymentUrl,
+				paymentUrl: (await getUrl),
 			};
 			return apiResponse;
 

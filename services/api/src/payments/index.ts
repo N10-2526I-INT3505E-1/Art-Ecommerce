@@ -6,6 +6,7 @@ import { createPaymentUrl } from './paymentHandle/vnpayPaymentHandle';
 import { createPaymentBodySchema, paymentResponseSchema, errorResponseSchema, updatePaymentBodySchema, updatePaymentParamsSchema, updatePaymentResponseSchema } from './payment.model';
 
 export const paymentsPlugin = new Elysia({ prefix: '/api' })
+
 	// POST /api/payments - Creates a new payment record with pending status
 	// Accepts order_id, amount, and payment_gateway in the request body
 	// Returns the created payment with a generated payment URL
@@ -60,6 +61,7 @@ export const paymentsPlugin = new Elysia({ prefix: '/api' })
 			tags: ['Payments']
 		}
 	})
+
 	// PATCH /api/payments/:id - Updates the status of an existing payment
 	// Accepts payment ID in the URL and new status in the request body
 	// Used primarily for webhook callbacks from payment providers
@@ -100,6 +102,7 @@ export const paymentsPlugin = new Elysia({ prefix: '/api' })
 			tags: ['Payments']
 		}
 	})
+	
 	// GET /api/payments/:id - Retrieves payment details by ID
 	// Returns the payment record with all its information (id, order_id, amount, gateway, status, timestamps)
 	.get('/payments/:id', async ({ params, set }) => {

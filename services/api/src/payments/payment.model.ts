@@ -31,7 +31,6 @@ export const createPaymentBodySchema = t.Object({
 		minimum: 1,
 		error: "A valid 'orderId' is required."
 	}),
-	// We accept amount in cents (as an integer) to avoid float issues
 	amount: t.Integer({
 		minimum: 0,
 		error: "'amount' must be a integer >= 0."
@@ -62,7 +61,7 @@ const paymentStatusSchema = t.Union([
 });
 
 
-// --- 1. Schema for URL Parameters ---
+// Schema for URL Parameters 
 export const updatePaymentParamsSchema = t.Object({
 	id: t.Numeric({ 
 		minimum: 1,
@@ -71,13 +70,13 @@ export const updatePaymentParamsSchema = t.Object({
 });
 
 
-// --- 2. Schema for the Request Body ---
+// Schema for the Request Body 
 export const updatePaymentBodySchema = t.Object({
 	status: paymentStatusSchema
 });
 
 
-// --- 3. Schema for the Successful (200 OK) Response ---
+// Schema for the Successful (200 OK) Response
 export const updatePaymentResponseSchema = t.Object({
 	id: t.Integer(),
 	order_id: t.Integer(),

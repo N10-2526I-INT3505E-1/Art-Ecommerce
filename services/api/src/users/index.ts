@@ -1,11 +1,22 @@
 // Elysia API server
 
+import { ForbiddenError, UnauthorizedError } from '@common/errors/httpErrors';
 import { jwt } from '@elysiajs/jwt';
-import { eq } from 'drizzle-orm';
+import { db } from '@user/db';
+import { and, eq, gt } from 'drizzle-orm';
 import { Elysia, t } from 'elysia';
-import { db } from './db';
-import { LoginSchema, SignUpSchema, UserResponseSchema, usersTable } from './user.model';
-import { comparePassword, hashPassword } from './utils/passwordHash';
+import {
+	GoogleLoginSchema,
+	LoginSchema,
+	SafeUserResponseSchema,
+	SignUpSchema,
+	UserAddressResponseSchema,
+	UserAddressSchema,
+	UserResponseSchema,
+	userAddressTable,
+	usersTable,
+} from './user.model';
+import { UserService } from './user.service';
 
 const ErrorSchema = t.Object({
 	message: t.String(),
@@ -16,31 +27,20 @@ if (!process.env.JWT_SECRET) {
 	process.exit(1);
 }
 
-export const usersPlugin = new Elysia({ prefix: '/api' })
+export const usersPlugin = new Elysia({})
 	.decorate('db', db)
 	.get('/', ({ path }) => path)
-	.use(jwt({ name: 'jwt', secret: process.env.JWT_SECRET as string }))
+	.use(jwt({ name: 'jwt', secret: process.env.JWT_SECRET as string, exp: '1m' }))
+	.resolve(({ db, jwt }) => ({
+		userService: new UserService(db, jwt as any),
+	}))
 
 	.group('/auth', (app) =>
 		app
 			.post(
 				'/login',
-				async ({ body, set, db, jwt, cookie }) => {
-					const [userFromDb] = await db
-						.select()
-						.from(usersTable)
-						.where(eq(usersTable.email, body.email));
-					if (!userFromDb) {
-						set.status = 401;
-						return { message: 'Invalid email or password.' };
-					}
-					const passwordMatch = await comparePassword(userFromDb.password, body.password);
-					if (!passwordMatch) {
-						set.status = 401;
-						return { message: 'Invalid email or password.' };
-					}
-					const userPayload = { id: userFromDb.id, email: userFromDb.email, role: userFromDb.role };
-					const token = await jwt.sign(userPayload);
+				async ({ body, set, cookie, userService }) => {
+					const { token } = await userService.login(body);
 
 					cookie.auth?.set({
 						value: token,
@@ -50,6 +50,7 @@ export const usersPlugin = new Elysia({ prefix: '/api' })
 						maxAge: 60 * 60 * 24 * 7, // 7 days
 					});
 
+					set.status = 200;
 					return { token };
 				},
 				{
@@ -64,14 +65,14 @@ export const usersPlugin = new Elysia({ prefix: '/api' })
 					},
 				},
 			)
+
 			.post(
 				'/logout',
-				({ cookie, set }) => {
+				({ cookie }) => {
 					const token = cookie?.auth?.value as string | undefined;
 
 					if (!token) {
-						set.status = 401;
-						return { message: 'Unauthorized: No active session to log out from.' };
+						throw new UnauthorizedError('No active session to log out from.');
 					}
 
 					cookie.auth?.remove();
@@ -87,41 +88,130 @@ export const usersPlugin = new Elysia({ prefix: '/api' })
 						401: ErrorSchema,
 					},
 				},
+			)
+			.post(
+				'/google',
+				async ({ body, set, cookie, userService }) => {
+					const result = await userService.loginWithGoogle(body.token);
+
+					if (result.status === 'login' && result.token) {
+						cookie.auth?.set({
+							value: result.token,
+							path: '/',
+							httpOnly: true,
+							sameSite: 'lax',
+							maxAge: 60 * 60 * 24 * 7, // 7 days
+						});
+					}
+
+					set.status = 200;
+					return result;
+				},
+				{
+					body: GoogleLoginSchema,
+					detail: {
+						tags: ['Authentication'],
+						summary: 'Log in with Google',
+					},
+				},
 			),
 	)
 
 	.group('/users', (app) =>
 		app
+
+			// .get(
+			// 	'/offset',
+			// 	async ({ db, query }) => {
+			// 		const { offset, limit } = query;
+			// 		const userList = await db
+			// 			.select()
+			// 			.from(usersTable)
+			// 			.orderBy(usersTable.id)
+			// 			.limit(limit!)
+			// 			.offset(offset!);
+
+			// 		return { users: userList };
+			// 	},
+			// 	{
+			// 		query: t.Object({
+			// 			offset: t.Number({ default: 0, minimum: 0 }),
+			// 			limit: t.Number({ default: 10, minimum: 1, maximum: 1000 }),
+			// 		}),
+			// 		response: {
+			// 			200: t.Object({ users: t.Array(SafeUserResponseSchema) }),
+			// 		},
+			// 		detail: {
+			// 			tags: ['User Management'],
+			// 			summary: 'User pagination offset/limit',
+			// 		},
+			// 	},
+			// )
+
+			// .get(
+			// 	'/cursor',
+			// 	async ({ db, query }) => {
+			// 		const limit = 10;
+			// 		const cursor = query.cursor;
+
+			// 		const userList = await db
+			// 			.select()
+			// 			.from(usersTable)
+			// 			.orderBy(usersTable.id)
+			// 			.where(gt(usersTable.id, cursor))
+			// 			.limit(limit);
+
+			// 		return { users: userList };
+			// 	},
+			// 	{
+			// 		query: t.Object({
+			// 			cursor: t.Number({ default: 0, minimum: 0 }),
+			// 			limit: t.Number({ default: 10, minimum: 1, maximum: 1000 }),
+			// 		}),
+			// 		response: {
+			// 			200: t.Object({ users: t.Array(SafeUserResponseSchema) }),
+			// 		},
+			// 		detail: {
+			// 			tags: ['User Management'],
+			// 			summary: 'User pagination cursor-based',
+			// 		},
+			// 	},
+			// )
+
+			// .get(
+			// 	'/page',
+			// 	async ({ db, query }) => {
+			// 		const limit = query.per_page;
+			// 		const offset = (query.page - 1) * limit;
+
+			// 		const userList = await db
+			// 			.select()
+			// 			.from(usersTable)
+			// 			.orderBy(usersTable.id)
+			// 			.offset(offset)
+			// 			.limit(limit);
+
+			// 		return { users: userList };
+			// 	},
+			// 	{
+			// 		query: t.Object({
+			// 			page: t.Number({ default: 1, minimum: 1 }),
+			// 			per_page: t.Number({ default: 10, minimum: 1, maximum: 1000 }),
+			// 		}),
+			// 		response: {
+			// 			200: t.Object({ users: t.Array(SafeUserResponseSchema) }),
+			// 		},
+			// 		detail: {
+			// 			tags: ['User Management'],
+			// 			summary: 'User pagination page-based',
+			// 		},
+			// 	},
+			// )
+
 			.post(
 				'/',
-				async ({ body, set, db }) => {
-					const existingEmail = await db
-						.select()
-						.from(usersTable)
-						.where(eq(usersTable.email, body.email));
-					if (existingEmail.length > 0) {
-						set.status = 409;
-						return { message: 'A user with this email already exists.' };
-					}
-					const existingUsername = await db
-						.select()
-						.from(usersTable)
-						.where(eq(usersTable.username, body.username));
-					if (existingUsername.length > 0) {
-						set.status = 409;
-						return { message: 'A user with this username already exists.' };
-					}
-
-					const hashedPassword = await hashPassword(body.password);
-					const [newUser] = await db
-						.insert(usersTable)
-						.values({ ...body, password: hashedPassword })
-						.returning();
-
-					if (!newUser) {
-						set.status = 500;
-						return { message: 'Failed to create user account due to server error.' };
-					}
+				async ({ body, set, userService }) => {
+					const newUser = await userService.createUser(body);
 
 					set.status = 201;
 					return { user: newUser };
@@ -142,16 +232,14 @@ export const usersPlugin = new Elysia({ prefix: '/api' })
 
 			.guard(
 				{
-					beforeHandle: async ({ jwt, set, cookie }) => {
+					beforeHandle: async ({ jwt, cookie }) => {
 						const token = cookie?.auth?.value as string | undefined;
 						if (!token) {
-							set.status = 401;
-							return { message: 'Unauthorized: Missing token' };
+							throw new UnauthorizedError('Missing token');
 						}
 						const payload = await jwt.verify(token);
 						if (!payload) {
-							set.status = 401;
-							return { message: 'Unauthorized: Invalid token' };
+							throw new UnauthorizedError('Invalid or expired token');
 						}
 					},
 				},
@@ -167,21 +255,19 @@ export const usersPlugin = new Elysia({ prefix: '/api' })
 
 						.get(
 							'/',
-							async ({ db, set, user }) => {
+							async ({ user, userService }) => {
 								if (user?.role !== 'admin') {
-									set.status = 403;
-									return { message: 'Forbidden: Admins only' };
+									throw new ForbiddenError('Admins only');
 								}
 
-								const allUsers = await db.select().from(usersTable);
-								return { users: allUsers };
+								const { users } = await userService.getAllUsers();
+								return { users };
 							},
 							{
 								response: {
-									200: t.Object({ users: t.Array(UserResponseSchema) }),
+									200: t.Object({ users: t.Array(SafeUserResponseSchema) }),
 									403: ErrorSchema,
 								},
-
 								detail: {
 									tags: ['User Management'],
 									summary: 'Get all users (Admin Only)',
@@ -191,21 +277,12 @@ export const usersPlugin = new Elysia({ prefix: '/api' })
 
 						.get(
 							'/me',
-							async ({ user, set, db }) => {
+							async ({ user, userService }) => {
 								if (!user || typeof user.id !== 'number') {
-									set.status = 401;
-									return { message: 'Unauthorized' };
+									throw new UnauthorizedError('Invalid user payload');
 								}
-								const [userFromDb] = await db
-									.select()
-									.from(usersTable)
-									.where(eq(usersTable.id, user.id));
-								if (!userFromDb) {
-									set.status = 404;
-									return { message: 'User not found' };
-								}
-								const { password, ...userData } = userFromDb;
-								return { user: userData };
+								const currentUser = await userService.getUserById(user.id);
+								return { user: currentUser };
 							},
 							{
 								response: {
@@ -221,23 +298,21 @@ export const usersPlugin = new Elysia({ prefix: '/api' })
 						)
 
 						.get(
-							'/:id',
-							async ({ params, set, db }) => {
-								const uid = Number(params.id);
-								const [existingUser] = await db
-									.select()
-									.from(usersTable)
-									.where(eq(usersTable.id, uid));
-								if (!existingUser) {
-									set.status = 404;
-									return { message: 'User not found.' };
+							'/:user_id',
+							async ({ params, user, userService }) => {
+								if (user?.role !== 'admin' && user?.id !== Number(params.user_id)) {
+									throw new ForbiddenError(
+										'Only admins or the user themselves can access this information',
+									);
 								}
-								return { user: existingUser };
+								const foundUser = await userService.getUserById(params.user_id);
+								return { user: foundUser };
 							},
 							{
-								params: t.Object({ id: t.Numeric() }),
+								params: t.Object({ user_id: t.Numeric() }),
 								response: {
-									200: t.Object({ user: UserResponseSchema }),
+									200: t.Object({ user: SafeUserResponseSchema }),
+									403: ErrorSchema,
 									404: ErrorSchema,
 								},
 								detail: {
@@ -248,66 +323,44 @@ export const usersPlugin = new Elysia({ prefix: '/api' })
 						)
 
 						.patch(
-							'/:id',
-							async ({ params, body, set, db, user }) => {
-								if (user?.role !== 'admin' && user?.id !== Number(params.id)) {
-									set.status = 403;
-									return {
-										message:
-											'Forbidden: Only admins or the user themselves can update this information',
-									};
+							'/:user_id',
+							async ({ params, body, user, userService }) => {
+								if (user?.role !== 'admin' && user?.id !== Number(params.user_id)) {
+									throw new ForbiddenError(
+										'Only admins or the user themselves can update this information',
+									);
 								}
-								const uid = Number(params.id);
-								const [updatedUser] = await db
-									.update(usersTable)
-									.set(body)
-									.where(eq(usersTable.id, uid))
-									.returning();
-								if (!updatedUser) {
-									set.status = 404;
-									return { message: 'User not found.' };
-								}
+								const updatedUser = await userService.updateUser(params.user_id, body);
 								return { user: updatedUser };
 							},
 							{
-								params: t.Object({ id: t.Numeric() }),
+								params: t.Object({ user_id: t.Numeric() }),
 								body: t.Partial(
 									t.Omit(SignUpSchema, ['id', 'password', 'role', 'created_at', 'updated_at']),
 								),
 								response: {
-									200: t.Object({ user: UserResponseSchema }),
+									200: t.Object({ user: SafeUserResponseSchema }),
 									404: ErrorSchema,
 								},
 								detail: {
 									tags: ['User Management'],
-									summary: 'Partially update a user',
+									summary: 'Partially update a user account information',
 								},
 							},
 						)
+
 						.delete(
-							'/:id',
-							async ({ params, set, db, user }) => {
-								if (user?.role !== 'admin' && user?.id !== Number(params.id)) {
-									set.status = 403;
-									return {
-										message:
-											'Forbidden: Only admins or the user themselves can delete this account',
-									};
+							'/:user_id',
+							async ({ params, user, userService }) => {
+								if (user?.role !== 'admin' && user?.id !== Number(params.user_id)) {
+									throw new ForbiddenError('Only admins or the user themselves can delete this account');
 								}
 
-								const uid = Number(params.id);
-								const [deletedUser] = await db
-									.delete(usersTable)
-									.where(eq(usersTable.id, uid))
-									.returning();
-								if (!deletedUser) {
-									set.status = 404;
-									return { message: 'User not found.' };
-								}
-								return { message: `User with ID ${uid} successfully deleted.` };
+								const result = await userService.deleteUser(params.user_id);
+								return { message: result.message };
 							},
 							{
-								params: t.Object({ id: t.Numeric() }),
+								params: t.Object({ user_id: t.Numeric() }),
 								response: {
 									200: t.Object({ message: t.String() }),
 									404: ErrorSchema,
@@ -317,6 +370,66 @@ export const usersPlugin = new Elysia({ prefix: '/api' })
 									summary: 'Delete a user',
 								},
 							},
+						)
+
+						.post(
+							'/:user_id/addresses',
+							async ({ params, body, set, user, userService }) => {
+								if (user?.role !== 'admin' && user?.id !== Number(params.user_id)) {
+									throw new ForbiddenError('Only admins or the user themselves can add addresses');
+								}
+
+								const newAddress = await userService.addUserAddress(params.user_id, body);
+
+								set.status = 201;
+								return { address: newAddress };
+							},
+							{
+								params: t.Object({ user_id: t.Numeric() }),
+								body: t.Omit(UserAddressSchema, ['id', 'user_id']),
+								response: {
+									201: t.Object({ address: UserAddressResponseSchema }),
+									403: ErrorSchema,
+									404: ErrorSchema,
+									500: ErrorSchema,
+								},
+								detail: {
+									tags: ['User Management'],
+									summary: 'Add a new address for a user',
+								},
+							},
+						)
+
+						.patch(
+							'/:user_id/addresses/:address_id',
+							async ({ params, body, user, userService }) => {
+								if (user?.role !== 'admin' && user?.id !== Number(params.user_id)) {
+									throw new ForbiddenError('Only admins or the user themselves can update addresses');
+								}
+								const updatedAddress = await userService.updateUserAddress(
+									params.user_id,
+									params.address_id,
+									body,
+								);
+
+								return { address: updatedAddress };
+							},
+							{
+								params: t.Object({ user_id: t.Numeric(), address_id: t.Numeric() }),
+								body: t.Partial(UserAddressSchema),
+								response: {
+									200: t.Object({ address: UserAddressResponseSchema }),
+									403: ErrorSchema,
+									404: ErrorSchema,
+									500: ErrorSchema,
+								},
+								detail: {
+									tags: ['User Management'],
+									summary: 'Update an existing address for a user',
+								},
+							},
 						),
 			),
 	);
+
+export type App = typeof usersPlugin 

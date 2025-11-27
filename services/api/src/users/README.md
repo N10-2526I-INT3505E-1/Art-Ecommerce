@@ -7,7 +7,7 @@
 ## Technologies
 
 ### Elysia
-Elysia is a modern, high-performance web framework for Node.js, designed for building APIs with built-in TypeScript support. It offers features like automatic type inference, middleware chaining, and efficient routing, making it ideal for scalable server-side applications. In this project, Elysia handles all HTTP requests, responses, and route definitions.
+Elysia is a modern, high-performance web framework for BunJS, designed for building APIs with built-in TypeScript support. It offers features like automatic type inference, middleware chaining, and efficient routing, making it ideal for scalable server-side applications. In this project, Elysia handles all HTTP requests, responses, and route definitions.
 
 ### OpenAPI
 OpenAPI is a specification for describing RESTful APIs in a machine-readable format. The `@elysiajs/openapi` plugin integrates with Elysia to auto-generate API documentation (e.g., via Swagger UI) based on route schemas and details. This allows developers to explore and test endpoints easily, ensuring clear API contracts.

@@ -3,7 +3,7 @@ import { openapi } from '@elysiajs/openapi';
 import { Elysia } from 'elysia';
 
 import { usersPlugin } from './users';
-import { paymentsPlugin } from './payments';
+import { paymentsPlugin, vnpayIpnHandler } from './payments';
 
 const app = new Elysia()
 	.use(
@@ -27,12 +27,16 @@ const app = new Elysia()
 
 	.use(usersPlugin)
 	.use(paymentsPlugin)
+	.use(vnpayIpnHandler)
 
 	.get('/', () => ({ status: 'ok' }), {
 		detail: { summary: 'Health check endpoint' },
 	})
 
-	.listen(3000);
+	.listen({
+    port: 5000,
+    hostname: '0.0.0.0', 
+});
 
 console.log(`🦊 Elysia server is running at http://${app.server?.hostname}:${app.server?.port}`);
 

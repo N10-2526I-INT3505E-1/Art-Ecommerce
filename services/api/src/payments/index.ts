@@ -4,7 +4,10 @@ import { db } from './db';
 import { eq } from 'drizzle-orm';
 import { createPaymentUrl } from './paymentHandle/vnpayPaymentHandle';
 import { createPaymentBodySchema, paymentResponseSchema, errorResponseSchema, updatePaymentBodySchema, updatePaymentParamsSchema, updatePaymentResponseSchema } from './payment.model';
-
+import { IpnFailChecksum, IpnOrderNotFound, IpnInvalidAmount, InpOrderAlreadyConfirmed, IpnUnknownError, IpnSuccess } from 'vnpay';
+import type { VerifyReturnUrl } from 'vnpay';
+import crypto from 'crypto';
+import { stringify } from 'qs';
 export const paymentsPlugin = new Elysia({ prefix: '/api' })
 
 	// POST /api/payments - Creates a new payment record with pending status
@@ -141,3 +144,77 @@ export const paymentsPlugin = new Elysia({ prefix: '/api' })
 		}
 	})
 	.listen(3000);
+
+// Helper function to sort object keys
+function sortObject(obj: Record<string, any>): Record<string, any> {
+	const sorted: Record<string, any> = {};
+	const keys = Object.keys(obj).sort();
+	for (const key of keys) {
+		sorted[key] = obj[key];
+	}
+	return sorted;
+}
+
+// VNPay IPN endpoint handler
+export const vnpayIpnHandler = new Elysia({ prefix: '/api' })
+	.get('/vnpay_ipn', async ({ query, set }) => {
+		try {
+			const vnp_Params = { ...query };
+			const secureHash = vnp_Params['vnp_SecureHash'] as string;
+
+			delete vnp_Params['vnp_SecureHash'];
+			delete vnp_Params['vnp_SecureHashType'];
+
+			const sortedParams = sortObject(vnp_Params);
+			const secretKey = process.env.VNPAY_HASH_SECRET || '';
+			const signData = stringify(sortedParams, { encode: false });
+			const hmac = crypto.createHmac('sha512', secretKey);
+			const signed = hmac.update(signData).digest('hex');
+
+			if (secureHash !== signed) {
+				set.status = 200;
+				return { RspCode: '97', Message: 'Fail checksum' };
+			}
+
+			const orderId = vnp_Params['vnp_TxnRef'] as string;
+			const rspCode = vnp_Params['vnp_ResponseCode'] as string;
+
+			// Find the payment record by order ID
+			const foundPayment = await db.query.paymentsTable.findFirst({
+				where: eq(paymentsTable.order_id, Number(orderId))
+			});
+
+			if (!foundPayment) {
+				set.status = 200;
+				return { RspCode: '01', Message: 'Order not found' };
+			}
+
+			// Update payment status based on response code
+			if (rspCode === '00') {
+				await db.update(paymentsTable)
+					.set({ status: 'paid' })
+					.where(eq(paymentsTable.id, foundPayment.id));
+
+				set.status = 200;
+				return { RspCode: '00', Message: 'success' };
+			} else {
+				await db.update(paymentsTable)
+					.set({ status: 'failed' })
+					.where(eq(paymentsTable.id, foundPayment.id));
+
+				set.status = 200;
+				return { RspCode: rspCode, Message: 'Payment failed' };
+			}
+
+		} catch (error) {
+			console.error(`VNPay IPN error: ${error}`);
+			set.status = 200;
+			return { RspCode: '99', Message: 'Unknown error' };
+		}
+	}, {
+		detail: {
+			summary: "VNPay IPN Callback",
+			description: "Webhook endpoint for VNPay payment verification using HMAC-SHA512 hash validation.",
+			tags: ['Payments']
+		}
+	});

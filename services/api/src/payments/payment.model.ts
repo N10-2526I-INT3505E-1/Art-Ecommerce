@@ -53,11 +53,12 @@ export const errorResponseSchema = t.Object({
 	error: t.String()
 });
 const paymentStatusSchema = t.Union([
-	t.Literal('completed'),
+	t.Literal('pending'),
+	t.Literal('paid'),
 	t.Literal('failed'),
-	t.Literal('cancelled')
+	t.Literal('refunded')
 ], {
-	error: "Status must be one of 'completed', 'failed', or 'cancelled'."
+	error: "Status must be one of 'pending', 'paid', 'failed', or 'refunded'."
 });
 
 

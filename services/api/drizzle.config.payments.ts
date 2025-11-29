@@ -5,7 +5,7 @@ config({ path: '.env' });
 
 export default defineConfig({
 	out: './drizzle',
-	schema: ['./src/payments/payments.model.ts'],
+	schema: ['./src/payments/payment.model.ts'],
 	dialect: 'turso',
 	dbCredentials: {
 		url: process.env.TURSO_PAYMENTS_DATABASE_URL as string,

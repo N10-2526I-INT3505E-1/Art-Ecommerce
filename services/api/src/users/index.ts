@@ -40,18 +40,26 @@ export const usersPlugin = new Elysia({})
 			.post(
 				'/login',
 				async ({ body, set, cookie, userService }) => {
-					const { token } = await userService.login(body);
+					const { accessToken, refreshToken } = await userService.login(body);
 
 					cookie.auth?.set({
-						value: token,
+						value: accessToken,
 						path: '/',
+						httpOnly: true,
+						sameSite: 'lax',
+						maxAge: 60 * 15, // 15 minutes
+					});
+
+					cookie.refresh_token?.set({
+						value: refreshToken,
+						path: '/api/auth/refresh', 
 						httpOnly: true,
 						sameSite: 'lax',
 						maxAge: 60 * 60 * 24 * 7, // 7 days
 					});
 
 					set.status = 200;
-					return { token };
+					return { token: accessToken };
 				},
 				{
 					body: LoginSchema,
@@ -68,14 +76,20 @@ export const usersPlugin = new Elysia({})
 
 			.post(
 				'/logout',
-				({ cookie }) => {
+				async ({ cookie, userService }) => {
 					const token = cookie?.auth?.value as string | undefined;
+					const refreshToken = cookie?.refresh_token?.value as string | undefined;
 
-					if (!token) {
+					if (!token && !refreshToken) {
 						throw new UnauthorizedError('No active session to log out from.');
 					}
 
+					if (refreshToken) {
+						await userService.logout(refreshToken);
+					}
+
 					cookie.auth?.remove();
+					cookie.refresh_token?.remove();
 					return { ok: true };
 				},
 				{
@@ -94,14 +108,25 @@ export const usersPlugin = new Elysia({})
 				async ({ body, set, cookie, userService }) => {
 					const result = await userService.loginWithGoogle(body.token);
 
-					if (result.status === 'login' && result.token) {
+					if (result.status === 'login' && result.accessToken && result.refreshToken) {
 						cookie.auth?.set({
-							value: result.token,
+							value: result.accessToken,
 							path: '/',
+							httpOnly: true,
+							sameSite: 'lax',
+							maxAge: 60 * 15, // 15 minutes
+						});
+
+						cookie.refresh_token?.set({
+							value: result.refreshToken,
+							path: '/api/auth/refresh',
 							httpOnly: true,
 							sameSite: 'lax',
 							maxAge: 60 * 60 * 24 * 7, // 7 days
 						});
+
+						const { refreshToken, ...response } = result;
+						return response;
 					}
 
 					set.status = 200;
@@ -112,6 +137,38 @@ export const usersPlugin = new Elysia({})
 					detail: {
 						tags: ['Authentication'],
 						summary: 'Log in with Google',
+					},
+				},
+			)
+			.post(
+				'/refresh',
+				async ({ cookie, userService }) => {
+					const refreshToken = cookie?.refresh_token?.value as string | undefined;
+
+					if (!refreshToken) {
+						throw new UnauthorizedError('No refresh token provided');
+					}
+
+					const { accessToken } = await userService.refreshAccessToken(refreshToken);
+
+					cookie.auth?.set({
+						value: accessToken,
+						path: '/',
+						httpOnly: true,
+						sameSite: 'lax',
+						maxAge: 60 * 15, // 15 minutes
+					});
+
+					return { token: accessToken };
+				},
+				{
+					detail: {
+						tags: ['Authentication'],
+						summary: 'Refresh access token',
+					},
+					response: {
+						200: t.Object({ token: t.String() }),
+						401: ErrorSchema,
 					},
 				},
 			),
@@ -210,11 +267,27 @@ export const usersPlugin = new Elysia({})
 
 			.post(
 				'/',
-				async ({ body, set, userService }) => {
-					const newUser = await userService.createUser(body);
+				async ({ body, set, cookie, userService }) => {
+					const { accessToken, refreshToken, ...user } = await userService.createUser(body);
+
+					cookie.auth?.set({
+						value: accessToken,
+						path: '/',
+						httpOnly: true,
+						sameSite: 'lax',
+						maxAge: 60 * 15, // 15 minutes
+					});
+
+					cookie.refresh_token?.set({
+						value: refreshToken,
+						path: '/api/auth/refresh',
+						httpOnly: true,
+						sameSite: 'lax',
+						maxAge: 60 * 60 * 24 * 7, // 7 days
+					});
 
 					set.status = 201;
-					return { user: newUser };
+					return { user };
 				},
 				{
 					body: t.Omit(SignUpSchema, ['id', 'role', 'created_at', 'updated_at']),

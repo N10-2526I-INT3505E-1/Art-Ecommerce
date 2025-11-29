@@ -6,7 +6,7 @@ import {
 } from '@common/errors/httpErrors';
 import type { db as defaultDb } from '@user/db';
 import type { LoginSchema, SignUpSchema, UserAddressSchema } from '@user/user.model';
-import { userAddressTable, usersTable } from '@user/user.model';
+import { refreshTokensTable, userAddressTable, usersTable } from '@user/user.model';
 import { comparePassword, hashPassword } from '@user/utils/passwordHash';
 import { and, eq } from 'drizzle-orm';
 import type { Static } from 'elysia';
@@ -26,7 +26,54 @@ export class UserService {
 	constructor(db: DbClient, jwt: JwtClient) {
 		this.db = db;
 		this.jwt = jwt;
+		if (!process.env.GOOGLE_CLIENT_ID) {
+			console.warn('Warning: GOOGLE_CLIENT_ID is not defined');
+		}
 		this.googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+	}
+
+	async createRefreshToken(userId: number) {
+		const refreshToken = crypto.randomUUID();
+		const time_ms = 7 * 24 * 60 * 60 * 1000;
+		const expiresAt = new Date(Date.now() + time_ms);
+
+		await this.db.insert(refreshTokensTable).values({
+			user_id: userId,
+			token: refreshToken,
+			expires_at: expiresAt,
+		});
+
+		return refreshToken;
+	}
+
+	async refreshAccessToken(refreshToken: string) {
+		const [storedToken] = await this.db
+			.select()
+			.from(refreshTokensTable)
+			.where(eq(refreshTokensTable.token, refreshToken));
+
+		if (!storedToken) {
+			throw new UnauthorizedError('Invalid refresh token');
+		}
+
+		if (storedToken.expires_at < new Date()) {
+			await this.db.delete(refreshTokensTable).where(eq(refreshTokensTable.token, refreshToken));
+			throw new UnauthorizedError('Refresh token expired');
+		}
+
+		const [user] = await this.db
+			.select()
+			.from(usersTable)
+			.where(eq(usersTable.id, storedToken.user_id));
+
+		if (!user) {
+			throw new UnauthorizedError('User not found');
+		}
+
+		const userPayload = { id: user.id, email: user.email, role: user.role };
+		const newAccessToken = await this.jwt.sign(userPayload);
+
+		return { accessToken: newAccessToken };
 	}
 
 	async loginWithGoogle(token: string) {
@@ -51,8 +98,9 @@ export class UserService {
 					email: userFromDb.email,
 					role: userFromDb.role,
 				};
-				const jwtToken = await this.jwt.sign(userPayload);
-				return { status: 'login', token: jwtToken };
+				const accessToken = await this.jwt.sign(userPayload);
+				const refreshToken = await this.createRefreshToken(userFromDb.id);
+				return { status: 'login', accessToken, refreshToken };
 			}
 
 			return {
@@ -84,9 +132,15 @@ export class UserService {
 		}
 
 		const userPayload = { id: userFromDb.id, email: userFromDb.email, role: userFromDb.role };
-		const token = await this.jwt.sign(userPayload);
+		const accessToken = await this.jwt.sign(userPayload);
+		const refreshToken = await this.createRefreshToken(userFromDb.id);
 
-		return { token };
+		return { accessToken, refreshToken };
+	}
+
+	async logout(refreshToken: string) {
+		await this.db.delete(refreshTokensTable).where(eq(refreshTokensTable.token, refreshToken));
+		return { message: 'Logged out successfully' };
 	}
 
 	async createUser(
@@ -118,7 +172,11 @@ export class UserService {
 			throw new InternalServerError('Failed to create user account due to server error.');
 		}
 
-		return newUser;
+		const userPayload = { id: newUser.id, email: newUser.email, role: newUser.role };
+		const accessToken = await this.jwt.sign(userPayload);
+		const refreshToken = await this.createRefreshToken(newUser.id);
+
+		return { ...newUser, accessToken, refreshToken };
 	}
 
 	async getAllUsers() {

@@ -45,7 +45,19 @@ export const userAddressTable = sqliteTable('user_address', {
 		.$onUpdate(() => sql`(CURRENT_TIMESTAMP)`),
 });
 
-export const schema = { usersTable, userAddressTable } as const;
+export const refreshTokensTable = sqliteTable('refresh_tokens', {
+	id: int().primaryKey({ autoIncrement: true }),
+	user_id: int()
+		.notNull()
+		.references(() => usersTable.id, { onDelete: 'cascade' }),
+	token: text().notNull().unique(),
+	expires_at: int({ mode: 'timestamp' }).notNull(),
+	created_at: text()
+		.notNull()
+		.default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const schema = { usersTable, userAddressTable, refreshTokensTable } as const;
 
 export const SignUpSchema = createInsertSchema(usersTable, {
 	email: t.String({ format: 'email' }),

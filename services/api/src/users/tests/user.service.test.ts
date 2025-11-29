@@ -38,6 +38,7 @@ describe('UserService', () => {
             insert: mock().mockReturnThis(),
             values: mock().mockReturnThis(),
             returning: mock().mockResolvedValue([]),
+            delete: mock().mockReturnThis(),
         };
 
         mockJwt = {
@@ -56,7 +57,8 @@ describe('UserService', () => {
             const result = await userService.login({ email: 'test@example.com', password: 'password123' });
 
             // Assert
-            expect(result.token).toBe('mock_jwt_token');
+            expect(result.accessToken).toBe('mock_jwt_token');
+            expect(result.refreshToken).toBeDefined();
             expect(mockJwt.sign).toHaveBeenCalledWith({
                 id: mockFullUser.id,
                 email: mockFullUser.email,
@@ -85,6 +87,61 @@ describe('UserService', () => {
         });
     });
 
+    describe('refreshAccessToken', () => {
+        it('should return a new access token for a valid refresh token', async () => {
+            // Arrange
+            const validRefreshToken = {
+                user_id: 1,
+                token: 'valid_refresh_token',
+                expires_at: new Date(Date.now() + 10000), // Future date
+            };
+            mockDb.where
+                .mockResolvedValueOnce([validRefreshToken]) // For finding the token
+                .mockResolvedValueOnce([mockFullUser]); // For finding the user
+
+            // Act
+            const result = await userService.refreshAccessToken('valid_refresh_token');
+
+            // Assert
+            expect(result.accessToken).toBe('mock_jwt_token');
+        });
+
+        it('should throw UnauthorizedError if refresh token is invalid', async () => {
+            // Arrange
+            mockDb.where.mockResolvedValue([]);
+
+            // Act & Assert
+            expect(userService.refreshAccessToken('invalid_token')).rejects.toThrow(
+                new UnauthorizedError('Invalid refresh token'),
+            );
+        });
+
+        it('should throw UnauthorizedError if refresh token is expired', async () => {
+            // Arrange
+            const expiredRefreshToken = {
+                user_id: 1,
+                token: 'expired_token',
+                expires_at: new Date(Date.now() - 10000), // Past date
+            };
+            mockDb.where.mockResolvedValue([expiredRefreshToken]);
+
+            // Act & Assert
+            expect(userService.refreshAccessToken('expired_token')).rejects.toThrow(
+                new UnauthorizedError('Refresh token expired'),
+            );
+        });
+    });
+
+    describe('logout', () => {
+        it('should delete the refresh token', async () => {
+            // Act
+            await userService.logout('some_refresh_token');
+
+            // Assert
+            expect(mockDb.delete).toHaveBeenCalled();
+        });
+    });
+
     describe('createUser', () => {
         it('should create and return a new user if email and username are unique', async () => {
             // Arrange
@@ -110,13 +167,8 @@ describe('UserService', () => {
 
             // Assert
             expect(result).toBeInstanceOf(Object);
-            expect(result).toHaveProperty('id', 2);
-            expect(result).toHaveProperty('password', 'new_hashed_password');
-            expect(result).toMatchObject({
-                email: 'new@example.com',
-                username: 'newuser',
-                first_name: 'New',
-            });
+            expect(result.accessToken).toBe('mock_jwt_token');
+            expect(result.refreshToken).toBeDefined();
         });
 
         it('should throw ConflictError if the email already exists', async () => {

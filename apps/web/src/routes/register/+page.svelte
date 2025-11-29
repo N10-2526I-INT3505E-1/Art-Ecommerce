@@ -1,11 +1,11 @@
 <script lang="ts">
-    import { enhance } from '$app/forms';
+    import { Lock, type Icon as LucideIcon, Mail, User } from 'lucide-svelte';
+    import { onMount } from 'svelte';
+	import { enhance } from '$app/forms';
     import { goto } from '$app/navigation';
     import { page } from '$app/state';
     import { PUBLIC_GOOGLE_CLIENT_ID } from '$env/static/public';
     import { showToast } from '$lib/toastStore';
-    import { Lock, Mail, User, type Icon as LucideIcon } from 'lucide-svelte';
-    import { onMount } from 'svelte';
 
     let submitting = $state(false);
     
@@ -162,20 +162,22 @@
                 class="mt-8 space-y-4"
                 method="POST"
                 action="?/register"
-                use:enhance={() => {
-                    submitting = true;
-                    document.querySelectorAll('input.validator').forEach(el => el.classList.add('touched'));
+    use:enhance={() => {
+        submitting = true;
+        document.querySelectorAll('input.validator').forEach(el => el.classList.add('touched'));
 
-                    return async ({ result, update }) => {
-                        submitting = false;
-                        if (result.type === 'success' && result.data?.success) {
-                            showToast({ message: 'Account created successfully.', type: 'success' });
-                            await goto('/login');
-                        } else {
-                            await update();
-                        }
-                    };
-                }}
+        return async ({ result, update }) => {
+            submitting = false;
+
+            if (result.type === 'redirect') {
+                showToast({ message: 'Account created successfully.', type: 'success' });
+                await update(); 
+            } 
+            else {
+                await update();
+            }
+        };
+    }}
             >
                 <div class="flow-row flex gap-4">
                     <div class="w-full">

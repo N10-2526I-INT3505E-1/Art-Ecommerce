@@ -3,7 +3,7 @@ import { HTTPError } from 'ky';
 import { api } from '$lib/server/http';
 
 export const handle: Handle = async ({ event, resolve }) => {
-	const requestId = crypto.randomUUID().split('-')[0];
+	const requestId = Bun.randomUUIDv7().split('-')[0];
 
 	const token = event.cookies.get('auth');
 	if (!token) {

@@ -8,7 +8,7 @@ import type { db as defaultDb } from '@user/db';
 import type { LoginSchema, SignUpSchema, UserAddressSchema } from '@user/user.model';
 import { refreshTokensTable, userAddressTable, usersTable } from '@user/user.model';
 import { comparePassword, hashPassword } from '@user/utils/passwordHash';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, or } from 'drizzle-orm';
 import type { Static } from 'elysia';
 import { OAuth2Client } from 'google-auth-library';
 
@@ -33,7 +33,7 @@ export class UserService {
 	}
 
 	async createRefreshToken(userId: number) {
-		const refreshToken = crypto.randomUUID();
+		const refreshToken = Bun.randomUUIDv7();
 		const time_ms = 7 * 24 * 60 * 60 * 1000;
 		const expiresAt = new Date(Date.now() + time_ms);
 
@@ -117,26 +117,39 @@ export class UserService {
 	}
 
 	async login(credentials: Static<typeof LoginSchema>) {
-		const [userFromDb] = await this.db
-			.select()
-			.from(usersTable)
-			.where(eq(usersTable.email, credentials.email));
+        let userFromDb;
 
-		if (!userFromDb) {
-			throw new UnauthorizedError('Invalid email or password.');
-		}
+        if (credentials.email) {
+            [userFromDb] = await this.db
+                .select()
+                .from(usersTable)
+                .where(eq(usersTable.email, credentials.email));
+        } 
+        else if (credentials.username) {
+            [userFromDb] = await this.db
+                .select()
+                .from(usersTable)
+                .where(eq(usersTable.username, credentials.username));
+        }
+        else {
+            throw new UnauthorizedError('Email or Username is required.');
+        }
 
-		const passwordMatch = await comparePassword(credentials.password, userFromDb.password);
-		if (!passwordMatch) {
-			throw new UnauthorizedError('Invalid email or password.');
-		}
+        if (!userFromDb) {
+            throw new UnauthorizedError('Invalid credentials.');
+        }
 
-		const userPayload = { id: userFromDb.id, email: userFromDb.email, role: userFromDb.role };
-		const accessToken = await this.jwt.sign(userPayload);
-		const refreshToken = await this.createRefreshToken(userFromDb.id);
+        const passwordMatch = await comparePassword(credentials.password, userFromDb.password);
+        if (!passwordMatch) {
+            throw new UnauthorizedError('Invalid credentials.');
+        }
 
-		return { accessToken, refreshToken };
-	}
+        const userPayload = { id: userFromDb.id, email: userFromDb.email, role: userFromDb.role };
+        const accessToken = await this.jwt.sign(userPayload);
+        const refreshToken = await this.createRefreshToken(userFromDb.id);
+
+        return { accessToken, refreshToken };
+    }
 
 	async logout(refreshToken: string) {
 		await this.db.delete(refreshTokensTable).where(eq(refreshTokensTable.token, refreshToken));
@@ -283,6 +296,7 @@ export class UserService {
 
 			return updatedAddress;
 		} catch (error) {
+			if (error instanceof NotFoundError) throw error;
 			console.error('Transaction failed:', error);
 			throw new InternalServerError('Failed to update address due to a server error.');
 		}

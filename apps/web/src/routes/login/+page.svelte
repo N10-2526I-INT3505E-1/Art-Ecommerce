@@ -1,11 +1,12 @@
 <script lang="ts">
-    import { enhance } from '$app/forms';
+    
+    import { Lock, type Icon as LucideIcon, User } from 'lucide-svelte';
+    import { onMount } from 'svelte';
+	import { enhance } from '$app/forms';
     import { goto } from '$app/navigation';
     import { page } from '$app/state';
     import { PUBLIC_GOOGLE_CLIENT_ID } from '$env/static/public';
     import { showToast } from '$lib/toastStore';
-    import { Lock, User, type Icon as LucideIcon } from 'lucide-svelte';
-    import { onMount } from 'svelte';
 
     let submitting = $state(false);
 

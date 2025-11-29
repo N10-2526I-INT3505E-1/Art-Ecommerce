@@ -1,7 +1,5 @@
-import { hash, verify } from 'argon2';
-
 export const hashPassword = async (password: string) => {
-	return await hash(password);
+	return await Bun.password.hash(password, "argon2id");
 };
 
 /**
@@ -10,8 +8,8 @@ export const hashPassword = async (password: string) => {
  * @param hashed - The Argon2 hashed password to verify against.
  * @param plain - The plaintext password provided by the user.
  * @returns Promise<boolean> - Resolves to true if the plaintext matches the hash, otherwise false.
- * @throws Error - Propagates errors from argon2.verify (for example, if the provided hash is malformed).
+ * @throws Error
  */
-export const comparePassword = async (hashed: string, plain: string) => {
-	return await verify(hashed, plain);
-};
+export async function comparePassword(plain: string, hash: string): Promise<boolean> {
+    return await Bun.password.verify(plain, hash, 'argon2id');
+}

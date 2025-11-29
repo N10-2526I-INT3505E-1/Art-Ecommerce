@@ -82,8 +82,9 @@ export const UserAddressSchema = createInsertSchema(userAddressTable, {
 });
 
 export const LoginSchema = t.Object({
-	email: t.String({ format: 'email' }),
-	password: t.String({ minLength: 6 }),
+    email: t.Optional(t.String({ format: 'email' })),
+    username: t.Optional(t.String()),
+    password: t.String({ minLength: 6 }),
 });
 
 export const GoogleLoginSchema = t.Object({

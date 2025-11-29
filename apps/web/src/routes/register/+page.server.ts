@@ -1,4 +1,4 @@
-import { type Actions, fail, redirect } from '@sveltejs/kit';
+import { type Actions, fail, isRedirect, redirect } from '@sveltejs/kit'; 
 import { HTTPError } from 'ky';
 import { api } from '$lib/server/http';
 import type { PageServerLoad } from './$types';
@@ -33,12 +33,21 @@ export const actions: Actions = {
             await client.post('api/users', { json: payload }).json();
             throw redirect(303, '/login');
         } catch (e) {
+            if (isRedirect(e)) {
+                throw e;
+            }
+
             if (e instanceof HTTPError) {
                 const body = await e.response.json().catch(() => null);
+                console.error('API Error:', body);
+                
                 return fail(e.response.status ?? 400, {
                     message: body?.message ?? 'Sign up failed.'
                 });
             }
+            
+            console.error('Unexpected Register Error:', e);
+            
             return fail(500, { message: 'An error occurred. Please try again.' });
         }
     }

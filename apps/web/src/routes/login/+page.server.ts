@@ -3,48 +3,44 @@ import { HTTPError } from 'ky';
 import { api } from '$lib/server/http';
 
 export const actions: Actions = {
-	login: async (event) => {
-		const fd = await event.request.formData();
-		const email = String(fd.get('email') ?? '');
-		const password = String(fd.get('password') ?? '');
+    login: async (event) => {
+        const fd = await event.request.formData();
+        
+        const loginId = String(fd.get('loginId') ?? '');
+        const password = String(fd.get('password') ?? '');
 
-		if (!email || !password) {
-			return fail(400, { message: 'Email and password are required.' });
-		}
+        if (!loginId || !password) {
+            return fail(400, { message: 'Username/Email and password are required.' });
+        }
 
-		const payload = { email, password };
-		const client = api(event);
+        const payload = loginId.includes('@') 
+            ? { email: loginId, password } 
+            : { username: loginId, password };
 
-		try {
-			const response = await client
-				.post('api/auth/login', { json: payload })
-				.json<{ token: string }>();
+        const client = api(event);
 
-			event.cookies.set('auth', response.token, {
-				path: '/',
-				httpOnly: true,
-				sameSite: 'lax',
-				maxAge: 60 * 60 * 24 * 7, // 7 days
-			});
-		} catch (e) {
-			if (e instanceof HTTPError) {
-				const body = await e.response.json().catch(() => null);
-				return fail(e.response.status ?? 400, {
-					message: body?.message ?? 'Invalid credentials or server error.',
-				});
-			}
-			console.error('An unexpected error occurred during API call:', e);
-			return fail(500, { message: 'An unexpected error occurred. Please try again.' });
-		}
+        try {
+            const response = await client
+                .post('api/auth/login', { json: payload })
+                .json<{ token: string }>();
 
-		return { success: true, message: 'Login successful!' };
-	},
-};
+            event.cookies.set('auth', response.token, {
+                path: '/',
+                httpOnly: true,
+                sameSite: 'lax',
+                maxAge: 60 * 60 * 24 * 7, // 7 days
+            });
+        } catch (e) {
+            if (e instanceof HTTPError) {
+                const body = await e.response.json().catch(() => null);
+                return fail(e.response.status ?? 400, {
+                    message: body?.message ?? 'Invalid credentials.'
+                });
+            }
+            console.error('Login Error:', e);
+            return fail(500, { message: 'An unexpected error occurred.' });
+        }
 
-export const load = async (event) => {
-	const user = event.locals.user;
-	if (user) {
-		return { user };
-	}
-	return {};
+        return { success: true, message: 'Login successful!' };
+    },
 };

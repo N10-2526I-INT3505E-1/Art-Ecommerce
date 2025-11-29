@@ -44,13 +44,13 @@ const vnpay = new VNPay({
 const tomorrow = new Date();
 tomorrow.setDate(tomorrow.getDate() + 1);
 
-export const createPaymentUrl = async (amount: number): Promise<string> => {
+export const createPaymentUrl = async (amount: number, transaction_id: string): Promise<string> => {
 
 	const paymentUrl = vnpay.buildPaymentUrl({
 		vnp_Amount: amount,
 		vnp_IpAddr: '1.1.1.1',
-		vnp_TxnRef: '123456',
-		vnp_OrderInfo: 'Thanh toan don hang 123456',
+		vnp_TxnRef: transaction_id,
+		vnp_OrderInfo: 'Thanh toan don hang ${vnp_TxnRef}.',
 		vnp_OrderType: ProductCode.Other,
 		vnp_ReturnUrl: 'https://www.google.com/',
 		//vnp_ReturnUrl: 'http://localhost:3000/vnpay-return',

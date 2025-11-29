@@ -8,6 +8,7 @@ import { IpnFailChecksum, IpnOrderNotFound, IpnInvalidAmount, InpOrderAlreadyCon
 import type { VerifyReturnUrl } from 'vnpay';
 import crypto from 'crypto';
 import { stringify } from 'qs';
+import { nanoid } from 'nanoid';
 export const paymentsPlugin = new Elysia({ prefix: '/api' })
 
 	// POST /api/payments - Creates a new payment record with pending status
@@ -16,12 +17,14 @@ export const paymentsPlugin = new Elysia({ prefix: '/api' })
 	.post('/payments', async ({ body, set }) => {
 		try {
 			// A transaction ensures the insert is an all-or-nothing operation.
+			const transactionId = nanoid(16); // Example: "aBc123DeFg"
 			const [newPayment] = await db.transaction(async (tx) => {
 				const result = await tx.insert(paymentsTable)
 					.values({
 						order_id: body.order_id,
 						amount: body.amount.toString(),
 						payment_gateway: body.payment_gateway,
+						transaction_id: transactionId,
 						status: 'pending'
 					})
 					.returning(); // Return the newly created record
@@ -34,13 +37,19 @@ export const paymentsPlugin = new Elysia({ prefix: '/api' })
 				throw new Error('Payment initialization failed.');
 			}
 			set.status = 201; 
-			const getUrl = createPaymentUrl(Number(newPayment.amount));
+			const getUrl = createPaymentUrl(Number(newPayment.amount), newPayment.transaction_id || '');
+
+			if (getUrl == null) {
+				throw new Error('Failed to create paymentUrl')
+			}
+
 			const apiResponse = {
 				id: newPayment.id,
 				order_id: newPayment.order_id,
 				amount: newPayment.amount, // Numeric is returned as a string
 				payment_gateway: newPayment.payment_gateway,
 				status: newPayment.status,
+				transaction_id: newPayment.transaction_id,
 				paymentUrl: (await getUrl),
 			};
 			return apiResponse;
@@ -60,7 +69,7 @@ export const paymentsPlugin = new Elysia({ prefix: '/api' })
 		},
 		detail: {
 			summary: "Create a Pending Payment",
-			description: "Creates a new payment record with a 'pending' status. The body should contain orderId, amount, and paymentGateway.",
+			description: "Creates a new payment record with a 'pending' status. The body should contain order_id, amount, and paymentGateway.",
 			tags: ['Payments']
 		}
 	})

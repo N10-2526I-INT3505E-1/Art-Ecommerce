@@ -1,7 +1,7 @@
 // File: /services/api/src/products/index.ts
 
 import { Elysia, t } from 'elysia';
-import { ProductService } from './products.service'; // <--- Check kỹ dòng này
+import { ProductService } from './products.service';
 import { insertProductBody, updateProductBody, selectProductSchema } from './products.schema';
 
 export const productsAPI = new Elysia({ prefix: '/products' })

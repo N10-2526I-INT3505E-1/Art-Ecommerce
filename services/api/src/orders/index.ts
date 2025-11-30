@@ -10,7 +10,7 @@ import {
   orderItemsTable,
   CreateOrderItemSchema,
   OrderItemResponseSchema,
-} from './order_items.model';
+} from './order_item.model';
 
 const ErrorSchema = t.Object({ message: t.String() });
 

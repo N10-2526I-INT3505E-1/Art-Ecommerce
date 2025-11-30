@@ -1,28 +1,25 @@
 import { Elysia, t } from 'elysia';
-import { eq } from 'drizzle-orm';
-import { db } from './db';
+import { OrderService } from './order.service'; // Import service vừa tạo
 import {
-  ordersTable,
   CreateOrderSchema,
   OrderResponseSchema,
 } from './order.model';
 import {
-  orderItemsTable,
   CreateOrderItemSchema,
   OrderItemResponseSchema,
-} from './order_items.model';
+} from './order_item.model';
 
 const ErrorSchema = t.Object({ message: t.String() });
 
 export const ordersPlugin = new Elysia({ prefix: '/api' })
-  .decorate('db', db)
+  // Không cần decorate 'db' nữa vì Service đã tự lo rồi
   .group('/orders', (app) =>
     app
       // create order
       .post(
         '/',
-        async ({ body, set, db }) => {
-          const [newOrder] = await db.insert(ordersTable).values(body).returning();
+        async ({ body, set }) => {
+          const newOrder = await OrderService.createOrder(body as any);
           if (!newOrder) {
             set.status = 500;
             return { message: 'Failed to create order.' };
@@ -43,8 +40,8 @@ export const ordersPlugin = new Elysia({ prefix: '/api' })
       // get all orders
       .get(
         '/',
-        async ({ db }) => {
-          const orders = await db.select().from(ordersTable);
+        async () => {
+          const orders = await OrderService.getAllOrders();
           return { orders };
         },
         {
@@ -56,11 +53,8 @@ export const ordersPlugin = new Elysia({ prefix: '/api' })
       // get order by id
       .get(
         '/:id',
-        async ({ params, db, set }) => {
-          const [order] = await db
-            .select()
-            .from(ordersTable)
-            .where(eq(ordersTable.id, Number(params.id)));
+        async ({ params, set }) => {
+          const order = await OrderService.getOrderById(Number(params.id));
           if (!order) {
             set.status = 404;
             return { message: 'Order not found.' };
@@ -80,12 +74,8 @@ export const ordersPlugin = new Elysia({ prefix: '/api' })
       // update order (partial)
       .patch(
         '/:id',
-        async ({ params, body, set, db }) => {
-          const [updated] = await db
-            .update(ordersTable)
-            .set(body as any) 
-            .where(eq(ordersTable.id, Number(params.id)))
-            .returning();
+        async ({ params, body, set }) => {
+          const updated = await OrderService.updateOrder(Number(params.id), body as any);
           if (!updated) {
             set.status = 404;
             return { message: 'Order not found.' };
@@ -106,11 +96,8 @@ export const ordersPlugin = new Elysia({ prefix: '/api' })
       // delete order
       .delete(
         '/:id',
-        async ({ params, db, set }) => {
-          const [deleted] = await db
-            .delete(ordersTable)
-            .where(eq(ordersTable.id, Number(params.id)))
-            .returning();
+        async ({ params, set }) => {
+          const deleted = await OrderService.deleteOrder(Number(params.id));
           if (!deleted) {
             set.status = 404;
             return { message: 'Order not found.' };
@@ -130,18 +117,9 @@ export const ordersPlugin = new Elysia({ prefix: '/api' })
           // add item to order
           .post(
             '/',
-            async ({ params, body, set, db }) => {
-              const snapshot = body.product_snapshot
-                ? JSON.stringify(body.product_snapshot)
-                : JSON.stringify({}); 
-              const toInsert = {
-                order_id: Number(params.orderId),
-                product_id: body.product_id,
-                quantity: body.quantity,
-                price_per_item: body.price_per_item, 
-                product_snapshot: snapshot,
-              };
-              const [newItem] = await db.insert(orderItemsTable).values(toInsert).returning();
+            async ({ params, body, set }) => {
+              const newItem = await OrderService.addItemToOrder(Number(params.orderId), body);
+              
               if (!newItem) {
                 set.status = 500;
                 return { message: 'Failed to add item.' };
@@ -163,16 +141,9 @@ export const ordersPlugin = new Elysia({ prefix: '/api' })
           // get items of an order
           .get(
             '/',
-            async ({ params, db }) => {
-              const items = await db
-                .select()
-                .from(orderItemsTable)
-                .where(eq(orderItemsTable.order_id, Number(params.orderId)));
-              const parsed = items.map((it) => ({
-                ...it,
-                product_snapshot: it.product_snapshot ? JSON.parse(it.product_snapshot) : null,
-              }));
-              return { items: parsed };
+            async ({ params }) => {
+              const items = await OrderService.getOrderItems(Number(params.orderId));
+              return { items };
             },
             {
               params: t.Object({ orderId: t.Numeric() }),

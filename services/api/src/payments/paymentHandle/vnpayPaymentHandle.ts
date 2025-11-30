@@ -44,7 +44,7 @@ const vnpay = new VNPay({
 const tomorrow = new Date();
 tomorrow.setDate(tomorrow.getDate() + 1);
 
-export const createPaymentUrl = async (amount: number, transaction_id: string): Promise<string> => {
+export const createVNPPaymentUrl = async (amount: number, transaction_id: string): Promise<string> => {
 
 	const paymentUrl = vnpay.buildPaymentUrl({
 		vnp_Amount: amount,

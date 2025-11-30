@@ -1,6 +1,6 @@
 import { Elysia, t } from 'elysia';
 import { ProductService } from './products.service';
-import { insertProductBody, updateProductBody } from './products.schema';
+import { insertProductBody, updateProductBody, selectProductSchema } from './products.schema';
 
 export const productsAPI = new Elysia({ prefix: '/products' })
 
@@ -19,6 +19,8 @@ export const productsAPI = new Elysia({ prefix: '/products' })
         return await ProductService.getRecommendations(body.tags || []);
     }, {
         body: t.Object({ tags: t.Array(t.String()) }),
+        // Khai báo response để Swagger hiện ví dụ kết quả trả về
+        response: t.Array(selectProductSchema),
         detail: { tags: ["Products"], summary: 'Get AI Recommendations' }
     })
 
@@ -64,6 +66,7 @@ export const productsAPI = new Elysia({ prefix: '/products' })
         return await ProductService.getRelated(params.id);
     }, {
         params: t.Object({ id: t.String() }),
+        response: t.Array(selectProductSchema), // Swagger sẽ hiện danh sách sản phẩm
         detail: { tags: ["Products"], summary: 'Get Related' }
     })
 

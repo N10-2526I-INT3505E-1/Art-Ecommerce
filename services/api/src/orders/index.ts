@@ -1,32 +1,23 @@
 import { Elysia, t } from 'elysia';
-import { eq } from 'drizzle-orm';
-import { db } from './db';
+import { OrderService } from './order.service';
 import {
-  ordersTable,
   CreateOrderSchema,
   OrderResponseSchema,
 } from './order.model';
 import {
-  orderItemsTable,
   CreateOrderItemSchema,
   OrderItemResponseSchema,
-} from './order_items.model';
-
-const ErrorSchema = t.Object({ message: t.String() });
+} from './order_item.model';
 
 export const ordersPlugin = new Elysia({ prefix: '/api' })
-  .decorate('db', db)
   .group('/orders', (app) =>
     app
-      // create order
+      // 1. Create Order
       .post(
         '/',
-        async ({ body, set, db }) => {
-          const [newOrder] = await db.insert(ordersTable).values(body).returning();
-          if (!newOrder) {
-            set.status = 500;
-            return { message: 'Failed to create order.' };
-          }
+        async ({ body, set }) => {
+          // Chỉ cần gọi hàm, lỗi 500 sẽ do Global Handler lo
+          const newOrder = await OrderService.createOrder(body as any);
           set.status = 201;
           return { order: newOrder };
         },
@@ -34,17 +25,17 @@ export const ordersPlugin = new Elysia({ prefix: '/api' })
           body: t.Omit(CreateOrderSchema, ['id', 'created_at', 'updated_at']),
           response: {
             201: t.Object({ order: OrderResponseSchema }),
-            500: ErrorSchema,
+            // Không cần khai báo response 500 ở đây nữa nếu không muốn Swagger quá dài
           },
           detail: { tags: ['Orders'], summary: 'Create a new order' },
         },
       )
 
-      // get all orders
+      // 2. Get All Orders
       .get(
         '/',
-        async ({ db }) => {
-          const orders = await db.select().from(ordersTable);
+        async () => {
+          const orders = await OrderService.getAllOrders();
           return { orders };
         },
         {
@@ -53,43 +44,28 @@ export const ordersPlugin = new Elysia({ prefix: '/api' })
         },
       )
 
-      // get order by id
+      // 3. Get Order By ID
       .get(
         '/:id',
-        async ({ params, db, set }) => {
-          const [order] = await db
-            .select()
-            .from(ordersTable)
-            .where(eq(ordersTable.id, Number(params.id)));
-          if (!order) {
-            set.status = 404;
-            return { message: 'Order not found.' };
-          }
+        async ({ params }) => {
+          // Nếu không tìm thấy, Service ném NotFoundError -> Global Handler bắt -> trả về 404 JSON
+          const order = await OrderService.getOrderById(Number(params.id));
           return { order };
         },
         {
           params: t.Object({ id: t.Numeric() }),
           response: {
             200: t.Object({ order: OrderResponseSchema }),
-            404: ErrorSchema,
           },
           detail: { tags: ['Orders'], summary: 'Get order by ID' },
         },
       )
 
-      // update order (partial)
+      // 4. Update Order
       .patch(
         '/:id',
-        async ({ params, body, set, db }) => {
-          const [updated] = await db
-            .update(ordersTable)
-            .set(body as any) 
-            .where(eq(ordersTable.id, Number(params.id)))
-            .returning();
-          if (!updated) {
-            set.status = 404;
-            return { message: 'Order not found.' };
-          }
+        async ({ params, body }) => {
+          const updated = await OrderService.updateOrder(Number(params.id), body as any);
           return { order: updated };
         },
         {
@@ -97,55 +73,32 @@ export const ordersPlugin = new Elysia({ prefix: '/api' })
           body: t.Partial(t.Omit(CreateOrderSchema, ['id', 'created_at', 'updated_at'])),
           response: {
             200: t.Object({ order: OrderResponseSchema }),
-            404: ErrorSchema,
           },
           detail: { tags: ['Orders'], summary: 'Update an order' },
         },
       )
 
-      // delete order
+      // 5. Delete Order
       .delete(
         '/:id',
-        async ({ params, db, set }) => {
-          const [deleted] = await db
-            .delete(ordersTable)
-            .where(eq(ordersTable.id, Number(params.id)))
-            .returning();
-          if (!deleted) {
-            set.status = 404;
-            return { message: 'Order not found.' };
-          }
-          return { message: `Order with ID ${params.id} deleted.` };
+        async ({ params }) => {
+          await OrderService.deleteOrder(Number(params.id));
+          return { message: `Đã xóa đơn hàng ID ${params.id}.` };
         },
         {
           params: t.Object({ id: t.Numeric() }),
-          response: { 200: t.Object({ message: t.String() }), 404: ErrorSchema },
+          response: { 200: t.Object({ message: t.String() }) },
           detail: { tags: ['Orders'], summary: 'Delete an order' },
         },
       )
 
-      // nested items group
+      // 6. Nested Items Route
       .group('/:orderId/items', (items) =>
         items
-          // add item to order
           .post(
             '/',
-            async ({ params, body, set, db }) => {
-              const snapshot = body.product_snapshot
-                ? JSON.stringify(body.product_snapshot)
-                : JSON.stringify({}); 
-              const toInsert = {
-                order_id: Number(params.orderId),
-                product_id: body.product_id,
-                quantity: body.quantity,
-                price_per_item: body.price_per_item, 
-                product_snapshot: snapshot,
-              };
-              const [newItem] = await db.insert(orderItemsTable).values(toInsert).returning();
-              if (!newItem) {
-                set.status = 500;
-                return { message: 'Failed to add item.' };
-              }
+            async ({ params, body, set }) => {
+              const newItem = await OrderService.addItemToOrder(Number(params.orderId), body);
               set.status = 201;
               return { item: newItem };
             },
@@ -154,25 +107,16 @@ export const ordersPlugin = new Elysia({ prefix: '/api' })
               body: t.Omit(CreateOrderItemSchema, ['id', 'order_id']),
               response: {
                 201: t.Object({ item: OrderItemResponseSchema }),
-                500: ErrorSchema,
               },
               detail: { tags: ['Order Items'], summary: 'Add an item to order' },
             },
           )
 
-          // get items of an order
           .get(
             '/',
-            async ({ params, db }) => {
-              const items = await db
-                .select()
-                .from(orderItemsTable)
-                .where(eq(orderItemsTable.order_id, Number(params.orderId)));
-              const parsed = items.map((it) => ({
-                ...it,
-                product_snapshot: it.product_snapshot ? JSON.parse(it.product_snapshot) : null,
-              }));
-              return { items: parsed };
+            async ({ params }) => {
+              const items = await OrderService.getOrderItems(Number(params.orderId));
+              return { items };
             },
             {
               params: t.Object({ orderId: t.Numeric() }),

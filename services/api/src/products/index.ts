@@ -1,5 +1,7 @@
+// File: /services/api/src/products/index.ts
+
 import { Elysia, t } from 'elysia';
-import { ProductService } from './products.service';
+import { ProductService } from './products.service'; // <--- Check kỹ dòng này
 import { insertProductBody, updateProductBody, selectProductSchema } from './products.schema';
 
 export const productsAPI = new Elysia({ prefix: '/products' })
@@ -19,12 +21,11 @@ export const productsAPI = new Elysia({ prefix: '/products' })
         return await ProductService.getRecommendations(body.tags || []);
     }, {
         body: t.Object({ tags: t.Array(t.String()) }),
-        // Khai báo response để Swagger hiện ví dụ kết quả trả về
         response: t.Array(selectProductSchema),
         detail: { tags: ["Products"], summary: 'Get AI Recommendations' }
     })
 
-    // 3. List Products (Filter + Pagination)
+    // 3. List Products
     .get('/', async ({ query }) => {
         return await ProductService.getAll(query);
     }, {
@@ -39,14 +40,14 @@ export const productsAPI = new Elysia({ prefix: '/products' })
         detail: { tags: ["Products"], summary: 'List Products' }
     })
 
-    // 4. Get Menu Categories
+    // 4. Categories
     .get('/categories', async () => {
         return await ProductService.getAllCategories();
     }, {
         detail: { tags: ["Products"], summary: 'Get Categories' }
     })
 
-    // 5. Get All Tags (Filter Sidebar)
+    // 5. Tags
     .get('/tags', async () => {
         return await ProductService.getAllTags();
     }, {
@@ -61,12 +62,12 @@ export const productsAPI = new Elysia({ prefix: '/products' })
         detail: { tags: ["Products"], summary: 'Get Detail' }
     })
 
-    // 7. Related Products
+    // 7. Related
     .get('/:id/related', async ({ params }) => {
         return await ProductService.getRelated(params.id);
     }, {
         params: t.Object({ id: t.String() }),
-        response: t.Array(selectProductSchema), // Swagger sẽ hiện danh sách sản phẩm
+        response: t.Array(selectProductSchema),
         detail: { tags: ["Products"], summary: 'Get Related' }
     })
 

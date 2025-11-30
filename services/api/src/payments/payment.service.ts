@@ -20,12 +20,12 @@ export class PaymentService {
     private db: DbClient;
     private paymentsTable: typeof schema.paymentsTable;
 
-    constructor(db: DbClient) {
-        this.db = db;
+    constructor(db?: DbClient) {
+        this.db = db || mainDb;
         this.paymentsTable = schema.paymentsTable;
     }
 
-    async createPayment(order_id: number, amount: number, payment_gateway: string) {
+    createPayment = async (order_id: number, amount: number, payment_gateway: string) => {
         try {
         const transactionId = Bun.randomUUIDv7();
             const [newPayment] = await this.db.transaction(async (tx) => {

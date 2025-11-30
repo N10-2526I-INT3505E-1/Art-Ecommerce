@@ -11,12 +11,10 @@ import { stringify } from 'qs';
 import { randomUUIDv7 } from 'bun';
 import { PaymentService, PaymentIPN } from './payment.service';
 
-export const paymentsPlugin = new Elysia({ prefix: '/api' })
-	.decorate('db', db)
-	.derive(({ db }) => ({
-		paymentService: new PaymentService(db),
-	}))
+const paymentService = new PaymentService(db);
 
+export const paymentsPlugin = new Elysia({ prefix: '/api' })
+	.decorate('paymentService', paymentService)
 	// POST /api/payments - Creates a new payment record with pending status
 	// Accepts order_id, amount, and payment_gateway in the request body
 	// Returns the created payment with a generated payment URL

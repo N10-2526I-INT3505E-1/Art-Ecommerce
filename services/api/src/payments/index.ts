@@ -2,63 +2,35 @@ import { Elysia, t } from 'elysia';
 import { paymentsTable } from './payment.model';
 import { db } from './db';
 import { eq } from 'drizzle-orm';
-import { createPaymentUrl } from './paymentHandle/vnpayPaymentHandle';
+import { createVNPPaymentUrl } from './paymentHandle/vnpayPaymentHandle';
 import { createPaymentBodySchema, paymentResponseSchema, errorResponseSchema, updatePaymentBodySchema, updatePaymentParamsSchema, updatePaymentResponseSchema } from './payment.model';
 import { IpnFailChecksum, IpnOrderNotFound, IpnInvalidAmount, InpOrderAlreadyConfirmed, IpnUnknownError, IpnSuccess } from 'vnpay';
 import type { VerifyReturnUrl } from 'vnpay';
 import crypto from 'crypto';
 import { stringify } from 'qs';
-import { nanoid } from 'nanoid';
-export const paymentsPlugin = new Elysia({ prefix: '/api' })
+import { randomUUIDv7 } from 'bun';
+import { PaymentService, PaymentIPN } from './payment.service';
 
+const paymentService = new PaymentService(db);
+
+export const paymentsPlugin = new Elysia({ prefix: '/api' })
+	.decorate('paymentService', paymentService)
 	// POST /api/payments - Creates a new payment record with pending status
 	// Accepts order_id, amount, and payment_gateway in the request body
 	// Returns the created payment with a generated payment URL
-	.post('/payments', async ({ body, set }) => {
-		try {
+	.post('/payments', async ({ body, set, paymentService }) => {
+		//try {
 			// A transaction ensures the insert is an all-or-nothing operation.
-			const transactionId = nanoid(16); // Example: "aBc123DeFg"
-			const [newPayment] = await db.transaction(async (tx) => {
-				const result = await tx.insert(paymentsTable)
-					.values({
-						order_id: body.order_id,
-						amount: body.amount.toString(),
-						payment_gateway: body.payment_gateway,
-						transaction_id: transactionId,
-						status: 'pending'
-					})
-					.returning(); // Return the newly created record
-
-				return result;
-			});
 
 			// If transaction is successful, set status and return the new payment
-			if (newPayment == null) {
-				throw new Error('Payment initialization failed.');
-			}
-			set.status = 201; 
-			const getUrl = createPaymentUrl(Number(newPayment.amount), newPayment.transaction_id || '');
-
-			if (getUrl == null) {
-				throw new Error('Failed to create paymentUrl')
-			}
-
-			const apiResponse = {
-				id: newPayment.id,
-				order_id: newPayment.order_id,
-				amount: newPayment.amount, // Numeric is returned as a string
-				payment_gateway: newPayment.payment_gateway,
-				status: newPayment.status,
-				transaction_id: newPayment.transaction_id,
-				paymentUrl: (await getUrl),
-			};
+			const apiResponse = await paymentService.createPayment(body.order_id, body.amount, body.payment_gateway);
+			set.status = 201;
 			return apiResponse;
-
-		} catch (error) {
-			console.error("Failed to create payment:", error);
-			set.status = 500; // Internal Server Error
-			return { error: "Could not process the payment creation." };
-		}
+		// } catch (error) {
+		// 	console.error("Failed to create payment:", error);
+		// 	set.status = 500; // Internal Server Error
+		// 	return { error: "Could not process the payment creation." };
+		// }
 	}, {
 		// Apply the schemas for automatic validation and documentation
 		body: createPaymentBodySchema,
@@ -77,27 +49,10 @@ export const paymentsPlugin = new Elysia({ prefix: '/api' })
 	// PATCH /api/payments/:id - Updates the status of an existing payment
 	// Accepts payment ID in the URL and new status in the request body
 	// Used primarily for webhook callbacks from payment providers
-	.patch('/payments/:id', async ({ params, body, set }) => {
-		try {
-			// Drizzle's update method to find a payment by ID and set its status
-			const [updatedPayment] = await db.update(paymentsTable)
-				.set({ status: body.status })
-				.where(eq(paymentsTable.id, params.id)) 
-				.returning(); 
-
-			if (!updatedPayment) {
-				set.status = 404;
-				return { error: `Payment with ID ${params.id} not found.` };
-			}
-
-			set.status = 200;
-			return updatedPayment;
-
-		} catch (error) {
-			console.error(`Failed to update payment ${params.id}:`, error);
-			set.status = 500;
-			return { error: "Could not process the payment update." };
-		}
+	.patch('/payments/:id', async ({ params, body, set, paymentService }) => {
+		const apiResponse = await paymentService.updatePaymentStatus(Number(params.id), body.status);
+		set.status = 200;
+		return apiResponse;
 	}, {
 		// Apply schemas for validation and documentation
 		params: updatePaymentParamsSchema,
@@ -117,33 +72,15 @@ export const paymentsPlugin = new Elysia({ prefix: '/api' })
 	
 	// GET /api/payments/:id - Retrieves payment details by ID
 	// Returns the payment record with all its information (id, order_id, amount, gateway, status, timestamps)
-	.get('/payments/:id', async ({ params, set }) => {
-		try {
-			// Query the payment by ID
-			const payment = await db.query.paymentsTable.findFirst({
-				where: eq(paymentsTable.id, Number(params.id))
-			});
-
-			if (!payment) {
-				set.status = 404;
-				return { error: `Payment with ID ${params.id} not found.` };
-			}
-
-			set.status = 200;
-			return payment;
-
-		} catch (error) {
-			console.error(`Failed to retrieve payment ${params.id}:`, error);
-			set.status = 500;
-			return { error: "Could not process the payment retrieval." };
-		}
+	.get('/payments/:id', async ({ params, set, paymentService }) => {
+		const apiResponse = await paymentService.getPaymentById(Number(params.id));
+		set.status = 200;
+		return apiResponse;	
 	}, {
 		// Apply schemas for validation and documentation
 		params: updatePaymentParamsSchema,
 		response: {
 			200: updatePaymentResponseSchema,
-			400: errorResponseSchema, // Handles validation errors for params
-			404: errorResponseSchema, // Handles our custom "not found" case
 			500: errorResponseSchema
 		},
 		detail: {
@@ -166,60 +103,14 @@ function sortObject(obj: Record<string, any>): Record<string, any> {
 
 // VNPay IPN endpoint handler
 export const vnpayIpnHandler = new Elysia({ prefix: '/api' })
-	.get('/vnpay_ipn', async ({ query, set }) => {
-		try {
-			const vnp_Params = { ...query };
-			const secureHash = vnp_Params['vnp_SecureHash'] as string;
-
-			delete vnp_Params['vnp_SecureHash'];
-			delete vnp_Params['vnp_SecureHashType'];
-
-			const sortedParams = sortObject(vnp_Params);
-			const secretKey = process.env.VNPAY_HASH_SECRET || '';
-			const signData = stringify(sortedParams, { encode: false });
-			const hmac = crypto.createHmac('sha512', secretKey);
-			const signed = hmac.update(signData).digest('hex');
-
-			if (secureHash !== signed) {
-				set.status = 200;
-				return { RspCode: '97', Message: 'Fail checksum' };
-			}
-
-			const orderId = vnp_Params['vnp_TxnRef'] as string;
-			const rspCode = vnp_Params['vnp_ResponseCode'] as string;
-
-			// Find the payment record by order ID
-			const foundPayment = await db.query.paymentsTable.findFirst({
-				where: eq(paymentsTable.order_id, Number(orderId))
-			});
-
-			if (!foundPayment) {
-				set.status = 200;
-				return { RspCode: '01', Message: 'Order not found' };
-			}
-
-			// Update payment status based on response code
-			if (rspCode === '00') {
-				await db.update(paymentsTable)
-					.set({ status: 'paid' })
-					.where(eq(paymentsTable.id, foundPayment.id));
-
-				set.status = 200;
-				return { RspCode: '00', Message: 'success' };
-			} else {
-				await db.update(paymentsTable)
-					.set({ status: 'failed' })
-					.where(eq(paymentsTable.id, foundPayment.id));
-
-				set.status = 200;
-				return { RspCode: rspCode, Message: 'Payment failed' };
-			}
-
-		} catch (error) {
-			console.error(`VNPay IPN error: ${error}`);
-			set.status = 200;
-			return { RspCode: '99', Message: 'Unknown error' };
-		}
+	.decorate('db', db)
+	.derive(({ db }) => ({
+		paymentIPN: new PaymentIPN(db),
+	}))
+.get('/vnpay_ipn', async ({ query, set, paymentIPN }) => {
+	const response = await paymentIPN.handleVnpayIpn(query);
+	set.status = 200;
+	return response;
 	}, {
 		detail: {
 			summary: "VNPay IPN Callback",

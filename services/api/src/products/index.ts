@@ -1,317 +1,308 @@
 // File: /services/api/src/products/index.ts
 
-import { and, desc, eq, like, sql, gte, lte, inArray } from 'drizzle-orm';
-import { Elysia, t } from 'elysia'
+import { and, desc, eq, like, sql, gte, lte, inArray, ne, isNull } from 'drizzle-orm';
+import { Elysia, t } from 'elysia';
+import slugify from 'slugify'; // Nhớ cài: bun add slugify
 import { db } from './db';
-import { categories, insertProductBody, product_tags, products, selectProductSchema, tags, updateProductBody } from './products.schema';
+import { 
+    products, categories, tags, product_tags, 
+    insertProductBody, updateProductBody, selectProductSchema 
+} from './products.schema';
 
 export const productsAPI = new Elysia({ prefix: '/products' })
 
+    /**
+     * POST /products (Crawler Upsert)
+     * Không try-catch -> Lỗi tự bay ra Global Handler
+     */
     .post('/', async ({ body, set }) => {
         console.log(`📥 Nhận: ${body.name}`);
 
-        try {
-            // --- BƯỚC 1: XỬ LÝ CATEGORY ---
-            let categoryId = null;
-            if (body.categoryName) {
-                // Tìm xem category có chưa
-                const existingCat = await db.query.categories.findFirst({
-                    where: (c, { eq }) => eq(c.name, body.categoryName!)
+        // 1. Xử lý Category
+        let categoryId = null;
+        if (body.categoryName) {
+            const existingCat = await db.query.categories.findFirst({
+                where: (c, { eq }) => eq(c.name, body.categoryName!)
+            });
+
+            if (existingCat) {
+                categoryId = existingCat.id;
+            } else {
+                // UUIDv7 tự sinh, không cần quan tâm ID
+                const newCat = await db.insert(categories)
+                    .values({ 
+                        name: body.categoryName!,
+                        slug: slugify(body.categoryName!, { lower: true, locale: 'vi' })
+                    })
+                    .returning();
+                categoryId = newCat[0].id;
+            }
+        }
+
+        // 2. Tạo Slug & Upsert Sản phẩm
+        const uniqueSlug = slugify(body.name, { lower: true, locale: 'vi' }) + '-' + Date.now();
+
+        const newProductResult = await db.insert(products)
+            .values({
+                name: body.name,
+                price: body.price,
+                imageUrl: body.imageUrl,
+                description: body.description,
+                categoryId: categoryId,
+                sourceUrl: body.sourceUrl,
+                slug: uniqueSlug,
+                stock: body.stock ?? 10
+            })
+            .onConflictDoUpdate({
+                target: products.sourceUrl,
+                set: { 
+                    price: body.price,      
+                    imageUrl: body.imageUrl,
+                }
+            })
+            .returning();
+        
+        const newProduct = newProductResult[0];
+
+        // 3. Xử lý Tags
+        if (body.tags && body.tags.length > 0) {
+            for (const tagName of body.tags) {
+                let tagId;
+                const existingTag = await db.query.tags.findFirst({
+                    where: (t, { eq }) => eq(t.name, tagName)
                 });
 
-                if (existingCat) {
-                    categoryId = existingCat.id;
+                if (existingTag) {
+                    tagId = existingTag.id;
                 } else {
-                    // Chưa có -> Tạo mới
-                    const newCat = await db.insert(categories)
-                        .values({ name: body.categoryName! })
+                    const newTag = await db.insert(tags)
+                        .values({ name: tagName, type: 'auto' })
                         .returning();
-                    categoryId = newCat[0]?.id;
+                    tagId = newTag[0].id;
                 }
+
+                await db.insert(product_tags)
+                    .values({ productId: newProduct.id, tagId: tagId })
+                    .onConflictDoNothing();
             }
-
-            // --- BƯỚC 2: TẠO SẢN PHẨM ---
-            const newProductResult = await db.insert(products)
-                .values({
-                    name: body.name,
-                    price: body.price,
-                    imageUrl: body.imageUrl,
-                    description: body.description,
-                    categoryId: categoryId,
-                    sourceUrl: body.sourceUrl
-                })
-                .onConflictDoUpdate({
-                    target: products.sourceUrl,
-                    set: {
-                        price: body.price,
-                        imageUrl: body.imageUrl,
-                    }
-                })
-                .returning();
-            const newProduct = newProductResult[0];
-
-            // --- BƯỚC 3: XỬ LÝ TAGS (CHO AI) ---
-            if (body.tags && body.tags.length > 0) {
-                for (const tagName of body.tags) {
-                    // Tìm hoặc Tạo Tag
-                    let tagId;
-                    const existingTag = await db.query.tags.findFirst({
-                        where: (t, { eq }) => eq(t.name, tagName)
-                    });
-
-                    if (existingTag) {
-                        tagId = existingTag.id;
-                    } else {
-                        const newTag = await db.insert(tags)
-                            .values({ name: tagName, type: 'auto' })
-                            .returning();
-                        tagId = newTag[0].id;
-                    }
-
-                    // Tạo liên kết
-                    await db.insert(product_tags)
-                        .values({ productId: newProduct.id, tagId: tagId })
-                        .onConflictDoNothing();
-                }
-            }
-
-            set.status = 201;
-            console.log(`✅ Đã lưu ID: ${newProduct.id}`);
-            return newProduct;
-
-        } catch (error) {
-            console.error("❌ Lỗi:", error);
-            set.status = 500;
-            return { error: "Internal Server Error" };
         }
+
+        set.status = 201;
+        return newProduct;
     }, {
-        body: insertProductBody
+        body: insertProductBody,
+        detail: { tags: ["Products"], summary: 'Upsert Product (Crawler)' }
+    })
+
+    /** 
+     * 1. API Recommend (Cho AI)
+     * Gửi Tags -> Nhận danh sách sản phẩm phù hợp (Trừ sản phẩm đã xóa)
+     */
+    .post('/recommend', async ({body}) => {
+        const inputTags = body.tags;
+        if (!inputTags || inputTags.length == 0) return [];
+
+        const tagRecords = await db.query.tags.findMany({
+            where: (t, {inArray}) => inArray(t.name, inputTags)
+        });
+
+        const tagIds = tagRecords.map(t => t.id);
+        if (tagIds.length == 0) return [];
+        const matchedProducts = await db.query.product_tags.findMany({
+            where: (pt, {inArray}) => inArray(pt.tagId, tagIds),
+            with: {
+                product: true
+            },
+            limit: 20
+        });
+
+        const uniqueProductsMap = new Map();
+        matchedProducts.forEach(mp=> {
+            if(mp.product && mp.product.deletedAt == null) {
+                uniqueProductsMap.set(mp.product.id,mp.product)
+            }
+        });
+        return Array.from(uniqueProductsMap.values());
+
+    }, {
+        body: t.Object({
+            tags: t.Array(t.String())
+        }),
+        detail: {
+            tags: ["Products"],
+            summary: 'Get AI Recommentations'
+        }
     })
 
     /**
-     * 2. GET /product (Upgrade)
-     * Support : Pagination, Search, Filter Category
-     * Example : /products?page=1&limit=10&search=ngua&categoryId=5
+     * 2. Related Products
+     */
+    .get('/:id/related', async({params}) => {
+        const currentProduct = await db.query.products.findFirst({
+            where: eq(products.id, params.id)
+        });
+
+        if (!currentProduct || !currentProduct.categoryId) return [];
+
+        const related = await db.query.products.findMany({
+            where: and(
+                eq(products.categoryId, currentProduct.categoryId),
+                ne(products.id, params.id),
+                isNull(products.deletedAt)
+            ),
+            limit: 4,
+            orderBy: [desc(products.createdAt)]
+        });
+        return related;
+    }, {
+        params: t.Object({id: t.String()}),
+        detail: {tags: ["Products"], summary: 'Get Related Products'}
+    })
+
+    /**
+     * GET /products (List + Filter)
      */
     .get('/', async ({ query }) => {
         const page = Number(query.page) || 1;
         const limit = Number(query.limit) || 12;
         const offset = (page - 1) * limit;
 
-        const search = query.search ? `%${query.search}%` : undefined;
-        const categoryId = query.categoryId ? Number(query.categoryId) : undefined;
-
-        const minPrice = query.minPrice ? Number(query.minPrice) : undefined;
-        const maxPrice = query.maxPrice ? Number(query.maxPrice) : undefined;
-
         const conditions = [];
-        if (search) conditions.push(like(products.name, search));
-        if (categoryId) conditions.push(eq(products.categoryId, categoryId));
-        if (minPrice) conditions.push(gte(products.price, minPrice));
-        if (maxPrice) conditions.push(lte(products.price, maxPrice));
+        conditions.push(isNull(products.deletedAt));
+        if (query.search) conditions.push(like(products.name, `%${query.search}%`));
+        // ID là string, không cần Number()
+        if (query.categoryId) conditions.push(eq(products.categoryId, query.categoryId)); 
+        if (query.minPrice) conditions.push(gte(products.price, Number(query.minPrice)));
+        if (query.maxPrice) conditions.push(lte(products.price, Number(query.maxPrice)));
 
         const data = await db.query.products.findMany({
             where: conditions.length > 0 ? and(...conditions) : undefined,
             limit: limit,
             offset: offset,
             orderBy: [desc(products.createdAt)],
-            with: {
-                category: true,
-            }
+            with: { category: true }
         });
 
         const allItems = await db
-        .select({ count: sql<number>`count(*)` })
-        .from(products)
-        .where(conditions.length > 0 ? and(...conditions) : undefined);
-
-        const total = allItems[0]?.count ?? 0;
+            .select({ count: sql<number>`count(*)` })
+            .from(products)
+            .where(conditions.length > 0 ? and(...conditions) : undefined);
 
         return {
             data,
             pagination: {
-                page,
-                limit,
-                total,
-                totalPages: Math.ceil(total / limit)
+                page, limit, total: allItems[0]?.count ?? 0,
+                totalPages: Math.ceil((allItems[0]?.count ?? 0) / limit)
             }
         };
     }, {
-        // Validate Query String
         query: t.Object({
             page: t.Optional(t.String()),
             limit: t.Optional(t.String()),
             search: t.Optional(t.String()),
-            categoryId: t.Optional(t.String()),
+            categoryId: t.Optional(t.String()), // String ID
             minPrice: t.Optional(t.String()),
             maxPrice: t.Optional(t.String())
         }),
-        detail: {
-            tags: ["Products"],
-            summary: 'List Products (Filter and Pagination)'
-        }
+        detail: { tags: ["Products"], summary: 'List Products' }
     })
 
-    // GET /product (details)
-    .get('/:id', async ({ params, set }) => {
-        const id = Number(params.id);
-
+    /**
+     * GET /products/:id (Detail)
+     */
+    .get('/:id', async ({ params }) => {
+        // ID là String, không ép kiểu Number
         const product = await db.query.products.findFirst({
-            where: eq(products.id, id),
+            where: eq(products.id, params.id), 
             with: {
-                category: true, // lay thong tin category
-                productTags: { // lay thong tin tag di kem
-                    with: {
-                        tag: true
-                    }
-                }
+                category: true,
+                productTags: { with: { tag: true } }
             }
         });
+
         if (!product) {
-            set.status = 404;
-            return { error: 'Product not found' };
+            // Ném lỗi object để Global Handler bắt
+            throw { code: 'NOT_FOUND', message: 'Product not found' };
         }
 
-        // lam dep du lieu tags truoc khi tra ve 
-        // bien doi thanh cau truc long nhau thanh mang phang
         const flatTags = product.productTags.map(pt => pt.tag);
-
-        return {
-            ...product,
-            tags: flatTags,
-            productTags: undefined
-        };
-
+        return { ...product, tags: flatTags, productTags: undefined };
     }, {
-        params: t.Object({
-            id: t.String()
-        }),
-        detail: {
-            tags: ["Products"],
-            summary: 'Get Product Detail'
-        }
-    })
-
-    /**
-     * GET /categories
-     * get category -> menu header
-     */
-    .get('/categories', async () => {
-        return await db.select().from(categories);
-    }, {
-        detail: {
-            tags: ["Products"],
-            summary: 'Get Menu Categories'
-        }
-    })
-
-    /**
-     * GET /tags
-     * get tags -> Sidebar (Phong thuy)
-     */
-    .get('/tags', async () => {
-        return await db.select().from(tags);
-    }, {
-        tags: ["Products"],
-        detail: { summary: 'Get All tags (For filter)' }
+        params: t.Object({ id: t.String() }),
+        detail: { tags: ["Products"], summary: 'Get Product Detail' }
     })
 
     /**
      * PATCH /products/:id
      */
-    .patch('/:id', async ({ params, body, set }) => {
-        const id = Number(params.id);
+    .patch('/:id', async ({ params, body }) => {
+        // 1. Update Category
+        let categoryId;
+        if (body.categoryName) {
+            const existingCat = await db.query.categories.findFirst({
+                where: (c, { eq }) => eq(c.name, body.categoryName!)
+            });
+            if (existingCat) {
+                categoryId = existingCat.id;
+            } else {
+                const newCat = await db.insert(categories)
+                    .values({ 
+                        name: body.categoryName!,
+                        slug: slugify(body.categoryName!, { lower: true, locale: 'vi' })
+                    })
+                    .returning();
+                categoryId = newCat[0].id;
+            }
+        }
 
-        try {
-            // 1. Update Category if needed
-            let categoryId;
-            if (body.categoryName) {
-                const existingCat = await db.query.categories.findFirst({
-                    where: (c, { eq }) => eq(c.name, body.categoryName!)
+        // 2. Update Product
+        const updateData: any = { ...body };
+        if (categoryId) updateData.categoryId = categoryId;
+        delete updateData.categoryName;
+        delete updateData.tags;
+
+        await db.update(products)
+            .set(updateData)
+            .where(eq(products.id, params.id));
+
+        // 3. Update Tags
+        if (body.tags) {
+            await db.delete(product_tags).where(eq(product_tags.productId, params.id));
+            for (const tagName of body.tags) {
+                let tagId;
+                const existingTag = await db.query.tags.findFirst({
+                    where: (t, { eq }) => eq(t.name, tagName)
                 });
-                if (existingCat) {
-                    categoryId = existingCat.id;
+                if (existingTag) {
+                    tagId = existingTag.id;
                 } else {
-                    const newCat = await db.insert(categories).values({ name: body.categoryName! }).returning();
-                    categoryId = newCat[0]?.id;
+                    const newTag = await db.insert(tags).values({ name: tagName, type: 'auto' }).returning();
+                    tagId = newTag[0].id;
                 }
+                await db.insert(product_tags)
+                    .values({ productId: params.id, tagId: tagId })
+                    .onConflictDoNothing();
             }
-
-            // 2. Update Product fields
-            const updateData: any = {
-                ...body
-            };
-            if (categoryId !== undefined) {
-                updateData.categoryId = categoryId;
-            }
-            delete updateData.categoryName;
-            delete updateData.tags;
-
-            await db.update(products)
-                .set(updateData)
-                .where(eq(products.id, id));
-
-            // 3. Update Tags if needed
-            if (body.tags) {
-                // Clear old tags
-                await db.delete(product_tags).where(eq(product_tags.productId, id));
-
-                // Add new tags
-                for (const tagName of body.tags) {
-                    let tagId;
-                    const existingTag = await db.query.tags.findFirst({
-                        where: (t, { eq }) => eq(t.name, tagName)
-                    });
-
-                    if (existingTag) {
-                        tagId = existingTag.id;
-                    } else {
-                        const newTag = await db.insert(tags).values({ name: tagName, type: 'auto' }).returning();
-                        tagId = newTag[0].id;
-                    }
-
-                    await db.insert(product_tags)
-                        .values({ productId: id, tagId: tagId })
-                        .onConflictDoNothing();
-                }
-            }
-
-            return { success: true, message: `Updated product ${id}` };
-
-        } catch (error) {
-            console.error("❌ Error updating product:", error);
-            set.status = 500;
-            return { error: "Internal Server Error" };
         }
+
+        return { success: true, message: `Updated product ${params.id}` };
     }, {
-        params: t.Object({
-            id: t.String()
-        }),
+        params: t.Object({ id: t.String() }),
         body: updateProductBody,
-        detail: {
-            tags: ["Products"],
-            summary: 'Update Product'
-        }
+        detail: { tags: ["Products"], summary: 'Update Product' }
     })
 
     /**
-     * admin 
      * DELETE /products/:id
      */
-    .delete('/:id', async ({ params, set }) => {
-        const id = Number(params.id);
-        await db.delete(products).where(eq(products.id, id))
-        return { success: true, message: `Deleted product ${id}` };
-
+    .delete('/:id', async ({ params }) => {
+        await db.update(products)
+            .set({deletedAt: new Date()})
+            .where(eq(products.id, params.id));
+        return { success: true, message: `Deleted product ${params.id}` };
     }, {
-        params: t.Object({
-            id: t.String()
-        }),
-        detail: {
-            tags: ["Products"],
-            summary: 'Delete Product',
-        },
-    });
+        params: t.Object({ id: t.String() }),
+        detail: { tags: ["Products"], summary: 'Delete Product' }
+    })
 
-
-
+    

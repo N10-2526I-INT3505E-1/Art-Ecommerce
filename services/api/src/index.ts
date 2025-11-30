@@ -7,7 +7,7 @@ import { usersPlugin } from './users';
 const app = new Elysia()
 	.use(
 		cors({
-			origin: 'http://localhost:5173',
+			origin: true, // Allow all origins in development
 			credentials: true,
 			methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 			allowedHeaders: ['Content-Type', 'Authorization'],

@@ -1,8 +1,7 @@
+import { PAYMENT_ENDPOINT, VNP_VERSION } from 'vnpay/constants';
+import { HashAlgorithm, ProductCode, VnpLocale } from 'vnpay/enums';
+import { dateFormat, resolveUrlString } from 'vnpay/utils';
 import { VNPay } from 'vnpay/vnpay';
-import { HashAlgorithm, ProductCode } from 'vnpay/enums';
-import { VNP_VERSION, PAYMENT_ENDPOINT } from 'vnpay/constants';
-import { resolveUrlString, dateFormat } from 'vnpay/utils';
-import { VnpLocale } from 'vnpay/enums';
 
 const vnpay = new VNPay({
 	tmnCode: 'DZL95F29',

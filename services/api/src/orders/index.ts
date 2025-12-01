@@ -1,9 +1,9 @@
 import { Elysia, t } from 'elysia';
-import { OrderService } from './order.service';
 import {
   CreateOrderSchema,
   OrderResponseSchema,
 } from './order.model';
+import { OrderService } from './order.service';
 import {
   CreateOrderItemSchema,
   OrderItemResponseSchema,
@@ -16,7 +16,6 @@ export const ordersPlugin = new Elysia({ prefix: '/api' })
       .post(
         '/',
         async ({ body, set }) => {
-          // Chỉ cần gọi hàm, lỗi 500 sẽ do Global Handler lo
           const newOrder = await OrderService.createOrder(body as any);
           set.status = 201;
           return { order: newOrder };
@@ -25,7 +24,6 @@ export const ordersPlugin = new Elysia({ prefix: '/api' })
           body: t.Omit(CreateOrderSchema, ['id', 'created_at', 'updated_at']),
           response: {
             201: t.Object({ order: OrderResponseSchema }),
-            // Không cần khai báo response 500 ở đây nữa nếu không muốn Swagger quá dài
           },
           detail: { tags: ['Orders'], summary: 'Create a new order' },
         },

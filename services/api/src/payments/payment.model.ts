@@ -1,5 +1,5 @@
-import { int, numeric, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
+import { int, numeric, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { createInsertSchema, createSelectSchema } from 'drizzle-typebox';
 import { t } from 'elysia';
 import { usersTable } from '../users/user.model.ts';

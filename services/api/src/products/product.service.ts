@@ -1,12 +1,12 @@
 import { 
-    NotFoundError, 
+    BadRequestError, 
     InternalServerError, 
-    BadRequestError 
+    NotFoundError 
 } from '@common/errors/httpErrors'; //
-import { db as defaultDb } from './db';
-import { products, categories, tags, product_tags } from './products.schema';
-import { and, desc, eq, like, sql, gte, lte, inArray, isNull, ne } from 'drizzle-orm';
+import { and, desc, eq, gte, inArray, isNull, like, lte, ne, sql } from 'drizzle-orm';
 import slugify from 'slugify';
+import type { db as defaultDb } from './db';
+import { categories, product_tags, products, tags } from './product.schema';
 
 type DbClient = typeof defaultDb;
 
@@ -44,7 +44,7 @@ export class ProductService {
                 }
 
                 // B. Upsert Product
-                const uniqueSlug = slugify(data.name, { lower: true, locale: 'vi' }) + '-' + Date.now();
+                const uniqueSlug = `${slugify(data.name, { lower: true, locale: 'vi' })}-${Date.now()}`;
 
                 const [newProduct] = await tx.insert(products)
                     .values({

@@ -1,15 +1,14 @@
-import { Elysia, t } from 'elysia';
-import { paymentsTable } from './payment.model';
-import { db } from './db';
-import { eq } from 'drizzle-orm';
-import { createVNPPaymentUrl } from './paymentHandle/vnpayPaymentHandle';
-import { createPaymentBodySchema, paymentResponseSchema, errorResponseSchema, updatePaymentBodySchema, updatePaymentParamsSchema, updatePaymentResponseSchema } from './payment.model';
-import { IpnFailChecksum, IpnOrderNotFound, IpnInvalidAmount, InpOrderAlreadyConfirmed, IpnUnknownError, IpnSuccess } from 'vnpay';
-import type { VerifyReturnUrl } from 'vnpay';
-import crypto from 'crypto';
-import { stringify } from 'qs';
 import { randomUUIDv7 } from 'bun';
-import { PaymentService, PaymentIPN } from './payment.service';
+import crypto from 'crypto';
+import { eq } from 'drizzle-orm';
+import { Elysia, t } from 'elysia';
+import { stringify } from 'qs';
+import type { VerifyReturnUrl } from 'vnpay';
+import { InpOrderAlreadyConfirmed, IpnFailChecksum, IpnInvalidAmount, IpnOrderNotFound, IpnSuccess, IpnUnknownError } from 'vnpay';
+import { db } from './db';
+import { createPaymentBodySchema, errorResponseSchema, paymentResponseSchema, paymentsTable, updatePaymentBodySchema, updatePaymentParamsSchema, updatePaymentResponseSchema } from './payment.model';
+import { PaymentIPN, PaymentService } from './payment.service';
+import { createVNPPaymentUrl } from './paymentHandle/vnpayPaymentHandle';
 
 const paymentService = new PaymentService(db);
 
@@ -26,11 +25,6 @@ export const paymentsPlugin = new Elysia({ prefix: '/api' })
 			const apiResponse = await paymentService.createPayment(body.order_id, body.amount, body.payment_gateway);
 			set.status = 201;
 			return apiResponse;
-		// } catch (error) {
-		// 	console.error("Failed to create payment:", error);
-		// 	set.status = 500; // Internal Server Error
-		// 	return { error: "Could not process the payment creation." };
-		// }
 	}, {
 		// Apply the schemas for automatic validation and documentation
 		body: createPaymentBodySchema,

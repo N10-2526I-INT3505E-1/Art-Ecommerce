@@ -1,11 +1,9 @@
 import { eq } from 'drizzle-orm';
+import { InternalServerError, NotFoundError } from '../common/errors/httpErrors';
 import { db } from './db';
 import { ordersTable } from './order.model';
 import { orderItemsTable } from './order_item.model';
-// Import các class lỗi bạn đã định nghĩa
-import { NotFoundError, InternalServerError } from '../common/errors/httpErrors';
 
-// Dùng cú pháp Type mới của Drizzle
 export type NewOrder = typeof ordersTable.$inferInsert;
 export type NewOrderItem = typeof orderItemsTable.$inferInsert;
 

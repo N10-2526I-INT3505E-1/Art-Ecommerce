@@ -1,8 +1,8 @@
 // File: /services/api/src/products/products.schema.ts
 
 import { relations } from 'drizzle-orm';
-import { sqliteTable, text, integer, real, primaryKey } from 'drizzle-orm/sqlite-core';
-import { createSelectSchema, createInsertSchema } from 'drizzle-typebox';
+import { integer, primaryKey, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { createInsertSchema, createSelectSchema } from 'drizzle-typebox';
 import { t } from 'elysia';
 
 // 1. BẢNG CATEGORIES

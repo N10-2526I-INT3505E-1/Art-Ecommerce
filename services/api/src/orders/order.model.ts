@@ -1,6 +1,5 @@
-// orders.model.ts
-import { check, int, sqliteTable, text, numeric } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
+import { check, int, numeric, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { createInsertSchema, createSelectSchema } from 'drizzle-typebox';
 import { t } from 'elysia';
 
@@ -21,7 +20,6 @@ export const ordersTable = sqliteTable(
     id: int().primaryKey({ autoIncrement: true }),
     user_id: int().notNull(),
     total_amount: numeric().notNull().$type<number>(),
-    // gán type tại level column để TS biết rõ
     status: text('status', { length: 50 }).notNull().$type<OrderStatus>(),
     shipping_address: text().notNull(),
     created_at: text().notNull().default(sql`CURRENT_TIMESTAMP`),

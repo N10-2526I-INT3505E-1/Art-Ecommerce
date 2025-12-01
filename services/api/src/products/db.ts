@@ -4,7 +4,7 @@ import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 
 // 1. Import schema CHỈ của products
-import * as schema from './products.schema';
+import * as schema from './product.schema';
 
 // 2. Tự tạo kết nối đến Turso (đọc từ file .env)
 const client = createClient({

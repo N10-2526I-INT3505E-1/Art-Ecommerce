@@ -1,5 +1,5 @@
 // order_items.model.ts
-import { int, sqliteTable, numeric, text } from 'drizzle-orm/sqlite-core';
+import { int, numeric, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { createInsertSchema, createSelectSchema } from 'drizzle-typebox';
 import { t } from 'elysia';
 
@@ -8,9 +8,7 @@ export const orderItemsTable = sqliteTable('order_items', {
   order_id: int().notNull(),
   product_id: int().notNull(),
   quantity: int().notNull(),
-  // tell TS it's number in code
   price_per_item: numeric().notNull().$type<number>(),
-  // store JSON as TEXT in sqlite; in TS we treat DB column as string
   product_snapshot: text().$type<string | null>().notNull(),
 });
 

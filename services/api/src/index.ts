@@ -3,6 +3,7 @@ import { cors } from '@elysiajs/cors';
 import { openapi } from '@elysiajs/openapi';
 import { usersPlugin } from '@user/index';
 import { Elysia } from 'elysia';
+import { productsAPI } from './products/index';
 
 import { paymentsPlugin, vnpayIpnHandler } from './payments';
 export const app = new Elysia({ prefix: "/api" })
@@ -27,8 +28,9 @@ export const app = new Elysia({ prefix: "/api" })
 	)
 
 	.use(usersPlugin)
-	.use(paymentsPlugin)
-	.use(vnpayIpnHandler)
+	.use(productsAPI)
+	// .use(paymentsPlugin)
+	// .use(vnpayIpnHandler)
 
 	.get('/', () => ({ status: 'ok' }), {
 		detail: { summary: 'Health check endpoint' },

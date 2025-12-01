@@ -2,15 +2,19 @@
 import { int, sqliteTable, numeric, text } from 'drizzle-orm/sqlite-core';
 import { createInsertSchema, createSelectSchema } from 'drizzle-typebox';
 import { t } from 'elysia';
+import { ordersTable } from './order.model'; 
 
 export const orderItemsTable = sqliteTable('order_items', {
   id: int().primaryKey({ autoIncrement: true }),
-  order_id: int().notNull(),
+  
+  order_id: int()
+    .notNull()
+    // Dòng này tạo liên kết khóa ngoại trong Database
+    .references(() => ordersTable.id, { onDelete: 'cascade' }), 
+    
   product_id: int().notNull(),
   quantity: int().notNull(),
-  // tell TS it's number in code
   price_per_item: numeric().notNull().$type<number>(),
-  // store JSON as TEXT in sqlite; in TS we treat DB column as string
   product_snapshot: text().$type<string | null>().notNull(),
 });
 

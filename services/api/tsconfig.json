@@ -29,6 +29,15 @@
 			"@user/*": [
 				"users/*"
 			],
+			"@product/*": [
+				"products/*"
+			],
+			"@order/*": [
+				"orders/*"
+			],
+			"@payment/*": [
+				"payments/*"
+			],
 			"@common/*": [
 				"common/*"
 			],

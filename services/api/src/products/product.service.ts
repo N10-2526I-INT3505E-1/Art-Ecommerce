@@ -6,7 +6,7 @@ import {
 import { and, desc, eq, gte, inArray, isNull, like, lte, ne, sql } from 'drizzle-orm';
 import slugify from 'slugify';
 import type { db as defaultDb } from './db';
-import { categories, product_tags, products, tags } from './product.schema';
+import { categories, product_tags, products, tags } from './product.model';
 
 type DbClient = typeof defaultDb;
 

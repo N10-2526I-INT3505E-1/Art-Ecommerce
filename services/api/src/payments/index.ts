@@ -12,7 +12,7 @@ import { createVNPPaymentUrl } from './paymentHandle/vnpayPaymentHandle';
 
 const paymentService = new PaymentService(db);
 
-export const paymentsPlugin = new Elysia({ prefix: '/api' })
+export const paymentsPlugin = new Elysia()
 	.decorate('paymentService', paymentService)
 	// POST /api/payments - Creates a new payment record with pending status
 	// Accepts order_id, amount, and payment_gateway in the request body

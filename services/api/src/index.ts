@@ -3,7 +3,7 @@ import { cors } from '@elysiajs/cors';
 import { openapi } from '@elysiajs/openapi';
 import { usersPlugin } from '@user/index';
 import { Elysia } from 'elysia';
-
+import { ordersPlugin } from './orders';
 import { paymentsPlugin, vnpayIpnHandler } from './payments';
 export const app = new Elysia({ prefix: "/api" })
 	.use(errorHandler)
@@ -27,6 +27,7 @@ export const app = new Elysia({ prefix: "/api" })
 	)
 
 	.use(usersPlugin)
+	.use(ordersPlugin)
 	.use(paymentsPlugin)
 	.use(vnpayIpnHandler)
 

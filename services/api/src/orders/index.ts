@@ -1,4 +1,5 @@
 import { Elysia, t } from 'elysia';
+import { db } from './db';
 import {
   CreateOrderSchema,
   OrderResponseSchema,
@@ -9,14 +10,16 @@ import {
   OrderItemResponseSchema,
 } from './order_item.model';
 
-export const ordersPlugin = new Elysia({ prefix: '/api' })
+const orderService = new OrderService(db);
+
+export const ordersPlugin = new Elysia()
   .group('/orders', (app) =>
     app
       // 1. Create Order
       .post(
         '/',
         async ({ body, set }) => {
-          const newOrder = await OrderService.createOrder(body as any);
+          const newOrder = await orderService.createOrder(body as any);
           set.status = 201;
           return { order: newOrder };
         },
@@ -33,7 +36,7 @@ export const ordersPlugin = new Elysia({ prefix: '/api' })
       .get(
         '/',
         async () => {
-          const orders = await OrderService.getAllOrders();
+          const orders = await orderService.getAllOrders();
           return { orders };
         },
         {
@@ -46,8 +49,7 @@ export const ordersPlugin = new Elysia({ prefix: '/api' })
       .get(
         '/:id',
         async ({ params }) => {
-          // Nếu không tìm thấy, Service ném NotFoundError -> Global Handler bắt -> trả về 404 JSON
-          const order = await OrderService.getOrderById(Number(params.id));
+          const order = await orderService.getOrderById(Number(params.id));
           return { order };
         },
         {
@@ -63,7 +65,7 @@ export const ordersPlugin = new Elysia({ prefix: '/api' })
       .patch(
         '/:id',
         async ({ params, body }) => {
-          const updated = await OrderService.updateOrder(Number(params.id), body as any);
+          const updated = await orderService.updateOrder(Number(params.id), body as any);
           return { order: updated };
         },
         {
@@ -80,7 +82,7 @@ export const ordersPlugin = new Elysia({ prefix: '/api' })
       .delete(
         '/:id',
         async ({ params }) => {
-          await OrderService.deleteOrder(Number(params.id));
+          await orderService.deleteOrder(Number(params.id));
           return { message: `Đã xóa đơn hàng ID ${params.id}.` };
         },
         {
@@ -96,7 +98,7 @@ export const ordersPlugin = new Elysia({ prefix: '/api' })
           .post(
             '/',
             async ({ params, body, set }) => {
-              const newItem = await OrderService.addItemToOrder(Number(params.orderId), body);
+              const newItem = await orderService.addItemToOrder(Number(params.orderId), body);
               set.status = 201;
               return { item: newItem };
             },
@@ -113,7 +115,7 @@ export const ordersPlugin = new Elysia({ prefix: '/api' })
           .get(
             '/',
             async ({ params }) => {
-              const items = await OrderService.getOrderItems(Number(params.orderId));
+              const items = await orderService.getOrderItems(Number(params.orderId));
               return { items };
             },
             {

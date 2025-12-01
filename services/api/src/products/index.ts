@@ -1,14 +1,15 @@
-// File: /services/api/src/products/index.ts
-
+import { insertProductBody, selectProductSchema, updateProductBody } from '@product/product.model';
 import { Elysia, t } from 'elysia';
-import { insertProductBody, selectProductSchema, updateProductBody } from './product.schema';
-import { ProductService } from './products.service';
+import { db } from './db';
+import { ProductService } from './product.service';
+
+const productService = new ProductService(db);
 
 export const productsAPI = new Elysia({ prefix: '/products' })
 
     // 1. Crawler Upsert
     .post('/', async ({ body, set }) => {
-        const product = await ProductService.createProduct(body);
+        const product = await productService.createProduct(body);
         set.status = 201;
         return product;
     }, {
@@ -18,7 +19,7 @@ export const productsAPI = new Elysia({ prefix: '/products' })
 
     // 2. AI Recommend
     .post('/recommend', async ({ body }) => {
-        return await ProductService.getRecommendations(body.tags || []);
+        return await productService.getRecommendations(body.tags || []);
     }, {
         body: t.Object({ tags: t.Array(t.String()) }),
         response: t.Array(selectProductSchema),
@@ -27,7 +28,7 @@ export const productsAPI = new Elysia({ prefix: '/products' })
 
     // 3. List Products
     .get('/', async ({ query }) => {
-        return await ProductService.getAll(query);
+        return await productService.getAll(query);
     }, {
         query: t.Object({
             page: t.Optional(t.String()),
@@ -42,21 +43,21 @@ export const productsAPI = new Elysia({ prefix: '/products' })
 
     // 4. Categories
     .get('/categories', async () => {
-        return await ProductService.getAllCategories();
+        return await productService.getAllCategories();
     }, {
         detail: { tags: ["Products"], summary: 'Get Categories' }
     })
 
     // 5. Tags
     .get('/tags', async () => {
-        return await ProductService.getAllTags();
+        return await productService.getAllTags();
     }, {
         detail: { tags: ["Products"], summary: 'Get Tags' }
     })
 
     // 6. Detail
     .get('/:id', async ({ params }) => {
-        return await ProductService.getById(params.id);
+        return await productService.getById(params.id);
     }, {
         params: t.Object({ id: t.String() }),
         detail: { tags: ["Products"], summary: 'Get Detail' }
@@ -64,7 +65,7 @@ export const productsAPI = new Elysia({ prefix: '/products' })
 
     // 7. Related
     .get('/:id/related', async ({ params }) => {
-        return await ProductService.getRelated(params.id);
+        return await productService.getRelated(params.id);
     }, {
         params: t.Object({ id: t.String() }),
         response: t.Array(selectProductSchema),
@@ -73,7 +74,7 @@ export const productsAPI = new Elysia({ prefix: '/products' })
 
     // 8. Update
     .patch('/:id', async ({ params, body }) => {
-        return await ProductService.update(params.id, body);
+        return await productService.update(params.id, body);
     }, {
         params: t.Object({ id: t.String() }),
         body: updateProductBody,
@@ -82,7 +83,7 @@ export const productsAPI = new Elysia({ prefix: '/products' })
 
     // 9. Soft Delete
     .delete('/:id', async ({ params }) => {
-        return await ProductService.delete(params.id);
+        return await productService.delete(params.id);
     }, {
         params: t.Object({ id: t.String() }),
         detail: { tags: ["Products"], summary: 'Delete Product' }

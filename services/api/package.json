@@ -11,6 +11,9 @@
 		"db:push:products": "drizzle-kit push --config ./drizzle.config.products.ts",
 		"db:generate:payments": "drizzle-kit generate --config ./drizzle.config.payments.ts",
 		"db:push:payments": "drizzle-kit push --config ./drizzle.config.payments.ts",
+		"db:generate:all": "bun run db:generate:users && bun run db:generate:orders && bun run db:generate:products && bun run db:generate:payments",
+		"db:push:all": "bun run db:push:users && bun run db:push:orders && bun run db:push:products && bun run db:push:payments",
+		"start": "bun run src/index.ts",
 		"dev": "bun run --watch src/index.ts"
 	},
 	"dependencies": {

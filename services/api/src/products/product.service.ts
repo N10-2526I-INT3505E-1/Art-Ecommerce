@@ -3,8 +3,8 @@ import {
     InternalServerError, 
     NotFoundError 
 } from '@common/errors/httpErrors'; //
+import slugify from '@sindresorhus/slugify';
 import { and, desc, eq, gte, inArray, isNull, like, lte, ne, sql } from 'drizzle-orm';
-import slugify from 'slugify';
 import type { db as defaultDb } from './db';
 import { categories, product_tags, products, tags } from './product.model';
 
@@ -36,7 +36,7 @@ export class ProductService {
                         const [newCat] = await tx.insert(categories)
                             .values({ 
                                 name: data.categoryName,
-                                slug: slugify(data.categoryName, { lower: true, locale: 'vi' })
+                                slug: slugify(data.categoryName, { lowercase: true, locale: 'vi' })
                             })
                             .returning();
                         categoryId = newCat.id;
@@ -44,7 +44,7 @@ export class ProductService {
                 }
 
                 // B. Upsert Product
-                const uniqueSlug = `${slugify(data.name, { lower: true, locale: 'vi' })}-${Date.now()}`;
+                const uniqueSlug = `${slugify(data.name, { lowercase: true, locale: 'vi' })}-${Date.now()}`;
 
                 const [newProduct] = await tx.insert(products)
                     .values({
@@ -254,7 +254,7 @@ export class ProductService {
                         const [newCat] = await tx.insert(categories)
                             .values({ 
                                 name: body.categoryName,
-                                slug: slugify(body.categoryName, { lower: true, locale: 'vi' })
+                                slug: slugify(body.categoryName, { lowercase: true, locale: 'vi' })
                             }).returning();
                         categoryId = newCat.id;
                     }

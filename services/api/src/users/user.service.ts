@@ -8,7 +8,7 @@ import type { db as defaultDb } from '@user/db';
 import type { LoginSchema, SignUpSchema, UserAddressSchema } from '@user/user.model';
 import { refreshTokensTable, userAddressTable, usersTable } from '@user/user.model';
 import { comparePassword, hashPassword } from '@user/utils/passwordHash';
-import { and, eq, or } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import type { Static } from 'elysia';
 import { OAuth2Client } from 'google-auth-library';
 
@@ -26,13 +26,125 @@ export class UserService {
 	constructor(db: DbClient, jwt: JwtClient) {
 		this.db = db;
 		this.jwt = jwt;
+		this.googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID || '');
 		if (!process.env.GOOGLE_CLIENT_ID) {
 			console.warn('Warning: GOOGLE_CLIENT_ID is not defined');
 		}
-		this.googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 	}
 
-	async createRefreshToken(userId: number) {
+    // Address Management
+
+	async getUserAddresses(userId: number) {
+		const addresses = await this.db
+			.select()
+			.from(userAddressTable)
+			.where(eq(userAddressTable.user_id, userId))
+			.orderBy(desc(userAddressTable.is_default)); // Default address first
+
+		return { addresses };
+	}
+
+	async addUserAddress(
+		userId: number,
+		addressData: Omit<Static<typeof UserAddressSchema>, 'id' | 'user_id'>,
+	) {
+		// 1. Verify User Exists
+		const [userFromDb] = await this.db.select().from(usersTable).where(eq(usersTable.id, userId));
+		if (!userFromDb) {
+			throw new NotFoundError('User not found.');
+		}
+
+		try {
+			// 2. Use Transaction to handle "Default" toggle
+			const [newAddress] = await this.db.transaction(async (tx) => {
+				// If this new address is set as default, unset previous defaults
+				if (addressData.is_default === 1) {
+					await tx
+						.update(userAddressTable)
+						.set({ is_default: 0 })
+						.where(eq(userAddressTable.user_id, userId));
+				}
+
+				// Insert the new address
+				const [inserted] = await tx
+					.insert(userAddressTable)
+					.values({ ...addressData, user_id: userId })
+					.returning();
+
+				return [inserted];
+			});
+
+			if (!newAddress) {
+				throw new InternalServerError('Failed to create address.');
+			}
+
+			return newAddress;
+		} catch (error) {
+			console.error('Add Address Error:', error);
+			throw new InternalServerError('Failed to add address due to a server error.');
+		}
+	}
+
+	async updateUserAddress(
+		userId: number,
+		addressId: number,
+		addressData: Partial<Static<typeof UserAddressSchema>>,
+	) {
+		// 1. Verify User Exists
+		const [userFromDb] = await this.db.select().from(usersTable).where(eq(usersTable.id, userId));
+		if (!userFromDb) {
+			throw new NotFoundError('User not found.');
+		}
+
+		try {
+			const [updatedAddress] = await this.db.transaction(async (tx) => {
+				// If setting as default, unset others
+				if (addressData.is_default === 1) {
+					await tx
+						.update(userAddressTable)
+						.set({ is_default: 0 })
+						.where(eq(userAddressTable.user_id, userId));
+				}
+
+				// Update specific address
+				const [result] = await tx
+					.update(userAddressTable)
+					.set({
+                        ...addressData,
+                        updated_at: new Date().toISOString() // Ensure timestamp update
+                    })
+					.where(and(eq(userAddressTable.id, addressId), eq(userAddressTable.user_id, userId)))
+					.returning();
+
+				return [result];
+			});
+
+			if (!updatedAddress) {
+				throw new NotFoundError('Address not found or does not belong to this user.');
+			}
+
+			return updatedAddress;
+		} catch (error) {
+			if (error instanceof NotFoundError) throw error;
+			console.error('Update Address Error:', error);
+			throw new InternalServerError('Failed to update address.');
+		}
+	}
+
+	async deleteUserAddress(userId: number, addressId: number) {
+		const [deletedAddress] = await this.db
+			.delete(userAddressTable)
+			.where(and(eq(userAddressTable.id, addressId), eq(userAddressTable.user_id, userId)))
+			.returning();
+
+		if (!deletedAddress) {
+			throw new NotFoundError('Address not found or does not belong to this user.');
+		}
+
+		return { message: 'Address deleted successfully.' };
+	}
+    
+    async createRefreshToken(userId: number) {
 		const refreshToken = Bun.randomUUIDv7();
 		const time_ms = 7 * 24 * 60 * 60 * 1000;
 		const expiresAt = new Date(Date.now() + time_ms);
@@ -224,81 +336,5 @@ export class UserService {
 			throw new NotFoundError('User not found.');
 		}
 		return { message: `User with ID ${id} successfully deleted.` };
-	}
-
-	async addUserAddress(
-		userId: number,
-		addressData: Omit<Static<typeof UserAddressSchema>, 'id' | 'user_id'>,
-	) {
-		const [userFromDb] = await this.db.select().from(usersTable).where(eq(usersTable.id, userId));
-		if (!userFromDb) {
-			throw new NotFoundError('User not found.');
-		}
-
-		try {
-			const [newAddress] = await this.db.transaction(async (tx) => {
-				if (addressData.is_default === 1) {
-					await tx
-						.update(userAddressTable)
-						.set({ is_default: 0 })
-						.where(eq(userAddressTable.user_id, userId));
-				}
-
-				const [inserted] = await tx
-					.insert(userAddressTable)
-					.values({ ...addressData, user_id: userId })
-					.returning();
-
-				return [inserted];
-			});
-
-			if (!newAddress)
-				throw new InternalServerError('Address creation failed within transaction.');
-
-			return newAddress;
-		} catch (error) {
-			console.error('Transaction failed:', error);
-			throw new InternalServerError('Failed to add address due to a server error.');
-		}
-	}
-
-	async updateUserAddress(
-		userId: number,
-		addressId: number,
-		addressData: Partial<Static<typeof UserAddressSchema>>,
-	) {
-		const [userFromDb] = await this.db.select().from(usersTable).where(eq(usersTable.id, userId));
-		if (!userFromDb) {
-			throw new NotFoundError('User not found.');
-		}
-
-		try {
-			const [updatedAddress] = await this.db.transaction(async (tx) => {
-				if (addressData.is_default === 1) {
-					await tx
-						.update(userAddressTable)
-						.set({ is_default: 0 })
-						.where(eq(userAddressTable.user_id, userId));
-				}
-
-				const [result] = await tx
-					.update(userAddressTable)
-					.set(addressData)
-					.where(and(eq(userAddressTable.id, addressId), eq(userAddressTable.user_id, userId)))
-					.returning();
-
-				return [result];
-			});
-
-			if (!updatedAddress) {
-				throw new NotFoundError('Address not found.');
-			}
-
-			return updatedAddress;
-		} catch (error) {
-			if (error instanceof NotFoundError) throw error;
-			console.error('Transaction failed:', error);
-			throw new InternalServerError('Failed to update address due to a server error.');
-		}
 	}
 }

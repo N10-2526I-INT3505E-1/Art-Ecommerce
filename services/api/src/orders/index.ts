@@ -93,17 +93,17 @@ export const ordersPlugin = new Elysia()
       )
 
       // 6. Nested Items Route
-      .group('/:orderId/items', (items) =>
+      .group('/:id/items', (items) =>
         items
           .post(
             '/',
             async ({ params, body, set }) => {
-              const newItem = await orderService.addItemToOrder(Number(params.orderId), body);
+              const newItem = await orderService.addItemToOrder(Number(params.id), body);
               set.status = 201;
               return { item: newItem };
             },
             {
-              params: t.Object({ orderId: t.Numeric() }),
+              params: t.Object({ id: t.Numeric() }),
               body: t.Omit(CreateOrderItemSchema, ['id', 'order_id']),
               response: {
                 201: t.Object({ item: OrderItemResponseSchema }),

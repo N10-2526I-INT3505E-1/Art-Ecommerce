@@ -1,9 +1,6 @@
-// Elysia API server
-
 import { ForbiddenError, UnauthorizedError } from '@common/errors/httpErrors';
 import { jwt } from '@elysiajs/jwt';
 import { db } from '@user/db';
-import { and, eq, gt } from 'drizzle-orm';
 import { Elysia, t } from 'elysia';
 import {
 	GoogleLoginSchema,
@@ -13,8 +10,6 @@ import {
 	UserAddressResponseSchema,
 	UserAddressSchema,
 	UserResponseSchema,
-	userAddressTable,
-	usersTable,
 } from './user.model';
 import { UserService } from './user.service';
 
@@ -52,7 +47,7 @@ export const usersPlugin = new Elysia({})
 
 					cookie.refresh_token?.set({
 						value: refreshToken,
-						path: '/api/auth/refresh', 
+						path: '/api/auth/refresh',
 						httpOnly: true,
 						sameSite: 'lax',
 						maxAge: 60 * 60 * 24 * 7, // 7 days
@@ -67,13 +62,9 @@ export const usersPlugin = new Elysia({})
 						200: t.Object({ token: t.String() }),
 						401: ErrorSchema,
 					},
-					detail: {
-						tags: ['Authentication'],
-						summary: 'Log in a user',
-					},
+					detail: { tags: ['Authentication'], summary: 'Log in a user' },
 				},
 			)
-
 			.post(
 				'/logout',
 				async ({ cookie, userService }) => {
@@ -93,17 +84,11 @@ export const usersPlugin = new Elysia({})
 					return { ok: true };
 				},
 				{
-					detail: {
-						tags: ['Authentication'],
-						summary: 'Log out the current user',
-					},
-					response: {
-						200: t.Object({ ok: t.Boolean() }),
-						401: ErrorSchema,
-					},
+					detail: { tags: ['Authentication'], summary: 'Log out' },
+					response: { 200: t.Object({ ok: t.Boolean() }), 401: ErrorSchema },
 				},
 			)
-			.post(
+            .post(
 				'/google',
 				async ({ body, set, cookie, userService }) => {
 					const result = await userService.loginWithGoogle(body.token);
@@ -134,21 +119,14 @@ export const usersPlugin = new Elysia({})
 				},
 				{
 					body: GoogleLoginSchema,
-					detail: {
-						tags: ['Authentication'],
-						summary: 'Log in with Google',
-					},
+					detail: { tags: ['Authentication'], summary: 'Log in with Google' },
 				},
 			)
 			.post(
 				'/refresh',
 				async ({ cookie, userService }) => {
 					const refreshToken = cookie?.refresh_token?.value as string | undefined;
-
-					if (!refreshToken) {
-						throw new UnauthorizedError('No refresh token provided');
-					}
-
+					if (!refreshToken) throw new UnauthorizedError('No refresh token provided');
 					const { accessToken } = await userService.refreshAccessToken(refreshToken);
 
 					cookie.auth?.set({
@@ -156,115 +134,21 @@ export const usersPlugin = new Elysia({})
 						path: '/',
 						httpOnly: true,
 						sameSite: 'lax',
-						maxAge: 60 * 15, // 15 minutes
+						maxAge: 60 * 15,
 					});
 
 					return { token: accessToken };
 				},
 				{
-					detail: {
-						tags: ['Authentication'],
-						summary: 'Refresh access token',
-					},
-					response: {
-						200: t.Object({ token: t.String() }),
-						401: ErrorSchema,
-					},
+					detail: { tags: ['Authentication'], summary: 'Refresh access token' },
+					response: { 200: t.Object({ token: t.String() }), 401: ErrorSchema },
 				},
 			),
 	)
 
+    // --- USER ROUTES ---
 	.group('/users', (app) =>
 		app
-
-			// .get(
-			// 	'/offset',
-			// 	async ({ db, query }) => {
-			// 		const { offset, limit } = query;
-			// 		const userList = await db
-			// 			.select()
-			// 			.from(usersTable)
-			// 			.orderBy(usersTable.id)
-			// 			.limit(limit!)
-			// 			.offset(offset!);
-
-			// 		return { users: userList };
-			// 	},
-			// 	{
-			// 		query: t.Object({
-			// 			offset: t.Number({ default: 0, minimum: 0 }),
-			// 			limit: t.Number({ default: 10, minimum: 1, maximum: 1000 }),
-			// 		}),
-			// 		response: {
-			// 			200: t.Object({ users: t.Array(SafeUserResponseSchema) }),
-			// 		},
-			// 		detail: {
-			// 			tags: ['User Management'],
-			// 			summary: 'User pagination offset/limit',
-			// 		},
-			// 	},
-			// )
-
-			// .get(
-			// 	'/cursor',
-			// 	async ({ db, query }) => {
-			// 		const limit = 10;
-			// 		const cursor = query.cursor;
-
-			// 		const userList = await db
-			// 			.select()
-			// 			.from(usersTable)
-			// 			.orderBy(usersTable.id)
-			// 			.where(gt(usersTable.id, cursor))
-			// 			.limit(limit);
-
-			// 		return { users: userList };
-			// 	},
-			// 	{
-			// 		query: t.Object({
-			// 			cursor: t.Number({ default: 0, minimum: 0 }),
-			// 			limit: t.Number({ default: 10, minimum: 1, maximum: 1000 }),
-			// 		}),
-			// 		response: {
-			// 			200: t.Object({ users: t.Array(SafeUserResponseSchema) }),
-			// 		},
-			// 		detail: {
-			// 			tags: ['User Management'],
-			// 			summary: 'User pagination cursor-based',
-			// 		},
-			// 	},
-			// )
-
-			// .get(
-			// 	'/page',
-			// 	async ({ db, query }) => {
-			// 		const limit = query.per_page;
-			// 		const offset = (query.page - 1) * limit;
-
-			// 		const userList = await db
-			// 			.select()
-			// 			.from(usersTable)
-			// 			.orderBy(usersTable.id)
-			// 			.offset(offset)
-			// 			.limit(limit);
-
-			// 		return { users: userList };
-			// 	},
-			// 	{
-			// 		query: t.Object({
-			// 			page: t.Number({ default: 1, minimum: 1 }),
-			// 			per_page: t.Number({ default: 10, minimum: 1, maximum: 1000 }),
-			// 		}),
-			// 		response: {
-			// 			200: t.Object({ users: t.Array(SafeUserResponseSchema) }),
-			// 		},
-			// 		detail: {
-			// 			tags: ['User Management'],
-			// 			summary: 'User pagination page-based',
-			// 		},
-			// 	},
-			// )
-
 			.post(
 				'/',
 				async ({ body, set, cookie, userService }) => {
@@ -275,7 +159,7 @@ export const usersPlugin = new Elysia({})
 						path: '/',
 						httpOnly: true,
 						sameSite: 'lax',
-						maxAge: 60 * 15, // 15 minutes
+						maxAge: 60 * 15,
 					});
 
 					cookie.refresh_token?.set({
@@ -283,7 +167,7 @@ export const usersPlugin = new Elysia({})
 						path: '/api/auth/refresh',
 						httpOnly: true,
 						sameSite: 'lax',
-						maxAge: 60 * 60 * 24 * 7, // 7 days
+						maxAge: 60 * 60 * 24 * 7,
 					});
 
 					set.status = 201;
@@ -296,24 +180,18 @@ export const usersPlugin = new Elysia({})
 						409: ErrorSchema,
 						500: ErrorSchema,
 					},
-					detail: {
-						tags: ['User Management'],
-						summary: 'Register a new user',
-					},
+					detail: { tags: ['User Management'], summary: 'Register a new user' },
 				},
 			)
 
+            // --- PROTECTED USER ROUTES ---
 			.guard(
 				{
 					beforeHandle: async ({ jwt, cookie }) => {
 						const token = cookie?.auth?.value as string | undefined;
-						if (!token) {
-							throw new UnauthorizedError('Missing token');
-						}
+						if (!token) throw new UnauthorizedError('Missing token');
 						const payload = await jwt.verify(token);
-						if (!payload) {
-							throw new UnauthorizedError('Invalid or expired token');
-						}
+						if (!payload) throw new UnauthorizedError('Invalid or expired token');
 					},
 				},
 				(app) =>
@@ -326,13 +204,11 @@ export const usersPlugin = new Elysia({})
 							return { user: userPayload };
 						})
 
+                        // 1. Get All Users (Admin)
 						.get(
 							'/',
 							async ({ user, userService }) => {
-								if (user?.role !== 'admin') {
-									throw new ForbiddenError('Admins only');
-								}
-
+								if (user?.role !== 'admin') throw new ForbiddenError('Admins only');
 								const { users } = await userService.getAllUsers();
 								return { users };
 							},
@@ -341,19 +217,15 @@ export const usersPlugin = new Elysia({})
 									200: t.Object({ users: t.Array(SafeUserResponseSchema) }),
 									403: ErrorSchema,
 								},
-								detail: {
-									tags: ['User Management'],
-									summary: 'Get all users (Admin Only)',
-								},
+								detail: { tags: ['User Management'], summary: 'Get all users (Admin Only)' },
 							},
 						)
 
+                        // 2. Get Me
 						.get(
 							'/me',
 							async ({ user, userService }) => {
-								if (!user || typeof user.id !== 'number') {
-									throw new UnauthorizedError('Invalid user payload');
-								}
+								if (!user || typeof user.id !== 'number') throw new UnauthorizedError('Invalid user payload');
 								const currentUser = await userService.getUserById(user.id);
 								return { user: currentUser };
 							},
@@ -363,20 +235,16 @@ export const usersPlugin = new Elysia({})
 									401: ErrorSchema,
 									404: ErrorSchema,
 								},
-								detail: {
-									tags: ['User Management'],
-									summary: 'Get current authenticated user',
-								},
+								detail: { tags: ['User Management'], summary: 'Get current authenticated user' },
 							},
 						)
 
+                        // 3. Get User By ID
 						.get(
 							'/:user_id',
 							async ({ params, user, userService }) => {
 								if (user?.role !== 'admin' && user?.id !== Number(params.user_id)) {
-									throw new ForbiddenError(
-										'Only admins or the user themselves can access this information',
-									);
+									throw new ForbiddenError('Access denied');
 								}
 								const foundUser = await userService.getUserById(params.user_id);
 								return { user: foundUser };
@@ -388,72 +256,76 @@ export const usersPlugin = new Elysia({})
 									403: ErrorSchema,
 									404: ErrorSchema,
 								},
-								detail: {
-									tags: ['User Management'],
-									summary: 'Get user by ID',
-								},
+								detail: { tags: ['User Management'], summary: 'Get user by ID' },
 							},
 						)
 
+                        // 4. Update User
 						.patch(
 							'/:user_id',
 							async ({ params, body, user, userService }) => {
 								if (user?.role !== 'admin' && user?.id !== Number(params.user_id)) {
-									throw new ForbiddenError(
-										'Only admins or the user themselves can update this information',
-									);
+									throw new ForbiddenError('Access denied');
 								}
 								const updatedUser = await userService.updateUser(params.user_id, body);
 								return { user: updatedUser };
 							},
 							{
 								params: t.Object({ user_id: t.Numeric() }),
-								body: t.Partial(
-									t.Omit(SignUpSchema, ['id', 'password', 'role', 'created_at', 'updated_at']),
-								),
+								body: t.Partial(t.Omit(SignUpSchema, ['id', 'password', 'role', 'created_at', 'updated_at'])),
 								response: {
 									200: t.Object({ user: SafeUserResponseSchema }),
 									404: ErrorSchema,
 								},
-								detail: {
-									tags: ['User Management'],
-									summary: 'Partially update a user account information',
-								},
+								detail: { tags: ['User Management'], summary: 'Update user' },
 							},
 						)
 
+                        // 5. Delete User
 						.delete(
 							'/:user_id',
 							async ({ params, user, userService }) => {
 								if (user?.role !== 'admin' && user?.id !== Number(params.user_id)) {
-									throw new ForbiddenError('Only admins or the user themselves can delete this account');
+									throw new ForbiddenError('Access denied');
 								}
-
 								const result = await userService.deleteUser(params.user_id);
 								return { message: result.message };
 							},
 							{
 								params: t.Object({ user_id: t.Numeric() }),
-								response: {
-									200: t.Object({ message: t.String() }),
-									404: ErrorSchema,
-								},
-								detail: {
-									tags: ['User Management'],
-									summary: 'Delete a user',
-								},
+								response: { 200: t.Object({ message: t.String() }), 404: ErrorSchema },
+								detail: { tags: ['User Management'], summary: 'Delete user' },
 							},
 						)
 
+                        // 6. Get Addresses
+                        .get(
+                            '/:user_id/addresses',
+                            async ({ params, user, userService }) => {
+                                if (user?.role !== 'admin' && user?.id !== Number(params.user_id)) {
+                                    throw new ForbiddenError('Access denied');
+                                }
+                                const { addresses } = await userService.getUserAddresses(params.user_id);
+                                return { addresses };
+                            },
+                            {
+                                params: t.Object({ user_id: t.Numeric() }),
+                                response: {
+                                    200: t.Object({ addresses: t.Array(UserAddressResponseSchema) }),
+                                    403: ErrorSchema,
+                                },
+                                detail: { tags: ['User Management'], summary: 'Get user addresses' },
+                            }
+                        )
+
+                        // 7. Add Address
 						.post(
 							'/:user_id/addresses',
 							async ({ params, body, set, user, userService }) => {
 								if (user?.role !== 'admin' && user?.id !== Number(params.user_id)) {
-									throw new ForbiddenError('Only admins or the user themselves can add addresses');
+									throw new ForbiddenError('Access denied');
 								}
-
 								const newAddress = await userService.addUserAddress(params.user_id, body);
-
 								set.status = 201;
 								return { address: newAddress };
 							},
@@ -466,25 +338,22 @@ export const usersPlugin = new Elysia({})
 									404: ErrorSchema,
 									500: ErrorSchema,
 								},
-								detail: {
-									tags: ['User Management'],
-									summary: 'Add a new address for a user',
-								},
+								detail: { tags: ['User Management'], summary: 'Add a new address' },
 							},
 						)
 
+                        // 8. Update Address
 						.patch(
 							'/:user_id/addresses/:address_id',
 							async ({ params, body, user, userService }) => {
 								if (user?.role !== 'admin' && user?.id !== Number(params.user_id)) {
-									throw new ForbiddenError('Only admins or the user themselves can update addresses');
+									throw new ForbiddenError('Access denied');
 								}
 								const updatedAddress = await userService.updateUserAddress(
 									params.user_id,
 									params.address_id,
 									body,
 								);
-
 								return { address: updatedAddress };
 							},
 							{
@@ -496,13 +365,31 @@ export const usersPlugin = new Elysia({})
 									404: ErrorSchema,
 									500: ErrorSchema,
 								},
-								detail: {
-									tags: ['User Management'],
-									summary: 'Update an existing address for a user',
-								},
+								detail: { tags: ['User Management'], summary: 'Update an address' },
 							},
-						),
+						)
+
+                        // 9. Delete Address
+                        .delete(
+                            '/:user_id/addresses/:address_id',
+                            async ({ params, user, userService }) => {
+                                if (user?.role !== 'admin' && user?.id !== Number(params.user_id)) {
+                                    throw new ForbiddenError('Access denied');
+                                }
+                                const result = await userService.deleteUserAddress(params.user_id, params.address_id);
+                                return result;
+                            },
+                            {
+                                params: t.Object({ user_id: t.Numeric(), address_id: t.Numeric() }),
+                                response: {
+                                    200: t.Object({ message: t.String() }),
+                                    403: ErrorSchema,
+                                    404: ErrorSchema,
+                                },
+                                detail: { tags: ['User Management'], summary: 'Delete an address' },
+                            }
+                        ),
 			),
 	);
 
-export type App = typeof usersPlugin 
+export type App = typeof usersPlugin;

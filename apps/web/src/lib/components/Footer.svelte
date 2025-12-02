@@ -1,5 +1,5 @@
 <footer class="footer bg-base-300 sm:footer-horizontal p-8">
-	<aside class="footer-title">L'Artelier</aside>
+	<aside class="footer-title">Novus</aside>
 	<nav>
 		<a href="/about">About us</a>
 		<a href="/tos">Terms of Usage</a>

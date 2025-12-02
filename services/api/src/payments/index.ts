@@ -12,12 +12,12 @@ import { createVNPPaymentUrl } from './paymentHandle/vnpayPaymentHandle';
 
 const paymentService = new PaymentService(db);
 
-export const paymentsPlugin = new Elysia()
+export const paymentsPlugin = new Elysia({ prefix: '/payments' })
 	.decorate('paymentService', paymentService)
 	// POST /api/payments - Creates a new payment record with pending status
 	// Accepts order_id, amount, and payment_gateway in the request body
 	// Returns the created payment with a generated payment URL
-	.post('/payments', async ({ body, set, paymentService }) => {
+	.post('/', async ({ body, set, paymentService }) => {
 		//try {
 			// A transaction ensures the insert is an all-or-nothing operation.
 
@@ -43,7 +43,7 @@ export const paymentsPlugin = new Elysia()
 	// PATCH /api/payments/:id - Updates the status of an existing payment
 	// Accepts payment ID in the URL and new status in the request body
 	// Used primarily for webhook callbacks from payment providers
-	.patch('/payments/:id', async ({ params, body, set, paymentService }) => {
+	.patch('/:id', async ({ params, body, set, paymentService }) => {
 		const apiResponse = await paymentService.updatePaymentStatus(Number(params.id), body.status);
 		set.status = 200;
 		return apiResponse;
@@ -66,7 +66,7 @@ export const paymentsPlugin = new Elysia()
 	
 	// GET /api/payments/:id - Retrieves payment details by ID
 	// Returns the payment record with all its information (id, order_id, amount, gateway, status, timestamps)
-	.get('/payments/:id', async ({ params, set, paymentService }) => {
+	.get('/:id', async ({ params, set, paymentService }) => {
 		const apiResponse = await paymentService.getPaymentById(Number(params.id));
 		set.status = 200;
 		return apiResponse;	
@@ -83,7 +83,6 @@ export const paymentsPlugin = new Elysia()
 			tags: ['Payments']
 		}
 	})
-	.listen(3000);
 
 // Helper function to sort object keys
 function sortObject(obj: Record<string, any>): Record<string, any> {
@@ -96,7 +95,7 @@ function sortObject(obj: Record<string, any>): Record<string, any> {
 }
 
 // VNPay IPN endpoint handler
-export const vnpayIpnHandler = new Elysia({ prefix: '/api' })
+export const vnpayIpnHandler = new Elysia()
 	.decorate('db', db)
 	.derive(({ db }) => ({
 		paymentIPN: new PaymentIPN(db),

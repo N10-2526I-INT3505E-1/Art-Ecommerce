@@ -157,7 +157,10 @@ export class ProductService {
                 limit: limit,
                 offset: offset,
                 orderBy: [desc(products.createdAt)],
-                with: { category: true }
+                with: { 
+                    category: true,
+                    productTags: { with: { tag: true } }
+                }
             });
 
             const allItems = await this.db

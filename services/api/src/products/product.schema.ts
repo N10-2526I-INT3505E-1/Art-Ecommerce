@@ -57,11 +57,11 @@ export const product_tags = sqliteTable('product_tags', {
 // === VALIDATION & RELATIONS (Giữ nguyên logic nhưng ID giờ là string) ===
 
 export const insertProductBody = t.Object({
-  name: t.String(),
+  name: t.String({ minLength: 1, error: "Tên sản phẩm không được để trống" }),
   price: t.Number(),
-  imageUrl: t.String(),
+  imageUrl: t.String({ minLength: 1, error: "Link ảnh không được để trống" }),
   description: t.Optional(t.String()),
-  sourceUrl: t.Optional(t.String()),
+  sourceUrl: t.Optional(t.String({ minLength: 1 })),
   categoryName: t.Optional(t.String()),
   tags: t.Optional(t.Array(t.String())),
   stock: t.Optional(t.Number())

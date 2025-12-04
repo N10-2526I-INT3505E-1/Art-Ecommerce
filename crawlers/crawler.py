@@ -9,7 +9,7 @@ import re
 # Link trang danh mục (ví dụ: Tranh phong cảnh vùng cao)
 BASE_URL = "https://bantranh.com"
 LIST_URL = "https://bantranh.com/pc/tranh-phong-canh-vung-cao/page/{}/" # Trang này có thể không phân trang kiểu ?page=1, cần kiểm tra kỹ
-API_URL = "http://localhost:3000/products"
+API_URL = "http://localhost:3000/api/products"
 
 TARGET_CATEGORIES = [
     # 1. HÀNH MỘC (Cây cối, Rừng)
@@ -29,7 +29,7 @@ TARGET_CATEGORIES = [
     
     # 5. HÀNH KIM (Chim công - Thường có màu vàng kim/trắng)
     "https://bantranh.com/pc/tranh-son-mai-cac-loai-hoa/page/{}",
-
+    "https://bantranh.com/pc/tranh-hoa/page/{}",
 
 ]
 
@@ -204,7 +204,7 @@ def get_product_links(category_url, page=1):
             cnt += 1
     print(cnt)
         
-    return product_links[:5]
+    return product_links[:15]
 
 def get_product_detail(url):
     time.sleep(random.uniform(0.5, 1.5))
@@ -233,7 +233,7 @@ def get_product_detail(url):
         items = bread.find_all("a")
         if len(items) > 1:
             # Lấy mục gần cuối (thường là danh mục chính)
-            category = items[-1].text.strip()
+            category = items[1].text.strip()
         else:
             category = "Tranh treo tường" # Fallback
     else:
@@ -279,23 +279,30 @@ for cat_url in TARGET_CATEGORIES:
         # 3. Duyệt qua từng sản phẩm trong trang
         for link in links:
             data = get_product_detail(link)
+
+            if not data['name'] or data['name'] == "Untitled" or data['name'] == "Untitle":
+                print(f"   ⚠️ Bỏ qua: Dữ liệu rỗng hoặc lỗi ({link})")
+                continue  # Bỏ qua, không gửi API
+    
+            if not data['imageUrl']:
+                print(f"   ⚠️ Bỏ qua: Không có ảnh ({link})")
+                continue
             
-            if data:
-                try:
-                    # In ra console cho đẹp
-                    # print(f"         + [{data['price']:,}đ] {data['name']}")
-                    print(json.dumps(data, ensure_ascii=False, indent=2))
+            try:
+                # In ra console cho đẹp
+                print(f"         + [{data['price']:,}đ] {data['name']}")
+                print(json.dumps(data, ensure_ascii=False, indent=2))
+                
+                # Gửi API
+                resp = requests.post(API_URL, json=data)
+                
+                if resp.status_code == 201:
+                    total_success += 1
+                else:
+                    print(f"           ❌ Lỗi API: {resp.text}")
                     
-                    # Gửi API
-                    resp = requests.post(API_URL, json=data)
-                    
-                    if resp.status_code == 201:
-                        total_success += 1
-                    else:
-                        print(f"           ❌ Lỗi API: {resp.text}")
-                        
-                except Exception as e:
-                    print(f"           ❌ Lỗi Python: {e}")
+            except Exception as e:
+                print(f"           ❌ Lỗi Python: {e}")
 
 print(f"\n🎉🎉🎉 HOÀN TẤT TOÀN BỘ! Tổng cộng đã thêm {total_success} sản phẩm vào Database.")
     

@@ -1,10 +1,14 @@
 import type { RequestEvent } from '@sveltejs/kit';
 import ky, { type KyInstance, type Options } from 'ky';
 
-export function api({ fetch }: Pick<RequestEvent, 'fetch'>, options: Options = {}): KyInstance {
+export function api(
+	{ fetch, request }: Pick<RequestEvent, 'fetch' | 'request'>,
+	options: Options = {},
+): KyInstance {
 	const defaultOptions: Options = {
 		prefixUrl: 'http://localhost:3000/',
 		credentials: 'include',
+
 		fetch: fetch as typeof globalThis.fetch,
 		timeout: 10000,
 		retry: { limit: 2 },

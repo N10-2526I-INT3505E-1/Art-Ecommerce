@@ -25,7 +25,7 @@ if (!process.env.JWT_SECRET) {
 export const usersPlugin = new Elysia({})
 	.decorate('db', db)
 	.get('/', ({ path }) => path)
-	.use(jwt({ name: 'jwt', secret: process.env.JWT_SECRET as string, exp: '1m' }))
+	.use(jwt({ name: 'jwt', secret: process.env.JWT_SECRET as string, exp: '30m' }))
 	.resolve(({ db, jwt }) => ({
 		userService: new UserService(db, jwt as any),
 	}))
@@ -34,32 +34,16 @@ export const usersPlugin = new Elysia({})
 		app
 			.post(
 				'/login',
-				async ({ body, set, cookie, userService }) => {
+				async ({ body, set, userService }) => {
 					const { accessToken, refreshToken } = await userService.login(body);
 
-					cookie.auth?.set({
-						value: accessToken,
-						path: '/',
-						httpOnly: true,
-						sameSite: 'lax',
-						maxAge: 60 * 15, // 15 minutes
-					});
-
-					cookie.refresh_token?.set({
-						value: refreshToken,
-						path: '/api/auth/refresh',
-						httpOnly: true,
-						sameSite: 'lax',
-						maxAge: 60 * 60 * 24 * 7, // 7 days
-					});
-
 					set.status = 200;
-					return { token: accessToken };
+					return { accessToken, refreshToken };
 				},
 				{
 					body: LoginSchema,
 					response: {
-						200: t.Object({ token: t.String() }),
+						200: t.Object({ accessToken: t.String(), refreshToken: t.String() }),
 						401: ErrorSchema,
 					},
 					detail: { tags: ['Authentication'], summary: 'Log in a user' },
@@ -67,52 +51,25 @@ export const usersPlugin = new Elysia({})
 			)
 			.post(
 				'/logout',
-				async ({ cookie, userService }) => {
-					const token = cookie?.auth?.value as string | undefined;
-					const refreshToken = cookie?.refresh_token?.value as string | undefined;
-
-					if (!token && !refreshToken) {
-						throw new UnauthorizedError('No active session to log out from.');
-					}
+				async ({ body, userService }) => {
+					const { refreshToken } = body;
 
 					if (refreshToken) {
 						await userService.logout(refreshToken);
 					}
 
-					cookie.auth?.remove();
-					cookie.refresh_token?.remove();
 					return { ok: true };
 				},
 				{
+					body: t.Object({ refreshToken: t.Optional(t.String()) }),
 					detail: { tags: ['Authentication'], summary: 'Log out' },
 					response: { 200: t.Object({ ok: t.Boolean() }), 401: ErrorSchema },
 				},
 			)
-            .post(
+			.post(
 				'/google',
-				async ({ body, set, cookie, userService }) => {
+				async ({ body, set, userService }) => {
 					const result = await userService.loginWithGoogle(body.token);
-
-					if (result.status === 'login' && result.accessToken && result.refreshToken) {
-						cookie.auth?.set({
-							value: result.accessToken,
-							path: '/',
-							httpOnly: true,
-							sameSite: 'lax',
-							maxAge: 60 * 15, // 15 minutes
-						});
-
-						cookie.refresh_token?.set({
-							value: result.refreshToken,
-							path: '/api/auth/refresh',
-							httpOnly: true,
-							sameSite: 'lax',
-							maxAge: 60 * 60 * 24 * 7, // 7 days
-						});
-
-						const { refreshToken, ...response } = result;
-						return response;
-					}
 
 					set.status = 200;
 					return result;
@@ -124,59 +81,40 @@ export const usersPlugin = new Elysia({})
 			)
 			.post(
 				'/refresh',
-				async ({ cookie, userService }) => {
-					const refreshToken = cookie?.refresh_token?.value as string | undefined;
+				async ({ body, userService }) => {
+					const { refreshToken } = body;
 					if (!refreshToken) throw new UnauthorizedError('No refresh token provided');
 					const { accessToken } = await userService.refreshAccessToken(refreshToken);
 
-					cookie.auth?.set({
-						value: accessToken,
-						path: '/',
-						httpOnly: true,
-						sameSite: 'lax',
-						maxAge: 60 * 15,
-					});
-
-					return { token: accessToken };
+					return { accessToken };
 				},
 				{
+					body: t.Object({ refreshToken: t.String() }),
 					detail: { tags: ['Authentication'], summary: 'Refresh access token' },
-					response: { 200: t.Object({ token: t.String() }), 401: ErrorSchema },
+					response: { 200: t.Object({ accessToken: t.String() }), 401: ErrorSchema },
 				},
 			),
 	)
 
-    // --- USER ROUTES ---
+	// --- USER ROUTES ---
 	.group('/users', (app) =>
 		app
 			.post(
 				'/',
-				async ({ body, set, cookie, userService }) => {
-					const { accessToken, refreshToken, ...user } = await userService.createUser(body);
-
-					cookie.auth?.set({
-						value: accessToken,
-						path: '/',
-						httpOnly: true,
-						sameSite: 'lax',
-						maxAge: 60 * 15,
-					});
-
-					cookie.refresh_token?.set({
-						value: refreshToken,
-						path: '/api/auth/refresh',
-						httpOnly: true,
-						sameSite: 'lax',
-						maxAge: 60 * 60 * 24 * 7,
-					});
+				async ({ body, set, userService }) => {
+					const result = await userService.createUser(body);
 
 					set.status = 201;
-					return { user };
+					return result;
 				},
 				{
 					body: t.Omit(SignUpSchema, ['id', 'role', 'created_at', 'updated_at']),
 					response: {
-						201: t.Object({ user: t.Omit(UserResponseSchema, ['password']) }),
+						201: t.Object({
+							user: t.Omit(UserResponseSchema, ['password']),
+							accessToken: t.String(),
+							refreshToken: t.String(),
+						}),
 						409: ErrorSchema,
 						500: ErrorSchema,
 					},
@@ -184,7 +122,7 @@ export const usersPlugin = new Elysia({})
 				},
 			)
 
-            // --- PROTECTED USER ROUTES ---
+			// --- PROTECTED USER ROUTES ---
 			.guard(
 				{
 					beforeHandle: async ({ jwt, cookie }) => {
@@ -199,16 +137,16 @@ export const usersPlugin = new Elysia({})
 						.resolve(async ({ jwt, cookie }) => {
 							const token = cookie?.auth?.value as string | undefined;
 							const userPayload = token
-								? ((await jwt.verify(token)) as { id: number; email: string; role: string } | null)
+								? ((await jwt.verify(token)) as { id: string; email: string; role: string } | null)
 								: null;
 							return { user: userPayload };
 						})
 
-                        // 1. Get All Users (Admin)
+						// 1. Get All Users (Admin)
 						.get(
 							'/',
 							async ({ user, userService }) => {
-								if (user?.role !== 'admin') throw new ForbiddenError('Admins only');
+								if (user?.role !== 'manager') throw new ForbiddenError('Admins only');
 								const { users } = await userService.getAllUsers();
 								return { users };
 							},
@@ -221,11 +159,12 @@ export const usersPlugin = new Elysia({})
 							},
 						)
 
-                        // 2. Get Me
+						// 2. Get Me
 						.get(
 							'/me',
 							async ({ user, userService }) => {
-								if (!user || typeof user.id !== 'number') throw new UnauthorizedError('Invalid user payload');
+								if (!user || typeof user.id !== 'string')
+									throw new UnauthorizedError('Invalid user payload');
 								const currentUser = await userService.getUserById(user.id);
 								return { user: currentUser };
 							},
@@ -239,18 +178,18 @@ export const usersPlugin = new Elysia({})
 							},
 						)
 
-                        // 3. Get User By ID
+						// 3. Get User By ID
 						.get(
 							'/:user_id',
 							async ({ params, user, userService }) => {
-								if (user?.role !== 'admin' && user?.id !== Number(params.user_id)) {
+								if (user?.role !== 'manager' && user?.id !== params.user_id) {
 									throw new ForbiddenError('Access denied');
 								}
 								const foundUser = await userService.getUserById(params.user_id);
 								return { user: foundUser };
 							},
 							{
-								params: t.Object({ user_id: t.Numeric() }),
+								params: t.Object({ user_id: t.String() }),
 								response: {
 									200: t.Object({ user: SafeUserResponseSchema }),
 									403: ErrorSchema,
@@ -260,19 +199,21 @@ export const usersPlugin = new Elysia({})
 							},
 						)
 
-                        // 4. Update User
+						// 4. Update User
 						.patch(
 							'/:user_id',
 							async ({ params, body, user, userService }) => {
-								if (user?.role !== 'admin' && user?.id !== Number(params.user_id)) {
+								if (user?.role !== 'manager' && user?.id !== params.user_id) {
 									throw new ForbiddenError('Access denied');
 								}
 								const updatedUser = await userService.updateUser(params.user_id, body);
 								return { user: updatedUser };
 							},
 							{
-								params: t.Object({ user_id: t.Numeric() }),
-								body: t.Partial(t.Omit(SignUpSchema, ['id', 'password', 'role', 'created_at', 'updated_at'])),
+								params: t.Object({ user_id: t.String() }),
+								body: t.Partial(
+									t.Omit(SignUpSchema, ['id', 'password', 'role', 'created_at', 'updated_at']),
+								),
 								response: {
 									200: t.Object({ user: SafeUserResponseSchema }),
 									404: ErrorSchema,
@@ -281,48 +222,48 @@ export const usersPlugin = new Elysia({})
 							},
 						)
 
-                        // 5. Delete User
+						// 5. Delete User
 						.delete(
 							'/:user_id',
 							async ({ params, user, userService }) => {
-								if (user?.role !== 'admin' && user?.id !== Number(params.user_id)) {
+								if (user?.role !== 'manager' && user?.id !== params.user_id) {
 									throw new ForbiddenError('Access denied');
 								}
 								const result = await userService.deleteUser(params.user_id);
 								return { message: result.message };
 							},
 							{
-								params: t.Object({ user_id: t.Numeric() }),
+								params: t.Object({ user_id: t.String() }),
 								response: { 200: t.Object({ message: t.String() }), 404: ErrorSchema },
 								detail: { tags: ['User Management'], summary: 'Delete user' },
 							},
 						)
 
-                        // 6. Get Addresses
-                        .get(
-                            '/:user_id/addresses',
-                            async ({ params, user, userService }) => {
-                                if (user?.role !== 'admin' && user?.id !== Number(params.user_id)) {
-                                    throw new ForbiddenError('Access denied');
-                                }
-                                const { addresses } = await userService.getUserAddresses(params.user_id);
-                                return { addresses };
-                            },
-                            {
-                                params: t.Object({ user_id: t.Numeric() }),
-                                response: {
-                                    200: t.Object({ addresses: t.Array(UserAddressResponseSchema) }),
-                                    403: ErrorSchema,
-                                },
-                                detail: { tags: ['User Management'], summary: 'Get user addresses' },
-                            }
-                        )
+						// 6. Get Addresses
+						.get(
+							'/:user_id/addresses',
+							async ({ params, user, userService }) => {
+								if (user?.role !== 'manager' && user?.id !== params.user_id) {
+									throw new ForbiddenError('Access denied');
+								}
+								const { addresses } = await userService.getUserAddresses(params.user_id);
+								return { addresses };
+							},
+							{
+								params: t.Object({ user_id: t.String() }),
+								response: {
+									200: t.Object({ addresses: t.Array(UserAddressResponseSchema) }),
+									403: ErrorSchema,
+								},
+								detail: { tags: ['User Management'], summary: 'Get user addresses' },
+							},
+						)
 
-                        // 7. Add Address
+						// 7. Add Address
 						.post(
 							'/:user_id/addresses',
 							async ({ params, body, set, user, userService }) => {
-								if (user?.role !== 'admin' && user?.id !== Number(params.user_id)) {
+								if (user?.role !== 'manager' && user?.id !== params.user_id) {
 									throw new ForbiddenError('Access denied');
 								}
 								const newAddress = await userService.addUserAddress(params.user_id, body);
@@ -330,7 +271,7 @@ export const usersPlugin = new Elysia({})
 								return { address: newAddress };
 							},
 							{
-								params: t.Object({ user_id: t.Numeric() }),
+								params: t.Object({ user_id: t.String() }),
 								body: t.Omit(UserAddressSchema, ['id', 'user_id']),
 								response: {
 									201: t.Object({ address: UserAddressResponseSchema }),
@@ -342,11 +283,11 @@ export const usersPlugin = new Elysia({})
 							},
 						)
 
-                        // 8. Update Address
+						// 8. Update Address
 						.patch(
 							'/:user_id/addresses/:address_id',
 							async ({ params, body, user, userService }) => {
-								if (user?.role !== 'admin' && user?.id !== Number(params.user_id)) {
+								if (user?.role !== 'manager' && user?.id !== params.user_id) {
 									throw new ForbiddenError('Access denied');
 								}
 								const updatedAddress = await userService.updateUserAddress(
@@ -357,7 +298,7 @@ export const usersPlugin = new Elysia({})
 								return { address: updatedAddress };
 							},
 							{
-								params: t.Object({ user_id: t.Numeric(), address_id: t.Numeric() }),
+								params: t.Object({ user_id: t.String(), address_id: t.Numeric() }),
 								body: t.Partial(UserAddressSchema),
 								response: {
 									200: t.Object({ address: UserAddressResponseSchema }),
@@ -369,26 +310,29 @@ export const usersPlugin = new Elysia({})
 							},
 						)
 
-                        // 9. Delete Address
-                        .delete(
-                            '/:user_id/addresses/:address_id',
-                            async ({ params, user, userService }) => {
-                                if (user?.role !== 'admin' && user?.id !== Number(params.user_id)) {
-                                    throw new ForbiddenError('Access denied');
-                                }
-                                const result = await userService.deleteUserAddress(params.user_id, params.address_id);
-                                return result;
-                            },
-                            {
-                                params: t.Object({ user_id: t.Numeric(), address_id: t.Numeric() }),
-                                response: {
-                                    200: t.Object({ message: t.String() }),
-                                    403: ErrorSchema,
-                                    404: ErrorSchema,
-                                },
-                                detail: { tags: ['User Management'], summary: 'Delete an address' },
-                            }
-                        ),
+						// 9. Delete Address
+						.delete(
+							'/:user_id/addresses/:address_id',
+							async ({ params, user, userService }) => {
+								if (user?.role !== 'manager' && user?.id !== params.user_id) {
+									throw new ForbiddenError('Access denied');
+								}
+								const result = await userService.deleteUserAddress(
+									params.user_id,
+									params.address_id,
+								);
+								return result;
+							},
+							{
+								params: t.Object({ user_id: t.String(), address_id: t.Numeric() }),
+								response: {
+									200: t.Object({ message: t.String() }),
+									403: ErrorSchema,
+									404: ErrorSchema,
+								},
+								detail: { tags: ['User Management'], summary: 'Delete an address' },
+							},
+						),
 			),
 	);
 

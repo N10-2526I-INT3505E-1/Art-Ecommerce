@@ -11,12 +11,13 @@ declare global {
 		// interface Platform {}
 
 		interface User {
-			id: number;
+			id: string;
 			username: string;
 			email: string;
 			first_name: string;
 			last_name: string;
-			role: 'user' | 'admin';
+			role: 'user' | 'operator' | 'manager';
+			dob?: string | null;
 		}
 	}
 }

@@ -2,45 +2,79 @@ import { type Actions, fail } from '@sveltejs/kit';
 import { HTTPError } from 'ky';
 import { api } from '$lib/server/http';
 
+import { redirect } from '@sveltejs/kit';
+
+export const load = async ({ locals }) => {
+	if (locals.user) {
+		redirect(302, '/');
+	}
+	return {};
+};
 export const actions: Actions = {
-    login: async (event) => {
-        const fd = await event.request.formData();
-        
-        const loginId = String(fd.get('loginId') ?? '');
-        const password = String(fd.get('password') ?? '');
+	login: async (event) => {
+		const fd = await event.request.formData();
 
-        if (!loginId || !password) {
-            return fail(400, { message: 'Username/Email and password are required.' });
-        }
+		const loginId = String(fd.get('loginId') ?? '');
+		const password = String(fd.get('password') ?? '');
 
-        const payload = loginId.includes('@') 
-            ? { email: loginId, password } 
-            : { username: loginId, password };
+		if (!loginId || !password) {
+			return fail(400, { message: 'Username/Email and password are required.' });
+		}
 
-        const client = api(event);
+		const payload = loginId.includes('@')
+			? { email: loginId, password }
+			: { username: loginId, password };
 
-        try {
-            const response = await client
-                .post('api/auth/login', { json: payload })
-                .json<{ token: string }>();
+		const client = api(event);
 
-            event.cookies.set('auth', response.token, {
-                path: '/',
-                httpOnly: true,
-                sameSite: 'lax',
-                maxAge: 60 * 60 * 24 * 7, // 7 days
-            });
-        } catch (e) {
-            if (e instanceof HTTPError) {
-                const body = await e.response.json().catch(() => null);
-                return fail(e.response.status ?? 400, {
-                    message: body?.message ?? 'Invalid credentials.'
-                });
-            }
-            console.error('Login Error:', e);
-            return fail(500, { message: 'An unexpected error occurred.' });
-        }
+		try {
+			const response = await client
+				.post('api/auth/login', { json: payload })
+				.json<{ accessToken: string; refreshToken: string }>();
 
-        return { success: true, message: 'Login successful!' };
-    },
+			event.cookies.set('auth', response.accessToken, {
+				path: '/',
+				httpOnly: true,
+				secure: process.env.NODE_ENV === 'production',
+				sameSite: 'lax',
+				maxAge: 60 * 30, // 30 minutes
+			});
+
+			event.cookies.set('refresh_token', response.refreshToken, {
+				path: '/',
+				httpOnly: true,
+				secure: process.env.NODE_ENV === 'production',
+				sameSite: 'lax',
+				maxAge: 60 * 60 * 24 * 7, // 7 days
+			});
+		} catch (e) {
+			if (e instanceof HTTPError) {
+				const body = await e.response.json().catch(() => null);
+				return fail(e.response.status ?? 400, {
+					message: body?.message ?? 'Invalid credentials.',
+				});
+			}
+			console.error('Login Error:', e);
+			return fail(500, { message: 'An unexpected error occurred.' });
+		}
+
+		throw redirect(303, '/');
+	},
+	logout: async (event) => {
+		const client = api(event);
+		const refreshToken = event.cookies.get('refresh_token');
+
+		if (refreshToken) {
+			try {
+				await client.post('api/auth/logout', { json: { refreshToken } });
+			} catch (e) {
+				console.error('Logout failed', e);
+			}
+		}
+
+		event.cookies.delete('auth', { path: '/' });
+		event.cookies.delete('refresh_token', { path: '/' });
+
+		throw redirect(303, '/login');
+	},
 };

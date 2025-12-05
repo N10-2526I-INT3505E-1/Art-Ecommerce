@@ -1,4 +1,4 @@
-# Art E-commerce Website
+# Novus E-commerce Website
 
 The source code of the 2526I_INT3505E_1 course project
 

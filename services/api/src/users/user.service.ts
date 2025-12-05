@@ -4,6 +4,7 @@ import {
 	NotFoundError,
 	UnauthorizedError,
 } from '@common/errors/httpErrors';
+import { faker } from '@faker-js/faker';
 import type { db as defaultDb } from '@user/db';
 import type { LoginSchema, SignUpSchema, UserAddressSchema } from '@user/user.model';
 import { refreshTokensTable, userAddressTable, usersTable } from '@user/user.model';
@@ -32,9 +33,9 @@ export class UserService {
 		}
 	}
 
-    // Address Management
+	// Address Management
 
-	async getUserAddresses(userId: number) {
+	async getUserAddresses(userId: string) {
 		const addresses = await this.db
 			.select()
 			.from(userAddressTable)
@@ -45,7 +46,7 @@ export class UserService {
 	}
 
 	async addUserAddress(
-		userId: number,
+		userId: string,
 		addressData: Omit<Static<typeof UserAddressSchema>, 'id' | 'user_id'>,
 	) {
 		// 1. Verify User Exists
@@ -86,7 +87,7 @@ export class UserService {
 	}
 
 	async updateUserAddress(
-		userId: number,
+		userId: string,
 		addressId: number,
 		addressData: Partial<Static<typeof UserAddressSchema>>,
 	) {
@@ -110,9 +111,9 @@ export class UserService {
 				const [result] = await tx
 					.update(userAddressTable)
 					.set({
-                        ...addressData,
-                        updated_at: new Date().toISOString() // Ensure timestamp update
-                    })
+						...addressData,
+						updated_at: new Date().toISOString(), // Ensure timestamp update
+					})
 					.where(and(eq(userAddressTable.id, addressId), eq(userAddressTable.user_id, userId)))
 					.returning();
 
@@ -131,7 +132,7 @@ export class UserService {
 		}
 	}
 
-	async deleteUserAddress(userId: number, addressId: number) {
+	async deleteUserAddress(userId: string, addressId: number) {
 		const [deletedAddress] = await this.db
 			.delete(userAddressTable)
 			.where(and(eq(userAddressTable.id, addressId), eq(userAddressTable.user_id, userId)))
@@ -143,8 +144,8 @@ export class UserService {
 
 		return { message: 'Address deleted successfully.' };
 	}
-    
-    async createRefreshToken(userId: number) {
+
+	async createRefreshToken(userId: string) {
 		const refreshToken = Bun.randomUUIDv7();
 		const time_ms = 7 * 24 * 60 * 60 * 1000;
 		const expiresAt = new Date(Date.now() + time_ms);
@@ -215,12 +216,22 @@ export class UserService {
 				return { status: 'login', accessToken, refreshToken };
 			}
 
-			return {
-				status: 'register',
+			// Auto-register logic
+			const newPassword = Bun.randomUUIDv7();
+			const funnyUsername = faker.internet.username() + Bun.randomUUIDv7().slice(0, 4);
+
+			const newUser = await this.createUser({
 				email: payload.email,
-				first_name: payload.given_name,
-				last_name: payload.family_name,
-				picture: payload.picture,
+				username: funnyUsername,
+				password: newPassword,
+				first_name: payload.given_name || 'User',
+				last_name: payload.family_name || 'Name',
+			});
+
+			return {
+				status: 'login',
+				accessToken: newUser.accessToken,
+				refreshToken: newUser.refreshToken,
 			};
 		} catch (error) {
 			console.error('Google login error:', error);
@@ -229,39 +240,37 @@ export class UserService {
 	}
 
 	async login(credentials: Static<typeof LoginSchema>) {
-        let userFromDb;
+		let userFromDb;
 
-        if (credentials.email) {
-            [userFromDb] = await this.db
-                .select()
-                .from(usersTable)
-                .where(eq(usersTable.email, credentials.email));
-        } 
-        else if (credentials.username) {
-            [userFromDb] = await this.db
-                .select()
-                .from(usersTable)
-                .where(eq(usersTable.username, credentials.username));
-        }
-        else {
-            throw new UnauthorizedError('Email or Username is required.');
-        }
+		if (credentials.email) {
+			[userFromDb] = await this.db
+				.select()
+				.from(usersTable)
+				.where(eq(usersTable.email, credentials.email));
+		} else if (credentials.username) {
+			[userFromDb] = await this.db
+				.select()
+				.from(usersTable)
+				.where(eq(usersTable.username, credentials.username));
+		} else {
+			throw new UnauthorizedError('Email or Username is required.');
+		}
 
-        if (!userFromDb) {
-            throw new UnauthorizedError('Invalid credentials.');
-        }
+		if (!userFromDb) {
+			throw new UnauthorizedError('Invalid credentials.');
+		}
 
-        const passwordMatch = await comparePassword(credentials.password, userFromDb.password);
-        if (!passwordMatch) {
-            throw new UnauthorizedError('Invalid credentials.');
-        }
+		const passwordMatch = await comparePassword(credentials.password, userFromDb.password);
+		if (!passwordMatch) {
+			throw new UnauthorizedError('Invalid credentials.');
+		}
 
-        const userPayload = { id: userFromDb.id, email: userFromDb.email, role: userFromDb.role };
-        const accessToken = await this.jwt.sign(userPayload);
-        const refreshToken = await this.createRefreshToken(userFromDb.id);
+		const userPayload = { id: userFromDb.id, email: userFromDb.email, role: userFromDb.role };
+		const accessToken = await this.jwt.sign(userPayload);
+		const refreshToken = await this.createRefreshToken(userFromDb.id);
 
-        return { accessToken, refreshToken };
-    }
+		return { accessToken, refreshToken };
+	}
 
 	async logout(refreshToken: string) {
 		await this.db.delete(refreshTokensTable).where(eq(refreshTokensTable.token, refreshToken));
@@ -309,7 +318,7 @@ export class UserService {
 		return { users: allUsers };
 	}
 
-	async getUserById(id: number) {
+	async getUserById(id: string) {
 		const [user] = await this.db.select().from(usersTable).where(eq(usersTable.id, id));
 		if (!user) {
 			throw new NotFoundError('User not found.');
@@ -317,7 +326,17 @@ export class UserService {
 		return user;
 	}
 
-	async updateUser(id: number, userData: Partial<Static<typeof SignUpSchema>>) {
+	async updateUser(id: string, userData: Partial<Static<typeof SignUpSchema>>) {
+		if (userData.username) {
+			const existingUsername = await this.db
+				.select()
+				.from(usersTable)
+				.where(eq(usersTable.username, userData.username));
+			if (existingUsername.length > 0 && existingUsername[0].id !== id) {
+				throw new ConflictError('A user with this username already exists.');
+			}
+		}
+
 		const [updatedUser] = await this.db
 			.update(usersTable)
 			.set(userData)
@@ -330,7 +349,7 @@ export class UserService {
 		return updatedUser;
 	}
 
-	async deleteUser(id: number) {
+	async deleteUser(id: string) {
 		const [deletedUser] = await this.db.delete(usersTable).where(eq(usersTable.id, id)).returning();
 		if (!deletedUser) {
 			throw new NotFoundError('User not found.');

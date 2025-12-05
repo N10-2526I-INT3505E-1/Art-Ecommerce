@@ -1,11 +1,11 @@
 <footer class="footer bg-base-300 sm:footer-horizontal p-8">
 	<aside class="footer-title">Novus</aside>
 	<nav>
-		<a href="/about">About us</a>
-		<a href="/tos">Terms of Usage</a>
+		<a href="/about">Giới thiệu</a>
+		<a href="/terms">Điều khoản sử dụng</a>
 	</nav>
 	<nav>
-		<a href="/profile">My account</a>
-		<a href="/orders">My orders</a>
+		<a href="/profile">Tài khoản của tôi</a>
+		<a href="/orders">Đơn hàng của tôi</a>
 	</nav>
 </footer>

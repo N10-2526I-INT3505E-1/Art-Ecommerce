@@ -5,15 +5,33 @@ import { int, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { createInsertSchema, createSelectSchema } from 'drizzle-typebox';
 import { t } from 'elysia';
 
+export const BIRTH_HOURS = [
+	'ty',
+	'suu',
+	'dan',
+	'mao',
+	'thin',
+	'ty_chi',
+	'ngo',
+	'mui',
+	'than',
+	'dau',
+	'tuat',
+	'hoi',
+] as const;
+
 export const usersTable = sqliteTable('users', {
-	id: int().primaryKey({ autoIncrement: true }),
+	id: text()
+		.primaryKey()
+		.$defaultFn(() => Bun.randomUUIDv7()),
 	email: text().notNull().unique(),
 	username: text().notNull().unique(),
 	password: text().notNull(),
 	first_name: text().notNull(),
 	last_name: text().notNull(),
 	dob: text(),
-	role: text('role', { enum: ['admin', 'operator', 'user'] })
+	birth_hour: text('birth_hour', { enum: BIRTH_HOURS }),
+	role: text('role', { enum: ['manager', 'operator', 'user'] })
 		.notNull()
 		.default('user'),
 	created_at: text()
@@ -27,7 +45,7 @@ export const usersTable = sqliteTable('users', {
 
 export const userAddressTable = sqliteTable('user_address', {
 	id: int().primaryKey({ autoIncrement: true }),
-	user_id: int()
+	user_id: text()
 		.notNull()
 		.references(() => usersTable.id, { onDelete: 'cascade' }),
 	address: text().notNull(),
@@ -47,7 +65,7 @@ export const userAddressTable = sqliteTable('user_address', {
 
 export const refreshTokensTable = sqliteTable('refresh_tokens', {
 	id: int().primaryKey({ autoIncrement: true }),
-	user_id: int()
+	user_id: text()
 		.notNull()
 		.references(() => usersTable.id, { onDelete: 'cascade' }),
 	token: text().notNull().unique(),
@@ -70,6 +88,7 @@ export const SignUpSchema = createInsertSchema(usersTable, {
 			default: null,
 		}),
 	),
+	birth_hour: t.Optional(t.String({ enum: BIRTH_HOURS })),
 });
 
 export const UserAddressSchema = createInsertSchema(userAddressTable, {
@@ -82,9 +101,9 @@ export const UserAddressSchema = createInsertSchema(userAddressTable, {
 });
 
 export const LoginSchema = t.Object({
-    email: t.Optional(t.String({ format: 'email' })),
-    username: t.Optional(t.String()),
-    password: t.String({ minLength: 6 }),
+	email: t.Optional(t.String({ format: 'email' })),
+	username: t.Optional(t.String()),
+	password: t.String({ minLength: 6 }),
 });
 
 export const GoogleLoginSchema = t.Object({

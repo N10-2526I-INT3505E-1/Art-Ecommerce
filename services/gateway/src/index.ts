@@ -1,33 +1,40 @@
 import { Elysia } from "elysia";
 import { authPlugin, getAuthUser, requireAuth } from "./middleware/auth";
+import { loggerPlugin } from "./middleware/logger";
 import { proxyHandler } from "./proxy";
+import { getOrderDetail } from "./controllers/order.controller";
 import { PORT } from "./config";
 
 const app = new Elysia()
-  // 1. Cài đặt JWT Plugin
+  .use(loggerPlugin)
   .use(authPlugin)
-  
-  // 2. Global Derive: Kiểm tra user ở mọi request (nhưng chưa chặn)
   .derive(getAuthUser)
+  .get("/health", () => ({ status: "ok" }))
 
-  // 3. Health Check
-  .get("/health", () => ({ status: "ok", gateway: true }))
-
-  // 4. Protected Routes (Ví dụ: Orders cần login)
-  // Logic: Các route bắt đầu bằng /api/orders sẽ đi qua guard requireAuth trước
+  // --- PROTECTED ROUTES ---
   .guard(
-    {
-      beforeHandle: [requireAuth], // Chặn nếu không có user
-    },
+    { beforeHandle: [requireAuth] },
     (app) => app
+      // ✅ 1. User Order Item: Gateway VẪN điều phối để ghép ảnh/tên cho đẹp
+      .get("/api/orders/:id", getOrderDetail)
+
+      .post("/api/payments/create", proxyHandler) 
+
+      // Các route khác giữ nguyên Proxy
+      .all("/api/orders", proxyHandler)
       .all("/api/orders/*", proxyHandler)
-      .all("/api/users/me", proxyHandler) // Ví dụ thêm route cần bảo vệ
+      .all("/api/users/*", proxyHandler)
+      .all("/api/payments/*", proxyHandler) 
   )
 
-  // 5. Public Routes (Login, Register, Products...)
-  // Các route này vẫn đi qua proxy nhưng không check auth bắt buộc
-  .all("/api/*", proxyHandler)
-
+  // --- PUBLIC ROUTES ---
+  .group("/api", (app) => app
+      .post("/auth/*", proxyHandler)
+      .get("/products", proxyHandler)
+      .get("/products/*", proxyHandler)
+      // Webhook VNPay (Quan trọng)
+      .get("/vnpay_ipn", proxyHandler) 
+  )
   .listen(PORT);
 
 console.log(`🚀 Gateway running at http://localhost:${PORT}`);

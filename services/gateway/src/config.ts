@@ -6,5 +6,5 @@ export const SERVICES = {
   PAYMENTS: process.env.PAYMENTS_SERVICE_URL || "http://localhost:4003",
 };
 
-export const JWT_SECRET = process.env.JWT_SECRET || "";
+export const JWT_SECRET = process.env.JWT_SECRET || "gateway-secret-key-change-in-production";
 export const PORT = Number(process.env.PORT) || 3000;

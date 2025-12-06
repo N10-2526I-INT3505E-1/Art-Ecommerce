@@ -1,23 +1,25 @@
 import { Elysia, t } from 'elysia';
-import { OrderService } from './order.service';
+import { db } from './db';
 import {
   CreateOrderSchema,
   OrderResponseSchema,
 } from './order.model';
+import { OrderService } from './order.service';
 import {
   CreateOrderItemSchema,
   OrderItemResponseSchema,
 } from './order_item.model';
 
-export const ordersPlugin = new Elysia({ prefix: '/api' })
+const orderService = new OrderService(db);
+
+export const ordersPlugin = new Elysia()
   .group('/orders', (app) =>
     app
       // 1. Create Order
       .post(
         '/',
         async ({ body, set }) => {
-          // Chỉ cần gọi hàm, lỗi 500 sẽ do Global Handler lo
-          const newOrder = await OrderService.createOrder(body as any);
+          const newOrder = await orderService.createOrder(body as any);
           set.status = 201;
           return { order: newOrder };
         },
@@ -25,22 +27,26 @@ export const ordersPlugin = new Elysia({ prefix: '/api' })
           body: t.Omit(CreateOrderSchema, ['id', 'created_at', 'updated_at']),
           response: {
             201: t.Object({ order: OrderResponseSchema }),
-            // Không cần khai báo response 500 ở đây nữa nếu không muốn Swagger quá dài
           },
           detail: { tags: ['Orders'], summary: 'Create a new order' },
         },
       )
 
-      // 2. Get All Orders
+      // 2. Get Orders (All or Filter by User ID)
       .get(
         '/',
-        async () => {
-          const orders = await OrderService.getAllOrders();
+        async ({ query }) => {
+          // Truyền user_id vào hàm getOrders (nếu có)
+          const orders = await orderService.getOrders(query.user_id);
           return { orders };
         },
         {
+          // Khai báo Query param user_id là optional string
+          query: t.Object({
+            user_id: t.Optional(t.String())
+          }),
           response: { 200: t.Object({ orders: t.Array(OrderResponseSchema) }) },
-          detail: { tags: ['Orders'], summary: 'Get all orders' },
+          detail: { tags: ['Orders'], summary: 'Get orders list (filter by user_id)' },
         },
       )
 
@@ -48,8 +54,7 @@ export const ordersPlugin = new Elysia({ prefix: '/api' })
       .get(
         '/:id',
         async ({ params }) => {
-          // Nếu không tìm thấy, Service ném NotFoundError -> Global Handler bắt -> trả về 404 JSON
-          const order = await OrderService.getOrderById(Number(params.id));
+          const order = await orderService.getOrderById(Number(params.id));
           return { order };
         },
         {
@@ -65,7 +70,7 @@ export const ordersPlugin = new Elysia({ prefix: '/api' })
       .patch(
         '/:id',
         async ({ params, body }) => {
-          const updated = await OrderService.updateOrder(Number(params.id), body as any);
+          const updated = await orderService.updateOrder(Number(params.id), body as any);
           return { order: updated };
         },
         {
@@ -82,7 +87,7 @@ export const ordersPlugin = new Elysia({ prefix: '/api' })
       .delete(
         '/:id',
         async ({ params }) => {
-          await OrderService.deleteOrder(Number(params.id));
+          await orderService.deleteOrder(Number(params.id));
           return { message: `Đã xóa đơn hàng ID ${params.id}.` };
         },
         {
@@ -92,18 +97,50 @@ export const ordersPlugin = new Elysia({ prefix: '/api' })
         },
       )
 
-      // 6. Nested Items Route
-      .group('/:orderId/items', (items) =>
+      // 6. Create Payment Link
+      .post(
+        '/payment-url',
+        async ({ body, set }) => {
+            const result = await orderService.createPaymentLink(body.order_id, body.payment_gateway);
+            set.status = 200;
+            return result; 
+        },
+        {
+            body: t.Object({
+                order_id: t.Numeric(),
+                payment_gateway: t.Optional(t.String({ default: 'vnpay' }))
+            }),
+            // Schema response dựa trên data trả về từ Payment Service
+            response: {
+                200: t.Object({
+                    id: t.Integer(),
+                    order_id: t.Integer(),
+                    amount: t.Any(), 
+                    payment_gateway: t.String(),
+                    status: t.String(),
+                    transaction_id: t.Union([t.String(), t.Null()]),
+                    paymentUrl: t.String(),
+                })
+            },
+            detail: { 
+                tags: ['Orders', 'Payment'], 
+                summary: 'Initiate payment for an order via Payment Service' 
+            },
+        }
+      )
+
+      // 7. Nested Items Route
+      .group('/:id/items', (items) =>
         items
           .post(
             '/',
             async ({ params, body, set }) => {
-              const newItem = await OrderService.addItemToOrder(Number(params.orderId), body);
+              const newItem = await orderService.addItemToOrder(Number(params.id), body);
               set.status = 201;
               return { item: newItem };
             },
             {
-              params: t.Object({ orderId: t.Numeric() }),
+              params: t.Object({ id: t.Numeric() }),
               body: t.Omit(CreateOrderItemSchema, ['id', 'order_id']),
               response: {
                 201: t.Object({ item: OrderItemResponseSchema }),
@@ -115,11 +152,11 @@ export const ordersPlugin = new Elysia({ prefix: '/api' })
           .get(
             '/',
             async ({ params }) => {
-              const items = await OrderService.getOrderItems(Number(params.orderId));
+              const items = await orderService.getOrderItems(Number(params.id));
               return { items };
             },
             {
-              params: t.Object({ orderId: t.Numeric() }),
+              params: t.Object({ id: t.Numeric() }), // Sửa params.orderId thành params.id cho khớp group
               response: {
                 200: t.Object({ items: t.Array(OrderItemResponseSchema) }),
               },

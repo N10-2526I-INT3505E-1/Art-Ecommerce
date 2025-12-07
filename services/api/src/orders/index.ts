@@ -32,16 +32,21 @@ export const ordersPlugin = new Elysia()
         },
       )
 
-      // 2. Get All Orders
+      // 2. Get Orders (All or Filter by User ID)
       .get(
         '/',
-        async () => {
-          const orders = await orderService.getAllOrders();
+        async ({ query }) => {
+          // Truyền user_id vào hàm getOrders (nếu có)
+          const orders = await orderService.getOrders(query.user_id);
           return { orders };
         },
         {
+          // Khai báo Query param user_id là optional string
+          query: t.Object({
+            user_id: t.Optional(t.String())
+          }),
           response: { 200: t.Object({ orders: t.Array(OrderResponseSchema) }) },
-          detail: { tags: ['Orders'], summary: 'Get all orders' },
+          detail: { tags: ['Orders'], summary: 'Get orders list (filter by user_id)' },
         },
       )
 
@@ -92,7 +97,39 @@ export const ordersPlugin = new Elysia()
         },
       )
 
-      // 6. Nested Items Route
+      // 6. Create Payment Link
+      .post(
+        '/payment-url',
+        async ({ body, set }) => {
+            const result = await orderService.createPaymentLink(body.order_id, body.payment_gateway);
+            set.status = 200;
+            return result; 
+        },
+        {
+            body: t.Object({
+                order_id: t.Numeric(),
+                payment_gateway: t.Optional(t.String({ default: 'vnpay' }))
+            }),
+            // Schema response dựa trên data trả về từ Payment Service
+            response: {
+                200: t.Object({
+                    id: t.Integer(),
+                    order_id: t.Integer(),
+                    amount: t.Any(), 
+                    payment_gateway: t.String(),
+                    status: t.String(),
+                    transaction_id: t.Union([t.String(), t.Null()]),
+                    paymentUrl: t.String(),
+                })
+            },
+            detail: { 
+                tags: ['Orders', 'Payment'], 
+                summary: 'Initiate payment for an order via Payment Service' 
+            },
+        }
+      )
+
+      // 7. Nested Items Route
       .group('/:id/items', (items) =>
         items
           .post(
@@ -115,11 +152,11 @@ export const ordersPlugin = new Elysia()
           .get(
             '/',
             async ({ params }) => {
-              const items = await orderService.getOrderItems(Number(params.orderId));
+              const items = await orderService.getOrderItems(Number(params.id));
               return { items };
             },
             {
-              params: t.Object({ orderId: t.Numeric() }),
+              params: t.Object({ id: t.Numeric() }), // Sửa params.orderId thành params.id cho khớp group
               response: {
                 200: t.Object({ items: t.Array(OrderItemResponseSchema) }),
               },

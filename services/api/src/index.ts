@@ -38,7 +38,7 @@ export const app = new Elysia({ prefix: "/api" })
 		detail: { summary: 'Health check endpoint' },
 	})
 
-	.listen(3000);
+	.listen(3001);
 
 console.log(`🦊 Elysia server is running at http://${app.server?.hostname}:${app.server?.port}`);
 

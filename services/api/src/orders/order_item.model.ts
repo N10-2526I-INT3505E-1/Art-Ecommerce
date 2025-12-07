@@ -2,10 +2,16 @@
 import { int, numeric, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { createInsertSchema, createSelectSchema } from 'drizzle-typebox';
 import { t } from 'elysia';
+import { ordersTable } from './order.model'; 
 
 export const orderItemsTable = sqliteTable('order_items', {
   id: int().primaryKey({ autoIncrement: true }),
-  order_id: int().notNull(),
+  
+  order_id: int()
+    .notNull()
+    // Dòng này tạo liên kết khóa ngoại trong Database
+    .references(() => ordersTable.id, { onDelete: 'cascade' }), 
+    
   product_id: int().notNull(),
   quantity: int().notNull(),
   price_per_item: numeric().notNull().$type<number>(),

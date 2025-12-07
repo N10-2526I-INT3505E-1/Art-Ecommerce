@@ -1,25 +1,24 @@
 <script lang="ts">
-	
 	import { yinYang } from '@lucide/lab';
 	import { ChevronDown, Icon, LogOut, Package, Settings, ShoppingCart, User } from 'lucide-svelte';
-import { page } from '$app/state';
+	import { page } from '$app/state';
 
 	let { user = null } = $props();
 	let currentUser = $derived(user || page.data.user);
 
-	// Mock cart count - replace with real cart state
+	// Mock cart state
 	let cartCount = $state(8);
 	let cartSubtotal = $state(1200000);
 </script>
 
 <div
-	class="navbar border-base-300/50 bg-base-100/95 fixed inset-x-0 top-0 z-40 border-b px-3 shadow-sm backdrop-blur md:px-5 lg:px-6"
+	class="navbar border-base-200/50 bg-base-100/95 fixed inset-x-0 top-0 z-50 h-14 border-b px-3 shadow-sm backdrop-blur transition-all md:px-6"
 >
 	<!-- Brand -->
 	<div class="navbar-start">
 		<a
 			href="/"
-			class="flex items-center gap-2 transition-transform hover:scale-105 md:gap-3"
+			class="group flex items-center gap-2 transition-transform hover:scale-105 active:scale-95 md:gap-3"
 			style="view-transition-name: brand-logo"
 			aria-label="Novus Home"
 		>
@@ -28,31 +27,35 @@ import { page } from '$app/state';
 				width="32"
 				height="32"
 				viewBox="0 0 100 100"
-				class="md:h-10 md:w-10"
+				class="h-8 w-8 transition-transform group-hover:rotate-12 md:h-9 md:w-9"
 			>
 				<g fill-rule="evenodd">
 					<path fill="#282828" d="M46 12 15 88q-30-38 31-76Z" />
 					<path fill="#825F41" d="m54 12 31 76q30-38-31-76Z" />
 				</g>
 			</svg>
-			<span class="text-lg font-bold md:text-xl lg:text-2xl">Novus</span>
+			<span class="font-montserrat text-base-content text-lg font-bold tracking-tight md:text-xl"
+				>Novus</span
+			>
 		</a>
 	</div>
 
-	<!-- Right side: cart + auth -->
-	<div class="navbar-end gap-1.5 md:gap-3">
+	<!-- Right side -->
+	<div class="navbar-end gap-2 md:gap-3">
 		<!-- Cart dropdown -->
 		<div class="dropdown dropdown-end">
 			<button
 				type="button"
 				tabindex="0"
-				class="btn btn-ghost btn-circle h-11 w-11 md:h-10 md:w-10"
-				aria-label="Shopping cart"
+				class="btn btn-ghost btn-circle btn-sm hover:bg-base-200 h-9 w-9 transition-colors"
+				aria-label="Giỏ hàng"
 			>
 				<div class="indicator">
-					<ShoppingCart class="h-5 w-5" />
+					<ShoppingCart class="h-4 w-4 md:h-5 md:w-5" />
 					{#if cartCount > 0}
-						<span class="badge badge-primary badge-sm indicator-item font-semibold">
+						<span
+							class="badge badge-primary badge-xs indicator-item h-4 min-w-[16px] border-none px-1 text-[10px] font-bold"
+						>
 							{cartCount > 99 ? '99+' : cartCount}
 						</span>
 					{/if}
@@ -61,38 +64,36 @@ import { page } from '$app/state';
 
 			<div
 				tabindex="-1"
-				class="card card-compact dropdown-content bg-base-100 z-1 mt-3 w-72 shadow-lg md:w-80"
+				class="card card-compact dropdown-content bg-base-100 ring-base-content/5 z-[1] mt-3 w-72 shadow-xl ring-1 md:w-80"
 			>
-				<div class="card-body">
-					<div class="flex items-baseline justify-between">
-						<span class="text-base font-bold md:text-lg">
+				<div class="card-body p-4">
+					<div class="border-base-200 flex items-baseline justify-between border-b pb-2">
+						<span class="text-base font-bold">
 							{cartCount}
-							{cartCount === 1 ? 'Item' : 'Items'}
+							{cartCount === 1 ? 'Sản phẩm' : 'Sản phẩm'}
 						</span>
 						{#if cartCount > 0}
-							<span class="text-base-content/70 text-xs"> Subtotal </span>
+							<span class="text-base-content/60 text-xs">Tạm tính</span>
 						{/if}
 					</div>
 
 					{#if cartCount > 0}
-						<span class="text-primary text-lg font-semibold md:text-xl">
-							{new Intl.NumberFormat('vi-VN', {
-								style: 'currency',
-								currency: 'VND',
-								minimumFractionDigits: 0,
-							}).format(cartSubtotal)}
-						</span>
-
-						<!-- Mini cart preview placeholder -->
-						<div class="text-base-content/70 my-2 space-y-2 text-xs">
-							<p>Items in your cart...</p>
+						<div class="py-2">
+							<span class="font-montserrat text-primary text-lg font-bold">
+								{new Intl.NumberFormat('vi-VN', {
+									style: 'currency',
+									currency: 'VND',
+									minimumFractionDigits: 0,
+								}).format(cartSubtotal)}
+							</span>
 						</div>
-
-						<div class="card-actions">
-							<a href="/cart" class="btn btn-primary btn-block btn-sm md:btn-md"> View Cart </a>
+						<div class="card-actions mt-2">
+							<a href="/cart" class="btn btn-primary btn-sm w-full font-bold text-white shadow-md">
+								Xem giỏ hàng
+							</a>
 						</div>
 					{:else}
-						<p class="text-base-content/70 py-2 text-sm">Your cart is empty</p>
+						<p class="text-base-content/60 py-4 text-center text-sm">Giỏ hàng trống</p>
 					{/if}
 				</div>
 			</div>
@@ -104,23 +105,28 @@ import { page } from '$app/state';
 				<button
 					type="button"
 					tabindex="0"
-					class="btn btn-ghost btn-sm h-11 gap-1 normal-case md:h-10 md:gap-1.5"
-					aria-label="User menu"
+					class="btn btn-ghost btn-sm hover:bg-base-200 h-9 gap-2 rounded-full px-2 normal-case transition-colors"
 				>
-					<span class="max-w-[8ch] truncate text-sm font-medium md:max-w-[12ch]">
-						{currentUser.first_name}
-					</span>
-					<ChevronDown class="h-4 w-4 opacity-70" />
+					<div
+						class="bg-neutral text-neutral-content flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold"
+					>
+						{currentUser.first_name[0]}
+					</div>
+					<div class="hidden flex-col items-start text-xs md:flex">
+						<span class="max-w-[10ch] truncate leading-none font-semibold">
+							{currentUser.first_name}
+						</span>
+					</div>
+					<ChevronDown class="h-3 w-3 opacity-50" />
 				</button>
 
 				<ul
 					tabindex="-1"
-					class="menu menu-sm dropdown-content rounded-box bg-base-100 md:menu-md z-1 mt-3 w-56 gap-1 p-2 shadow-lg md:w-64"
+					class="menu menu-sm dropdown-content bg-base-100 ring-base-content/5 z-[1] mt-3 w-60 rounded-xl p-2 shadow-xl ring-1"
 				>
-					<!-- User info header -->
-					<li class="menu-title px-4 py-2">
-						<div class="flex flex-col gap-1">
-							<span class="text-base-content text-sm font-semibold">
+					<li class="menu-title px-4 py-2 opacity-100">
+						<div class="flex flex-col gap-0.5">
+							<span class="text-base-content font-bold">
 								{currentUser.first_name}
 								{currentUser.last_name}
 							</span>
@@ -129,7 +135,7 @@ import { page } from '$app/state';
 							</span>
 							{#if ['manager', 'operator'].includes(currentUser.role)}
 								<span
-									class="bg-primary/10 text-primary mt-1 w-fit rounded-full px-2 py-0.5 text-[10px] font-semibold tracking-wide uppercase"
+									class="bg-primary/10 text-primary mt-1 w-fit rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase"
 								>
 									{currentUser.role}
 								</span>
@@ -137,60 +143,60 @@ import { page } from '$app/state';
 						</div>
 					</li>
 
-					<div class="divider my-0"></div>
+					<div class="divider my-1"></div>
 
-					<!-- Menu items with icons -->
 					<li>
-						<a href="/profile" class="gap-3">
-							<User class="h-4 w-4" />
-							<span>Hồ sơ</span>
+						<a href="/profile" class="gap-3 py-2">
+							<User class="h-4 w-4 opacity-70" />
+							<span>Hồ sơ cá nhân</span>
 						</a>
 					</li>
 					<li>
-						<a href="/orders" class="gap-3">
-							<Package class="h-4 w-4" />
-							<span>Đơn hàng</span>
+						<a href="/orders" class="gap-3 py-2">
+							<Package class="h-4 w-4 opacity-70" />
+							<span>Đơn mua hàng</span>
 						</a>
 					</li>
 					<li>
-						<a href="/bazi" class="gap-3">
-							<Icon iconNode={yinYang} class="h-4 w-4" />
-							<span>Bát tự</span>
+						<a href="/bazi" class="gap-3 py-2">
+							<Icon iconNode={yinYang} class="h-4 w-4 opacity-70" />
+							<span>Lá số Bát tự</span>
 						</a>
 					</li>
 
 					{#if ['manager', 'operator'].includes(currentUser.role)}
-						<div class="divider my-0"></div>
+						<div class="divider my-1"></div>
 						<li>
-							<a href="/manage" class="gap-3">
+							<a href="/manage" class="text-secondary gap-3 py-2 font-medium">
 								<Settings class="h-4 w-4" />
-								<span>Manage</span>
+								<span>Quản lý hệ thống</span>
 							</a>
 						</li>
 					{/if}
 
-					<div class="divider my-0"></div>
+					<div class="divider my-1"></div>
 
 					<li>
-						<form action="/login?/logout" method="POST" class="w-full">
-							<button type="submit" class="text-error flex w-full gap-3">
+						<form action="/login?/logout" method="POST" class="w-full p-0">
+							<button
+								type="submit"
+								class="text-error hover:bg-error/10 flex w-full gap-3 px-4 py-2"
+							>
 								<LogOut class="h-4 w-4" />
-								<span>Logout</span>
+								<span>Đăng xuất</span>
 							</button>
 						</form>
 					</li>
 				</ul>
 			</div>
 		{:else}
-			<div class="flex flex-col gap-1 md:flex-row md:items-center md:gap-2">
-				<a href="/login" class="btn btn-ghost btn-sm h-9 min-h-9 px-3 md:h-10 md:min-h-10 md:px-4">
-					Login
-				</a>
+			<div class="flex items-center gap-2">
+				<a href="/login" class="btn btn-ghost btn-sm h-9 min-h-[36px] font-medium"> Đăng nhập </a>
 				<a
 					href="/register"
-					class="btn btn-primary btn-sm h-9 min-h-9 px-3 md:h-10 md:min-h-10 md:px-4"
+					class="btn btn-primary btn-sm h-9 min-h-[36px] px-4 font-bold text-white shadow-md"
 				>
-					Register
+					Đăng ký
 				</a>
 			</div>
 		{/if}

@@ -27,6 +27,7 @@
 	import { fade, fly, slide } from 'svelte/transition';
 
 	import LongBg from '$lib/assets/images/Long.webp';
+	import { redirect } from '@sveltejs/kit';
 
 	// Types
 	type OrderStatus = 'pending' | 'paid' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
@@ -355,6 +356,7 @@
 
 	function handlePayNow(orderId: number) {
 		showToast('Đang chuyển đến trang thanh toán...', 'info');
+		redirect(302, `/checkout?orderId=${orderId}`);
 	}
 
 	function handleDownloadInvoice(orderId: number) {

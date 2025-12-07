@@ -1,16 +1,29 @@
+<!-- src/routes/profile/+page.svelte -->
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { toastStore } from '$lib/toastStore';
 
 	let { data, form } = $props();
-	let loading = $state(false);
 
+	let profileLoading = $state(false);
+
+	let addressLoading = $state(false);
+	let showAddressModal = $state(false);
+	let editingAddress = $state<UserAddress | null>(null);
+
+	let isEditMode = $derived(!!editingAddress?.id && editingAddress.id > 0);
+
+	// Xử lý kết quả trả về từ server actions
 	$effect(() => {
 		if (form?.success) {
 			toastStore.trigger({
-				message: 'Cập nhật hồ sơ thành công!',
+				message: form.message || 'Thao tác thành công!',
 				background: 'variant-filled-success',
 			});
+			if (form.type === 'address') {
+				showAddressModal = false;
+				editingAddress = null;
+			}
 		} else if (form?.message) {
 			toastStore.trigger({
 				message: form.message,
@@ -18,6 +31,35 @@
 			});
 		}
 	});
+
+	// Hàm mở modal để thêm địa chỉ mới
+	function openAddModal() {
+		editingAddress = {
+			id: 0, // ID tạm, isEditMode sẽ là false
+			user_id: data.user?.id || '',
+			address: '',
+			phone: '',
+			state: '',
+			country: 'Việt Nam',
+			postal_code: '',
+			is_default: 0,
+			created_at: '',
+			updated_at: '',
+		};
+		showAddressModal = true;
+	}
+
+	// Hàm mở modal để chỉnh sửa địa chỉ đã có
+	function openEditModal(address: UserAddress) {
+		// Tạo một bản sao của object để tránh thay đổi dữ liệu gốc
+		editingAddress = { ...address };
+		showAddressModal = true;
+	}
+
+	function closeModal() {
+		showAddressModal = false;
+		editingAddress = null;
+	}
 </script>
 
 <svelte:head>
@@ -80,14 +122,17 @@
 								</div>
 								<div class="flex justify-between">
 									<span class="text-base-content/60">Tham gia</span>
-									<span class="font-medium">{new Date().toLocaleDateString('vi-VN')}</span>
+									<span class="font-medium"
+										>{new Date(data.user.created_at).toLocaleDateString('vi-VN')}</span
+									>
 								</div>
 							</div>
 						</div>
 					</div>
 
-					<!-- Main Form -->
-					<div class="col-span-1 md:col-span-2">
+					<!-- Main Content Column -->
+					<div class="col-span-1 space-y-8 md:col-span-2">
+						<!-- Form Cập nhật thông tin chi tiết -->
 						<div class="card bg-base-100 border-base-200 border shadow-sm">
 							<div class="card-body gap-6 p-6 md:p-8">
 								<div>
@@ -96,20 +141,18 @@
 										Cập nhật thông tin cá nhân và hồ sơ công khai của bạn.
 									</p>
 								</div>
-
 								<form
 									method="POST"
 									action="?/updateProfile"
 									use:enhance={() => {
-										loading = true;
+										profileLoading = true;
 										return async ({ update }) => {
 											await update({ reset: false });
-											loading = false;
+											profileLoading = false;
 										};
 									}}
 									class="space-y-6"
 								>
-									<!-- Personal Info -->
 									<div class="space-y-4">
 										<h3 class="text-base-content/80 text-md font-bold tracking-wider uppercase">
 											Thông tin cá nhân
@@ -129,7 +172,6 @@
 													class="input input-bordered focus:input-primary w-full"
 												/>
 											</div>
-
 											<div class="form-control w-full">
 												<label class="label" for="last_name">
 													<span class="label-text font-medium">Tên</span>
@@ -146,10 +188,7 @@
 											</div>
 										</div>
 									</div>
-
 									<div class="divider"></div>
-
-									<!-- Public Profile -->
 									<div class="space-y-4">
 										<h3 class="text-base-content/50 text-xs font-bold tracking-wider uppercase">
 											Hồ sơ công khai
@@ -178,10 +217,7 @@
 											</div>
 										</div>
 									</div>
-
 									<div class="divider"></div>
-
-									<!-- Account Info -->
 									<div class="space-y-4">
 										<h3 class="text-base-content/50 text-xs font-bold tracking-wider uppercase">
 											Tài khoản
@@ -202,16 +238,18 @@
 											/>
 										</div>
 									</div>
-
-									<!-- Actions -->
 									<div
 										class="card-actions border-base-200 mt-6 flex items-center justify-end gap-4 border-t pt-6"
 									>
-										{#if loading}
-											<span class="text-base-content/60 text-sm">Đang lưu thay đổi...</span>
+										{#if profileLoading}
+											<span class="text-base-content/60 text-sm">Đang lưu...</span>
 										{/if}
-										<button type="submit" class="btn btn-primary min-w-[140px]" disabled={loading}>
-											{#if loading}
+										<button
+											type="submit"
+											class="btn btn-primary min-w-[140px]"
+											disabled={profileLoading}
+										>
+											{#if profileLoading}
 												<span class="loading loading-spinner loading-sm"></span>
 											{:else}
 												Lưu thay đổi
@@ -221,9 +259,181 @@
 								</form>
 							</div>
 						</div>
+
+						<!-- Khu vực quản lý địa chỉ -->
+						<div class="card bg-base-100 border-base-200 border shadow-sm">
+							<div class="card-body gap-6 p-6 md:p-8">
+								<div class="flex items-center justify-between">
+									<div>
+										<h2 class="text-base-content text-xl font-semibold">Sổ địa chỉ</h2>
+										<p class="text-base-content/60 mt-1 text-sm">
+											Quản lý các địa chỉ giao hàng của bạn.
+										</p>
+									</div>
+									<button class="btn btn-primary btn-sm" onclick={openAddModal}>
+										Thêm địa chỉ
+									</button>
+								</div>
+								<div class="space-y-4">
+									{#if data.addresses && data.addresses.length > 0}
+										{#each data.addresses as address (address.id)}
+											<div
+												class="border-base-200 flex flex-col justify-between gap-4 rounded-lg border p-4 sm:flex-row sm:items-center"
+											>
+												<div>
+													<div class="flex items-center gap-2">
+														<p class="font-semibold">{address.address}</p>
+														{#if address.is_default}
+															<span class="badge badge-primary badge-sm">Mặc định</span>
+														{/if}
+													</div>
+													<p class="text-base-content/70 text-sm">
+														{address.state}, {address.country} - SĐT: {address.phone}
+													</p>
+												</div>
+												<div class="flex items-center gap-2 self-end sm:self-center">
+													<button
+														class="btn btn-ghost btn-sm"
+														onclick={() => openEditModal(address)}
+													>
+														Sửa
+													</button>
+													<form
+														method="POST"
+														action="?/deleteAddress"
+														use:enhance={({ formElement }) => {
+															if (!confirm('Bạn có chắc chắn muốn xóa địa chỉ này?')) {
+																return ({ cancel }) => cancel();
+															}
+															return async ({ update }) => {
+																await update();
+															};
+														}}
+													>
+														<input type="hidden" name="id" value={address.id} />
+														<button type="submit" class="btn btn-ghost text-error btn-sm"
+															>Xóa</button
+														>
+													</form>
+												</div>
+											</div>
+										{/each}
+									{:else}
+										<p class="text-base-content/60 py-4 text-center">Bạn chưa có địa chỉ nào.</p>
+									{/if}
+								</div>
+							</div>
+						</div>
 					</div>
 				</div>
 			{/if}
 		</div>
 	</div>
 </div>
+
+<!-- Modal Thêm/Sửa địa chỉ -->
+{#if showAddressModal && editingAddress}
+	<div class="modal modal-open">
+		<div class="modal-box w-11/12 max-w-2xl">
+			<h3 class="text-xl font-bold">{isEditMode ? 'Cập nhật địa chỉ' : 'Thêm địa chỉ mới'}</h3>
+			<form
+				class="mt-6 space-y-4"
+				method="POST"
+				action={isEditMode ? '?/updateAddress' : '?/addAddress'}
+				use:enhance={() => {
+					addressLoading = true;
+					return async ({ update }) => {
+						await update({ reset: false });
+						addressLoading = false;
+					};
+				}}
+			>
+				{#if isEditMode}
+					<input type="hidden" name="id" value={editingAddress.id} />
+				{/if}
+
+				<div class="form-control">
+					<label for="address" class="label"><span class="label-text">Địa chỉ chi tiết</span></label
+					>
+					<input
+						id="address"
+						name="address"
+						type="text"
+						bind:value={editingAddress.address}
+						class="input input-bordered"
+						required
+					/>
+				</div>
+				<div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+					<div class="form-control">
+						<label for="phone" class="label"><span class="label-text">Số điện thoại</span></label>
+						<input
+							id="phone"
+							name="phone"
+							type="tel"
+							bind:value={editingAddress.phone}
+							class="input input-bordered"
+							required
+						/>
+					</div>
+					<div class="form-control">
+						<label for="state" class="label"><span class="label-text">Tỉnh/Thành phố</span></label>
+						<input
+							id="state"
+							name="state"
+							type="text"
+							bind:value={editingAddress.state}
+							class="input input-bordered"
+							required
+						/>
+					</div>
+					<div class="form-control">
+						<label for="country" class="label"><span class="label-text">Quốc gia</span></label>
+						<input
+							id="country"
+							name="country"
+							type="text"
+							bind:value={editingAddress.country}
+							class="input input-bordered"
+							required
+						/>
+					</div>
+					<div class="form-control">
+						<label for="postal_code" class="label"
+							><span class="label-text">Mã bưu chính (Tùy chọn)</span></label
+						>
+						<input
+							id="postal_code"
+							name="postal_code"
+							type="text"
+							bind:value={editingAddress.postal_code}
+							class="input input-bordered"
+						/>
+					</div>
+				</div>
+				<div class="form-control">
+					<label class="label cursor-pointer justify-start gap-4">
+						<input
+							name="is_default"
+							type="checkbox"
+							checked={editingAddress.is_default === 1}
+							class="checkbox checkbox-primary"
+						/>
+						<span class="label-text">Đặt làm địa chỉ mặc định</span>
+					</label>
+				</div>
+				<div class="modal-action">
+					<button type="button" class="btn" onclick={closeModal}>Hủy</button>
+					<button type="submit" class="btn btn-primary" disabled={addressLoading}>
+						{#if addressLoading}
+							<span class="loading loading-spinner loading-sm"></span>
+						{:else}
+							Lưu địa chỉ
+						{/if}
+					</button>
+				</div>
+			</form>
+		</div>
+		<div class="modal-backdrop" onclick={closeModal}></div>
+	</div>
+{/if}

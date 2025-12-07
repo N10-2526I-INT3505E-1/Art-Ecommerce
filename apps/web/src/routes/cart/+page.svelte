@@ -600,9 +600,12 @@
 							</div>
 
 							<!-- Checkout Button -->
-							<button class="btn btn-primary btn-lg shadow-primary/25 mt-6 w-full gap-2 shadow-lg">
+							<button
+								class="btn btn-primary btn-lg shadow-primary/25 mt-6 w-full gap-2 shadow-lg"
+								onclick={() => (window.location.href = '/checkout')}
+							>
 								<CreditCard size={20} />
-								Thanh toán ngay
+								Đặt hàng
 							</button>
 
 							<!-- Trust Signals -->

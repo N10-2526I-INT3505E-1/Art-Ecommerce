@@ -16,6 +16,25 @@ export default defineConfig({
 			filename: 'stats.html',
 		}),
 	],
+	ssr: {
+		noExternal: ['three', 'troika-three-text'],
+	},
+	optimizeDeps: {
+		include: ['gsap', 'three'],
+		exclude: ['@threlte/core', '@threlte/extras'],
+	},
+	build: {
+		target: 'esnext',
+		rollupOptions: {
+			output: {
+				manualChunks: {
+					three: ['three'],
+					gsap: ['gsap'],
+					threlte: ['@threlte/core', '@threlte/extras'],
+				},
+			},
+		},
+	},
 	server: {
 		proxy: {
 			'/api': { target: 'http://localhost:3000', changeOrigin: true },

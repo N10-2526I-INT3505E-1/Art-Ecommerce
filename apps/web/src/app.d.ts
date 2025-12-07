@@ -27,10 +27,22 @@ declare global {
 			first_name: string;
 			last_name: string;
 			role: 'user' | 'operator' | 'manager';
-			dob?: string | null;
-			birth_hour?: string | null; // From the original user model
+			created_at: string;
+			updated_at: string;
 		}
 
+		interface UserAddress = {
+			id: number;
+			user_id: string;
+			address: string;
+			phone: string;
+			state: string;
+			postal_code: string | null;
+			country: string;
+			is_default: number; // 0 hoặc 1
+			created_at: string;
+			updated_at: string;
+		};
 		/**
 		 * Represents the full Bazi profile object returned from the API.
 		 * This aligns with your `BaziProfileResponseSchema`.

@@ -5,20 +5,17 @@
 	import '@fontsource-variable/work-sans';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
-	import { onNavigate } from '$app/navigation';
 	import favicon from '$lib/assets/favicon.png';
 	import Footer from '$lib/components/Footer.svelte';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
 	import type { LayoutProps } from './$types';
+	import { page } from '$app/state';
 
 	import '@fontsource/cormorant-sc';
-	import '@fontsource-variable/raleway';
 	import '@fontsource-variable/montserrat';
-	import type Lenis from 'lenis';
 	import NavigationBar from '$lib/components/NavigationBar.svelte';
 
-	let { data, children }: LayoutProps = $props();
-	let lenis: Lenis;
+	let { children }: LayoutProps = $props();
 
 	onMount(() => {
 		if (!browser) return;
@@ -54,19 +51,18 @@
 </svelte:head>
 
 <ToastContainer />
-<main class="flex min-h-screen flex-col">
+
+<main class="flex flex-col overflow-hidden" class:h-dvh={page.url.pathname === '/'}>
 	<NavigationBar />
-	<div class="flex-1 overflow-auto">
+
+	<div class="flex-1 snap-y snap-mandatory overflow-x-hidden overflow-y-auto scroll-smooth">
 		{@render children()}
+		<Footer />
 	</div>
-	<Footer />
 </main>
 
 <style>
 	main {
 		padding-top: var(--header-height, 0px);
-		display: flex;
-		flex-direction: column;
-		min-height: 100dvh;
 	}
 </style>

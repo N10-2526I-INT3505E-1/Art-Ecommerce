@@ -159,7 +159,7 @@
 
 <div class="from-base-200 to-base-100 min-h-screen bg-gradient-to-b">
 	<div class="w-full px-3 py-4 sm:px-4 sm:py-6 md:px-8 md:py-10 lg:px-12">
-		<div class="mx-auto max-w-3xl space-y-4 sm:space-y-6 md:space-y-8">
+		<div class="mx-auto max-w-4xl space-y-4 sm:space-y-6 md:space-y-8">
 			<!-- Header -->
 			<header class="text-center">
 				<div class="mb-2 inline-flex items-center gap-2">

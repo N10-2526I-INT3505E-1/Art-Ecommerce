@@ -31,6 +31,11 @@
 		"@fontsource-variable/raleway": "^5.2.8",
 		"@fontsource-variable/work-sans": "^5.2.8",
 		"@fontsource/cormorant-sc": "^5.2.8",
+		"@lucide/lab": "^0.1.2",
+		"@threlte/core": "^8.3.1",
+		"@threlte/extras": "^9.7.1",
+		"@threlte/gltf": "^3.0.1",
+		"@threlte/rapier": "^3.2.0",
 		"embla-carousel-auto-height": "^8.6.0",
 		"embla-carousel-autoplay": "^8.6.0",
 		"embla-carousel-svelte": "^8.6.0",
@@ -40,8 +45,8 @@
 		"lucide-svelte": "^0.556.0",
 		"motion": "^12.23.25",
 		"rollup-plugin-visualizer": "^6.0.5",
+		"three": "^0.181.2",
 		"tough-cookie": "^6.0.0",
-		"vite-imagetools": "^9.0.2",
-		"@lucide/lab": "^0.1.2"
+		"vite-imagetools": "^9.0.2"
 	}
 }

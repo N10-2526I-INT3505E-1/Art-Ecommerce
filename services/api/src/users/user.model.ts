@@ -33,6 +33,7 @@ export const userAddressTable = sqliteTable('user_address', {
 		.references(() => usersTable.id, { onDelete: 'cascade' }),
 	address: text().notNull(),
 	phone: text().notNull(),
+	ward: text().notNull(),
 	state: text().notNull(),
 	postal_code: text(),
 	country: text().notNull(),
@@ -70,7 +71,7 @@ export const SignUpSchema = createInsertSchema(usersTable, {
 
 export const UserAddressSchema = createInsertSchema(userAddressTable, {
 	address: t.String({ minLength: 5, maxLength: 255 }),
-	phone: t.String({ maxLength: 10, format: '^[0-9]{10,11}$' }),
+	phone: t.String({ maxLength: 10, pattern: '^[0-9]{9,11}$', error: 'Invalid phone number' }),
 	state: t.String({ maxLength: 100 }),
 	postal_code: t.Optional(t.Union([t.String({ maxLength: 20 }), t.Null()])),
 	country: t.String({ maxLength: 100 }),

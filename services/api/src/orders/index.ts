@@ -9,10 +9,58 @@ import {
   CreateOrderItemSchema,
   OrderItemResponseSchema,
 } from './order_item.model';
+import { rabbitPlugin, QUEUES } from './rabbitmq';
+import type { Channel } from 'amqplib';
+import { updateSourceFile } from 'typescript';
 
 const orderService = new OrderService(db);
 
 export const ordersPlugin = new Elysia()
+  .use(await rabbitPlugin())
+  .onStart(async (app) => {
+    const rabbitChannel: Channel = app.decorator.rabbitChannel;
+    const sendToQueue = app.decorator.sendToQueue;
+    console.log("Order Service listening...");
+    rabbitChannel.consume(QUEUES.PAYMENT_PROCESS, async (msg) => {
+      if (!msg) return;
+
+      try {
+        const data = JSON.parse(msg.content.toString());
+        
+        // Update the Order Status in Database
+        if (data.type === 'PAYMENT_RESULT' && data.status === 'PAID') {
+          console.log(`Received PAYMENT_RESULT for Order ID ${data.orderId}, updating order status to 'paid'`);
+          const updateState = await orderService.updateOrder(Number(data.orderId), {
+            status: 'paid', // Update order status to 'paid'
+          });
+          // If order status updated successfully, send product stock update to Product Service
+          if (updateState) {
+            const order_item = await orderService.getOrderItems(Number(data.orderId));
+            const sent = sendToQueue(QUEUES.PRODUCT_UPDATES, {
+              type: 'PRODUCT_STOCK_UPDATE',
+              // Send order items to Product Service to update stock
+              orderItems: order_item.map(item => ({
+                product_id: item.product_id,
+                quantity: item.quantity
+              }))
+            });
+            if (!sent) {
+              console.error('Failed to send product stock update to RabbitMQ, Product Service might not be notified');
+            }
+          }
+          
+        }
+
+        // Acknowledge the message (tell RabbitMQ we are done)
+        rabbitChannel.ack(msg);
+
+      } catch (err) {
+        console.error("Error processing RabbitMQ message:", err);
+        // Ack to prevent infinite loops if data is bad
+        rabbitChannel.ack(msg); 
+      }
+    });
+  })
   .group('/orders', (app) =>
     app
       // 1. Create Order
@@ -95,38 +143,6 @@ export const ordersPlugin = new Elysia()
           response: { 200: t.Object({ message: t.String() }) },
           detail: { tags: ['Orders'], summary: 'Delete an order' },
         },
-      )
-
-      // 6. Create Payment Link
-      .post(
-        '/payment-url',
-        async ({ body, set }) => {
-            const result = await orderService.createPaymentLink(body.order_id, body.payment_gateway);
-            set.status = 200;
-            return result; 
-        },
-        {
-            body: t.Object({
-                order_id: t.Numeric(),
-                payment_gateway: t.Optional(t.String({ default: 'vnpay' }))
-            }),
-            // Schema response dựa trên data trả về từ Payment Service
-            response: {
-                200: t.Object({
-                    id: t.Integer(),
-                    order_id: t.Integer(),
-                    amount: t.Any(), 
-                    payment_gateway: t.String(),
-                    status: t.String(),
-                    transaction_id: t.Union([t.String(), t.Null()]),
-                    paymentUrl: t.String(),
-                })
-            },
-            detail: { 
-                tags: ['Orders', 'Payment'], 
-                summary: 'Initiate payment for an order via Payment Service' 
-            },
-        }
       )
 
       // 7. Nested Items Route

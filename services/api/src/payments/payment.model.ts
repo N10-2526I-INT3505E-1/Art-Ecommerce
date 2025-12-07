@@ -55,9 +55,10 @@ export const errorResponseSchema = t.Object({
 const paymentStatusSchema = t.Union([
 	t.Literal('completed'),
 	t.Literal('failed'),
-	t.Literal('cancelled')
+	t.Literal('cancelled'),
+	t.Literal('pending')
 ], {
-	error: "Status must be one of 'completed', 'failed', or 'cancelled'."
+	error: "Status must be one of 'completed', 'failed', 'cancelled', or 'pending'."
 });
 
 

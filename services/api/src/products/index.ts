@@ -2,11 +2,38 @@ import { insertProductBody, selectProductSchema, updateProductBody } from '@prod
 import { Elysia, t } from 'elysia';
 import { db } from './db';
 import { ProductService } from './product.service';
-
+import { rabbitPlugin, QUEUES } from './rabbitmq';
 const productService = new ProductService(db);
 
 export const productsPlugin = new Elysia({ prefix: '/products' })
-
+	.use(await rabbitPlugin())
+	.onStart(async (app) => {
+		const rabbitChannel = app.decorator.rabbitChannel;
+		console.log("Product Service listening...");
+		rabbitChannel.consume(QUEUES.PRODUCT_UPDATES, async (msg) => {
+		  if (!msg) return;
+	
+		  try {
+			const data = JSON.parse(msg.content.toString());
+			
+			// Update the Order Status in Database
+			if (data.type === 'PRODUCT_STOCK_UPDATE') {
+				console.log(`Received PRODUCT_STOCK_UPDATE, updating product stocks accordingly`);
+			  	const orderItems = data.orderItems;
+				//console.log(orderItems);
+			 	// Mock to update product stock based on order items
+				// ====================================
+				// Acknowledge the message (tell RabbitMQ we are done)
+				rabbitChannel.ack(msg);
+			}
+			
+		  } catch (err) {
+			console.error("Error processing RabbitMQ message:", err);
+			// Ack to prevent infinite loops if data is bad
+			rabbitChannel.ack(msg); 
+		  }
+		});
+	  })
 	// 1. Crawler Upsert
 	.post(
 		'/',

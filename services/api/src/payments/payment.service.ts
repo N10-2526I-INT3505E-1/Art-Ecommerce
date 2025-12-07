@@ -4,7 +4,7 @@ import {
 } from '@common/errors/httpErrors';
 import { randomUUIDv7 } from 'bun';
 import crypto from 'crypto';
-import { eq } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
 import { stringify } from 'qs';
 import { schema } from './payment.model';
 import { createVNPPaymentUrl } from './paymentHandle/vnpayPaymentHandle';
@@ -23,6 +23,13 @@ export class PaymentService {
 
     createPayment = async (order_id: number, amount: number, payment_gateway: string) => {
         try {
+            // Check if order_id exists
+            const exitsPayment = await this.db.query.paymentsTable.findFirst({
+                where: eq(this.paymentsTable.order_id, Number(order_id))
+            });
+            if (exitsPayment) {
+                throw new Error(` Payment for order_id ${order_id} already exists.`);
+            }
             const transactionId = randomUUIDv7();
             const [newPayment] = await this.db.transaction(async (tx: any) => {
                 const result = await tx.insert(this.paymentsTable)
@@ -55,14 +62,16 @@ export class PaymentService {
             return apiResponse;
         } catch (error) {
             console.error('Transaction failed:', error);
-            throw new InternalServerError('Payment create failed');
+            throw new InternalServerError('Payment create failed:' + (error as Error).message);
         }
     }
 
     async updatePaymentStatus(id: number, status: 'completed' | 'failed' | 'cancelled' | 'pending') {
         try {
             const [updatedPayment] = await this.db.update(this.paymentsTable)
-                .set({ status: status })
+                .set({ 
+                    status: status,
+                })
                 .where(eq(this.paymentsTable.id, id))
                 .returning();
 
@@ -118,6 +127,7 @@ export class PaymentIPN {
     async handleVnpayIpn(query: Record<string, any>) {
         try {
             const vnp_Params = { ...query };
+            console.log('VNPay IPN received params:', vnp_Params);
             const secureHash = vnp_Params['vnp_SecureHash'] as string;
             delete vnp_Params['vnp_SecureHash'];
             delete vnp_Params['vnp_SecureHashType'];
@@ -137,12 +147,18 @@ export class PaymentIPN {
                 }
             };
 
-            const orderId = vnp_Params['vnp_TxnRef'] as string;
+            const transactionId = vnp_Params['vnp_TxnRef'] as string;
+            if (!transactionId) {
+                return {
+                    RspCode: '01',
+                    Message: 'Missing transaction reference'
+                };
+            }
             const rspCode = vnp_Params['vnp_ResponseCode'] as string;
             const amount = vnp_Params['vnp_Amount'] as string;
 
             const foundPayment = await this.db.query.paymentsTable.findFirst({
-                where: eq(this.paymentsTable.order_id, Number(orderId))
+                where: eq(this.paymentsTable.transaction_id, transactionId)
             });
 
             if (!foundPayment) {
@@ -168,13 +184,19 @@ export class PaymentIPN {
             }
 
             if (rspCode === '00') {
-                await this.db.update(this.paymentsTable)
-                    .set({ status: 'paid' })
-                    .where(eq(this.paymentsTable.id, foundPayment.id));
-
+                const [updatedPayment] = await this.db.update(this.paymentsTable)
+                .set({ 
+                    status: 'completed',
+                })
+                .where(eq(this.paymentsTable.id, foundPayment.id))
+                .returning();
+                //console.log(`Payment with transaction ID ${updatedPayment.transaction_id} marked as completed.`);
+                const orderId = updatedPayment?.order_id;
+                //console.log(`Associated Order ID: ${orderId}`);
                 return {
                     RspCode: '00',
-                    Message: 'success'
+                    Message: 'success',
+                    orderId: orderId
                 };
             }
             

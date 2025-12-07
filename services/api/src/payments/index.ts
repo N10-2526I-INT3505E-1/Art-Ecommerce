@@ -9,7 +9,7 @@ import { db } from './db';
 import { createPaymentBodySchema, errorResponseSchema, paymentResponseSchema, paymentsTable, updatePaymentBodySchema, updatePaymentParamsSchema, updatePaymentResponseSchema } from './payment.model';
 import { PaymentIPN, PaymentService } from './payment.service';
 import { createVNPPaymentUrl } from './paymentHandle/vnpayPaymentHandle';
-
+import { rabbitPlugin, QUEUES } from './rabbitmq';
 const paymentService = new PaymentService(db);
 
 export const paymentsPlugin = new Elysia({ prefix: '/payments' })
@@ -94,16 +94,38 @@ function sortObject(obj: Record<string, any>): Record<string, any> {
 	return sorted;
 }
 
+const paymentIPN = new PaymentIPN(db);
 // VNPay IPN endpoint handler
 export const vnpayIpnHandler = new Elysia()
-	.decorate('db', db)
-	.derive(({ db }) => ({
-		paymentIPN: new PaymentIPN(db),
-	}))
-.get('/vnpay_ipn', async ({ query, set, paymentIPN }) => {
-	const response = await paymentIPN.handleVnpayIpn(query);
-	set.status = 200;
-	return response;
+	.use(await rabbitPlugin())
+	.decorate('paymentIPN', paymentIPN)
+	.get('/vnpay_ipn', async ({ query, set, paymentIPN, sendToQueue }) => {
+		const response = await paymentIPN.handleVnpayIpn(query);
+		const orderId = response.orderId;
+		if (response.RspCode === '00') {
+            const isSendToQueue = sendToQueue(QUEUES.PAYMENT_PROCESS, {
+                type: 'PAYMENT_RESULT',
+                orderId: orderId, // VNPay Transaction Reference
+                status: 'PAID',
+                amount: query.vnp_Amount,
+                transactionId: query.vnp_TransactionNo
+            });
+			if (!isSendToQueue) {
+				console.error('Failed to send payment result to RabbitMQ, Order Service might not be notified'), {
+					type: 'PAYMENT_RESULT',
+                	orderId: query.vnp_TxnRef, // VNPay Transaction Reference
+                	status: 'PAID',
+                	amount: query.vnp_Amount,
+                	transactionId: query.vnp_TransactionNo
+				}
+			}
+			return {
+				RspCode: '00',
+				Message: 'success',
+			}
+        }
+		set.status = 200;
+		return response;
 	}, {
 		detail: {
 			summary: "VNPay IPN Callback",

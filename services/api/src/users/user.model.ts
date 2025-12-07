@@ -5,21 +5,6 @@ import { int, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { createInsertSchema, createSelectSchema } from 'drizzle-typebox';
 import { t } from 'elysia';
 
-export const BIRTH_HOURS = [
-	'ty',
-	'suu',
-	'dan',
-	'mao',
-	'thin',
-	'ty_chi',
-	'ngo',
-	'mui',
-	'than',
-	'dau',
-	'tuat',
-	'hoi',
-] as const;
-
 export const usersTable = sqliteTable('users', {
 	id: text()
 		.primaryKey()
@@ -29,8 +14,6 @@ export const usersTable = sqliteTable('users', {
 	password: text().notNull(),
 	first_name: text().notNull(),
 	last_name: text().notNull(),
-	dob: text(),
-	birth_hour: text('birth_hour', { enum: BIRTH_HOURS }),
 	role: text('role', { enum: ['manager', 'operator', 'user'] })
 		.notNull()
 		.default('user'),
@@ -83,12 +66,6 @@ export const SignUpSchema = createInsertSchema(usersTable, {
 	password: t.String({ minLength: 6 }),
 	first_name: t.String({ minLength: 1, maxLength: 50 }),
 	last_name: t.String({ minLength: 1, maxLength: 50 }),
-	dob: t.Optional(
-		t.Union([t.String({ format: 'date' }), t.Null(), t.String({ minLength: 0 })], {
-			default: null,
-		}),
-	),
-	birth_hour: t.Optional(t.String({ enum: BIRTH_HOURS })),
 });
 
 export const UserAddressSchema = createInsertSchema(userAddressTable, {

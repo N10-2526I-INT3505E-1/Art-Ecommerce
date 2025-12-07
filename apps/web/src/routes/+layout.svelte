@@ -3,18 +3,18 @@
 	import '@fontsource-variable/josefin-sans';
 	import '@fontsource-variable/raleway';
 	import '@fontsource-variable/work-sans';
-	import { onNavigate } from '$app/navigation';
-	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
+	import { onNavigate } from '$app/navigation';
 	import favicon from '$lib/assets/favicon.png';
-	import ToastContainer from '$lib/components/ToastContainer.svelte';
 	import Footer from '$lib/components/Footer.svelte';
+	import ToastContainer from '$lib/components/ToastContainer.svelte';
 	import type { LayoutProps } from './$types';
 
 	import '@fontsource/cormorant-sc';
 	import '@fontsource-variable/raleway';
 	import '@fontsource-variable/montserrat';
-	import Lenis from 'lenis';
+	import type Lenis from 'lenis';
 	import NavigationBar from '$lib/components/NavigationBar.svelte';
 
 	let { data, children }: LayoutProps = $props();

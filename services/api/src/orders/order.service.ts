@@ -1,5 +1,5 @@
-import { eq, desc } from 'drizzle-orm';
-import { InternalServerError, NotFoundError, BadRequestError } from '../common/errors/httpErrors';
+import { desc, eq } from 'drizzle-orm';
+import { BadRequestError, InternalServerError, NotFoundError } from '../common/errors/httpErrors';
 import type { db } from './db'; 
 import { ordersTable } from './order.model';
 import { orderItemsTable } from './order_item.model';

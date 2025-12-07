@@ -1,7 +1,8 @@
-import { Elysia, type Context } from 'elysia'
 import { cors } from '@elysiajs/cors'
 import { jwt } from '@elysiajs/jwt'
+import { type Context, Elysia } from 'elysia'
 import { helmet } from 'elysia-helmet'
+
 // --- TYPES ---
 interface UserPayload {
     id: number;
@@ -186,7 +187,7 @@ const app = new Elysia()
                 method: request.method,
                 headers,
                 body: request.body,
-                // @ts-ignore
+                // @ts-expect-error
                 duplex: 'half'
             });
 

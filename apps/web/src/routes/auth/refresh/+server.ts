@@ -1,5 +1,5 @@
-import type { RequestHandler } from './$types';
 import { json } from '@sveltejs/kit';
+import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ cookies, locals }) => {
 	const refreshToken = cookies.get('refresh_token');

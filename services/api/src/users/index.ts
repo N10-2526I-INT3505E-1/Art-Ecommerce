@@ -1,5 +1,7 @@
 import { ForbiddenError, UnauthorizedError } from '@common/errors/httpErrors';
 import { jwt } from '@elysiajs/jwt';
+import { BaziProfileResponseSchema, CreateBaziProfileSchema } from '@user/bazi.model';
+import { BaziService } from '@user/bazi.service';
 import { db } from '@user/db';
 import { Elysia, t } from 'elysia';
 import {
@@ -24,10 +26,11 @@ if (!process.env.JWT_SECRET) {
 
 export const usersPlugin = new Elysia({})
 	.decorate('db', db)
+	.decorate('baziService', new BaziService())
 	.get('/', ({ path }) => path)
 	.use(jwt({ name: 'jwt', secret: process.env.JWT_SECRET as string, exp: '30m' }))
-	.resolve(({ db, jwt }) => ({
-		userService: new UserService(db, jwt as any),
+	.resolve(({ db, jwt, baziService }) => ({
+		userService: new UserService(db, jwt as any, baziService),
 	}))
 
 	.group('/auth', (app) =>
@@ -331,6 +334,56 @@ export const usersPlugin = new Elysia({})
 									404: ErrorSchema,
 								},
 								detail: { tags: ['User Management'], summary: 'Delete an address' },
+							},
+						)
+
+						// 10. Get Bazi Profile
+						.get(
+							'/:user_id/bazi',
+							async ({ params, user, userService }) => {
+								if (user?.role !== 'manager' && user?.id !== params.user_id) {
+									throw new ForbiddenError('Access denied');
+								}
+								const profile = await userService.getBaziProfile(params.user_id);
+								return { profile };
+							},
+							{
+								params: t.Object({ user_id: t.String() }),
+								response: {
+									200: t.Object({ profile: BaziProfileResponseSchema }),
+									403: ErrorSchema,
+									404: ErrorSchema,
+								},
+								detail: {
+									tags: ['User Management', 'Bazi'],
+									summary: "Get a user's Bazi profile",
+								},
+							},
+						)
+
+						// 11. Create or Update Bazi Profile
+						.put(
+							'/:user_id/bazi',
+							async ({ params, body, user, userService }) => {
+								if (user?.role !== 'manager' && user?.id !== params.user_id) {
+									throw new ForbiddenError('Access denied');
+								}
+								const profile = await userService.createOrUpdateBaziProfile(params.user_id, body);
+								return { profile };
+							},
+							{
+								params: t.Object({ user_id: t.String() }),
+								body: t.Omit(CreateBaziProfileSchema, ['id', 'user_id']),
+								response: {
+									200: t.Object({ profile: BaziProfileResponseSchema }),
+									403: ErrorSchema,
+									404: ErrorSchema, // For user not found
+									500: ErrorSchema,
+								},
+								detail: {
+									tags: ['User Management', 'Bazi'],
+									summary: "Create or update a user's Bazi profile",
+								},
 							},
 						),
 			),

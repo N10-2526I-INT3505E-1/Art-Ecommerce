@@ -1,4 +1,4 @@
-import { Elysia } from "elysia";
+import type { Elysia } from "elysia";
 
 // Logger Plugin cho Gateway
 // Logs: Request/Response duration, Payment audits, System errors

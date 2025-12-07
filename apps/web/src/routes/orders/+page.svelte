@@ -1,30 +1,30 @@
 <script lang="ts">
-	import { fade, slide, fly } from 'svelte/transition';
-	import { flip } from 'svelte/animate';
 	import {
-		Package,
-		Search,
+		AlertCircle,
+		Calendar,
+		Check,
+		CheckCircle,
 		ChevronDown,
 		ChevronUp,
+		CircleDot,
 		Clock,
-		CheckCircle,
-		Truck,
-		XCircle,
-		MapPin,
-		Calendar,
-		Filter,
-		X,
-		SortDesc,
-		ShoppingBag,
-		RotateCcw,
+		Copy,
 		CreditCard,
 		FileText,
+		Filter,
+		MapPin,
+		Package,
+		RotateCcw,
+		Search,
+		ShoppingBag,
+		SortDesc,
 		Star,
-		Copy,
-		Check,
-		AlertCircle,
-		CircleDot,
+		Truck,
+		X,
+		XCircle,
 	} from 'lucide-svelte';
+	import { flip } from 'svelte/animate';
+	import { fade, fly, slide } from 'svelte/transition';
 
 	import LongBg from '$lib/assets/images/Long.webp';
 

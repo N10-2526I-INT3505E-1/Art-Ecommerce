@@ -1,6 +1,7 @@
 // services/gateway/middlewares/auth.ts
-import { Elysia } from "elysia";
+
 import { jwt } from "@elysiajs/jwt";
+import type { Elysia } from "elysia";
 import { JWT_SECRET } from "../config";
 
 // 1. Setup Plugin

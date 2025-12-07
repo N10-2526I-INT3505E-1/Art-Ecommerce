@@ -1,5 +1,5 @@
-import { api } from '$lib/server/http';
 import { fail, redirect } from '@sveltejs/kit';
+import { api } from '$lib/server/http';
 
 /** @type {import('./$types').PageServerLoad} */
 export function load({ locals }) {

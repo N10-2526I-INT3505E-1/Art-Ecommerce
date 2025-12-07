@@ -1,9 +1,9 @@
 import { enhancedImages } from '@sveltejs/enhanced-img';
 import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
+import { visualizer } from 'rollup-plugin-visualizer';
 import { defineConfig } from 'vite';
 import { imagetools } from 'vite-imagetools';
-import { visualizer } from 'rollup-plugin-visualizer';
 
 export default defineConfig({
 	plugins: [

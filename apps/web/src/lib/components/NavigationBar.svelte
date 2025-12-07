@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { page } from '$app/state';
-	import { ChevronDown, LogOut, Package, Settings, ShoppingCart, User, Icon } from 'lucide-svelte';
+	
 	import { yinYang } from '@lucide/lab';
+	import { ChevronDown, Icon, LogOut, Package, Settings, ShoppingCart, User } from 'lucide-svelte';
+import { page } from '$app/state';
 
 	let { user = null } = $props();
 	let currentUser = $derived(user || page.data.user);

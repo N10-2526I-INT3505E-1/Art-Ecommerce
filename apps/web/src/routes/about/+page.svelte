@@ -1,21 +1,21 @@
 <script lang="ts">
 	import {
+		ArrowRight,
+		Award,
 		Brain,
+		Check,
 		Compass,
+		Eye,
 		Heart,
 		Shield,
-		Sparkles,
-		Users,
-		Eye,
-		ArrowRight,
-		Check,
-		TrendingUp,
-		Award,
-		Zap,
 		ShoppingBag,
+		Sparkles,
+		TrendingUp,
+		Users,
+		Zap,
 	} from 'lucide-svelte';
-	import YinyangBg from '$lib/assets/images/Yinyang.webp';
 	import { onMount } from 'svelte';
+	import YinyangBg from '$lib/assets/images/Yinyang.webp';
 
 	let isVisible = $state(false);
 	let statsVisible = $state(false);

@@ -1,22 +1,22 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import {
-		Shield,
-		User,
-		ShoppingBag,
-		CreditCard,
-		Truck,
-		RefreshCw,
-		Copyright,
 		AlertTriangle,
-		HelpCircle,
-		FileText,
 		ArrowLeft,
 		Brain,
+		Copyright,
+		CreditCard,
 		Eye,
+		FileText,
+		HelpCircle,
 		Lock,
 		Mail,
+		RefreshCw,
+		Shield,
+		ShoppingBag,
+		Truck,
+		User,
 	} from 'lucide-svelte';
+	import { onMount } from 'svelte';
 
 	let activeSection = $state('intro');
 	let isMobileNavVisible = $state(false);

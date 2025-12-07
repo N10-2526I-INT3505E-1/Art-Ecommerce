@@ -1,14 +1,14 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
-	import emblaCarouselSvelte from 'embla-carousel-svelte';
+	
 	import Autoplay from 'embla-carousel-autoplay';
+	import emblaCarouselSvelte from 'embla-carousel-svelte';
+	import { ArrowLeft, ArrowRight, Grid, List, Search } from 'lucide-svelte';
 	import { animate, stagger } from 'motion';
-	import LongBg from '$lib/assets/images/Long.webp';
+import { onDestroy, onMount } from 'svelte';
 	import LanBg from '$lib/assets/images/Lan.webp';
-	import QuyBg from '$lib/assets/images/Quy.webp';
+	import LongBg from '$lib/assets/images/Long.webp';
 	import PhungBg from '$lib/assets/images/Phung.webp';
-
-	import { ArrowLeft, ArrowRight, Search, Grid, List } from 'lucide-svelte';
+	import QuyBg from '$lib/assets/images/Quy.webp';
 
 	const slides = [
 		{

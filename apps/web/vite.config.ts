@@ -29,7 +29,6 @@ export default defineConfig({
 			output: {
 				manualChunks: {
 					three: ['three'],
-					gsap: ['gsap'],
 					threlte: ['@threlte/core', '@threlte/extras'],
 				},
 			},

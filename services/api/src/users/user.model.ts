@@ -72,6 +72,7 @@ export const SignUpSchema = createInsertSchema(usersTable, {
 export const UserAddressSchema = createInsertSchema(userAddressTable, {
 	address: t.String({ minLength: 5, maxLength: 255 }),
 	phone: t.String({ maxLength: 10, pattern: '^[0-9]{9,11}$', error: 'Invalid phone number' }),
+	ward: t.String({ maxLength: 100 }),
 	state: t.String({ maxLength: 100 }),
 	postal_code: t.Optional(t.Union([t.String({ maxLength: 20 }), t.Null()])),
 	country: t.String({ maxLength: 100 }),

@@ -31,6 +31,7 @@ const MOCK_ADDRESS: Static<typeof UserAddressSchema> & { id: number; user_id: st
 	user_id: MOCK_USER.id, // Use consistent UUID
 	address: '123 Main St',
 	phone: '1234567890',
+	ward: 'Central',
 	state: 'NY',
 	country: 'USA',
 	postal_code: '10001',
@@ -145,6 +146,7 @@ describe('UserService', () => {
 		const newAddressInput = {
 			address: '456 Side St',
 			phone: '0987654321',
+			ward: 'Downtown',
 			state: 'CA',
 			country: 'USA',
 			postal_code: '90210',

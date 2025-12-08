@@ -3,13 +3,15 @@ import { errorHandler } from '@common/errors/errorHandler';
 import { cors } from '@elysiajs/cors';
 import { openapi } from '@elysiajs/openapi';
 import { Elysia } from 'elysia';
+import { db } from '@user/db';
+import { BaziService } from '@user/bazi.service';
 import { usersPlugin } from './index';
 
-const app = new Elysia({ prefix: '/api' })
+const app = new Elysia({ prefix: '/users' })
 	.use(errorHandler)
 	.use(
 		cors({
-			origin: 'http://localhost:5173',
+			origin: ['http://localhost:5173', 'https://novus.io.vn/'],
 			credentials: true,
 			methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 			allowedHeaders: ['Content-Type', 'Authorization'],
@@ -25,7 +27,7 @@ const app = new Elysia({ prefix: '/api' })
 			},
 		}),
 	)
-	.use(usersPlugin)
+	.use(usersPlugin({ db, baziService: new BaziService() }))
 	.get('/', () => ({ status: 'ok', service: 'users' }), {
 		detail: { summary: 'Health check - Users Service' },
 	})

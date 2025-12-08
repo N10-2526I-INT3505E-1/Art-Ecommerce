@@ -6,6 +6,19 @@ import { Elysia } from 'elysia';
 import { ordersPlugin } from './orders';
 import { paymentsPlugin, vnpayIpnHandler } from './payments';
 import { productsPlugin } from './products';
+
+import { db as userDb } from './users/db';
+import { db as orderDb } from './orders/db';
+import { db as paymentDb } from './payments/db';
+import { db as productDb } from './products/db';
+import { UserService } from './users/user.service';
+import { BaziService } from './users/bazi.service';
+import { OrderService } from './orders/order.service';
+import { PaymentService, PaymentIPN } from './payments/payment.service';
+import { ProductService } from './products/product.service';
+const baziService = new BaziService();
+const userService = new UserService(userDb, baziService);
+
 export const app = new Elysia({ prefix: '/api' })
 	.use(errorHandler)
 	.use(
@@ -27,11 +40,11 @@ export const app = new Elysia({ prefix: '/api' })
 		}),
 	)
 
-	.use(usersPlugin)
-	.use(productsPlugin)
-	.use(ordersPlugin)
-	.use(paymentsPlugin)
-	.use(vnpayIpnHandler)
+	.use(usersPlugin({ userService }))
+	.use(productsPlugin({ productService: new ProductService(productDb) }))
+	.use(ordersPlugin({ orderService: new OrderService(orderDb) }))
+	.use(paymentsPlugin({ paymentService: new PaymentService(paymentDb) }))
+	.use(vnpayIpnHandler({ paymentIPN: new PaymentIPN(paymentDb) }))
 
 	.get('/', () => ({ status: 'ok' }), {
 		detail: { summary: 'Health check endpoint' },

@@ -37,7 +37,7 @@ export const actions: Actions = {
 				path: '/',
 				httpOnly: true,
 				sameSite: 'lax',
-				maxAge: 60 * 30, // 15 minutes
+				maxAge: 60 * 30, // 30 minutes
 			});
 
 			event.cookies.set('refresh_token', response.refreshToken, {

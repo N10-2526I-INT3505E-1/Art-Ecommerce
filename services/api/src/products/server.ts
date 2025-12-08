@@ -10,7 +10,7 @@ const app = new Elysia({ prefix: '/products' })
 	.use(errorHandler)
 	.use(
 		cors({
-			origin: 'http://localhost:5173',
+			origin: ['http://localhost:5173', 'https://novus.io.vn/'],
 			credentials: true,
 			methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 			allowedHeaders: ['Content-Type', 'Authorization'],

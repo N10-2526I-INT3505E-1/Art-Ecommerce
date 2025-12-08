@@ -75,7 +75,7 @@ export const actions = {
 
 		try {
 			const client = api({ fetch, request });
-			await client.post(`api/users/${locals.user.id}/addresses`, {
+			await client.post(`api/users/profile/addresses`, {
 				json: addressData,
 			});
 			return { success: true, type: 'address', message: 'Thêm địa chỉ thành công!' };
@@ -103,7 +103,7 @@ export const actions = {
 
 		try {
 			const client = api({ fetch, request });
-			await client.patch(`api/users/${locals.user.id}/addresses/${addressId}`, {
+			await client.patch(`api/users/profile/addresses/${addressId}`, {
 				json: addressData,
 			});
 			return { success: true, type: 'address', message: 'Cập nhật địa chỉ thành công!' };
@@ -122,7 +122,7 @@ export const actions = {
 
 		try {
 			const client = api({ fetch, request });
-			await client.delete(`api/users/${locals.user.id}/addresses/${addressId}`);
+			await client.delete(`api/users/profile/addresses/${addressId}`);
 			return { success: true, type: 'address', message: 'Xóa địa chỉ thành công!' };
 		} catch (error) {
 			console.error('Delete address error:', error);

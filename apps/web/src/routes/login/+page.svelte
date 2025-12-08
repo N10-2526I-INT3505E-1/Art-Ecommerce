@@ -38,31 +38,19 @@
 
 	async function handleGoogleLogin(response: google.accounts.id.CredentialResponse) {
 		try {
-			const res = await fetch('/api/auth/google', {
+			const res = await fetch('/api/sessions/google', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ token: response.credential }),
 			});
 
-			const data = await res.json();
-
-			if (data.status === 'login') {
-				document.cookie = `auth=${data.accessToken}; path=/; max-age=${60 * 30}; samesite=lax${
-					location.protocol === 'https:' ? '; secure' : ''
-				}`;
-				document.cookie = `refresh_token=${data.refreshToken}; path=/; max-age=${
-					60 * 60 * 24 * 7
-				}; samesite=lax${location.protocol === 'https:' ? '; secure' : ''}`;
-
+			if (res.ok) {
+				// Chỉ cần check status 200/201
 				showToast({ message: 'Logged in successfully!', type: 'success' });
+
+				// Cookie đã được set tự động bởi Backend response
 				await invalidateAll();
 				await goto('/');
-			} else if (data.status === 'register') {
-				const params = new URLSearchParams();
-				if (data.email) params.set('email', data.email);
-				if (data.first_name) params.set('firstName', data.first_name);
-				if (data.last_name) params.set('lastName', data.last_name);
-				await goto(`/register?${params.toString()}`);
 			} else {
 				showToast({ message: 'Login failed', type: 'error' });
 			}

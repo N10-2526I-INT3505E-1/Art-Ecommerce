@@ -6,10 +6,13 @@ import { Elysia } from 'elysia';
 import { db } from '@user/db';
 import { BaziService } from '@user/bazi.service';
 import { usersPlugin } from './index';
+import { UserService } from './user.service';
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
+const baziService = new BaziService();
+const userService = new UserService(db, baziService);
 
-const app = new Elysia({ prefix: '/users' })
+const app = new Elysia()
 	.use(errorHandler)
 	.use(
 		cors({
@@ -29,7 +32,7 @@ const app = new Elysia({ prefix: '/users' })
 			},
 		}),
 	)
-	.use(usersPlugin({ db, baziService: new BaziService() }))
+	.use(usersPlugin({ userService }))
 	.get('/', () => ({ status: 'ok', service: 'users' }), {
 		detail: { summary: 'Health check - Users Service' },
 	})

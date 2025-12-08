@@ -18,10 +18,10 @@ async function refreshAccessToken(
 	try {
 		// Send refresh token in request body (you'll need to update your API endpoint to accept this)
 		const response = await client
-			.post('api/auth/refresh', {
+			.post('api/sessions/refresh', {
 				json: { refreshToken },
 			})
-			.json<{ accessToken: string }>(); // Fixed: use accessToken, not token
+			.json<{ accessToken: string }>();
 
 		const newAccessToken = response.accessToken;
 		console.log('Refreshed access token:', newAccessToken);

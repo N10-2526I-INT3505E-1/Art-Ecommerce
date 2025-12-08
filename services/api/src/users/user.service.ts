@@ -1,3 +1,4 @@
+// src/users/user.service.ts
 import {
 	ConflictError,
 	InternalServerError,
@@ -8,7 +9,6 @@ import { faker } from '@faker-js/faker';
 import type { BaziInput } from '@user/bazi.model';
 import { baziProfilesTable } from '@user/bazi.model';
 import type { BaziService } from '@user/bazi.service';
-import type { db as defaultDb } from '@user/db';
 import type { LoginSchema, SignUpSchema, UserAddressSchema } from '@user/user.model';
 import { refreshTokensTable, userAddressTable, usersTable } from '@user/user.model';
 import { comparePassword, hashPassword } from '@user/utils/passwordHash';
@@ -16,235 +16,31 @@ import { and, desc, eq } from 'drizzle-orm';
 import type { Static } from 'elysia';
 import { OAuth2Client } from 'google-auth-library';
 
-type DbClient = typeof defaultDb;
-type JwtClient = {
+export type JwtClient = {
 	sign: (payload: Record<string, string | number>) => Promise<string>;
 	verify: (token: string) => Promise<Record<string, string | number> | false>;
 };
 
+type DbClient = any;
+
 export class UserService {
 	private db: DbClient;
-	private jwt: JwtClient;
 	private googleClient: OAuth2Client;
 	private baziService: BaziService;
 
-	constructor(db: DbClient, jwt: JwtClient, baziService: BaziService) {
+	constructor(db: DbClient, baziService: BaziService) {
 		this.db = db;
-		this.jwt = jwt;
 		this.baziService = baziService;
 		this.googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID || '');
-		if (!process.env.GOOGLE_CLIENT_ID) {
-			console.warn('Warning: GOOGLE_CLIENT_ID is not defined');
+
+		if (!this.db) {
+			console.error('FATAL: Database instance passed to UserService is undefined');
 		}
 	}
 
-	// Address Management
+	// SECTION 1: AUTHENTICATION (Cần JWT để Sign Token)
 
-	async getUserAddresses(userId: string) {
-		const addresses = await this.db
-			.select()
-			.from(userAddressTable)
-			.where(eq(userAddressTable.user_id, userId))
-			.orderBy(desc(userAddressTable.is_default)); // Default address first
-
-		return { addresses };
-	}
-
-	async addUserAddress(
-		userId: string,
-		addressData: Omit<Static<typeof UserAddressSchema>, 'id' | 'user_id'>,
-	) {
-		// 1. Verify User Exists
-		const [userFromDb] = await this.db.select().from(usersTable).where(eq(usersTable.id, userId));
-		if (!userFromDb) {
-			throw new NotFoundError('User not found.');
-		}
-
-		try {
-			// 2. Use Transaction to handle "Default" toggle
-			const [newAddress] = await this.db.transaction(async (tx) => {
-				// If this new address is set as default, unset previous defaults
-				if (addressData.is_default === 1) {
-					await tx
-						.update(userAddressTable)
-						.set({ is_default: 0 })
-						.where(eq(userAddressTable.user_id, userId));
-				}
-
-				// Insert the new address
-				const [inserted] = await tx
-					.insert(userAddressTable)
-					.values({ ...addressData, user_id: userId })
-					.returning();
-
-				return [inserted];
-			});
-
-			if (!newAddress) {
-				throw new InternalServerError('Failed to create address.');
-			}
-
-			return newAddress;
-		} catch (error) {
-			console.error('Add Address Error:', error);
-			throw new InternalServerError('Failed to add address due to a server error.');
-		}
-	}
-
-	async updateUserAddress(
-		userId: string,
-		addressId: number,
-		addressData: Partial<Static<typeof UserAddressSchema>>,
-	) {
-		// 1. Verify User Exists
-		const [userFromDb] = await this.db.select().from(usersTable).where(eq(usersTable.id, userId));
-		if (!userFromDb) {
-			throw new NotFoundError('User not found.');
-		}
-
-		try {
-			const [updatedAddress] = await this.db.transaction(async (tx) => {
-				// If setting as default, unset others
-				if (addressData.is_default === 1) {
-					await tx
-						.update(userAddressTable)
-						.set({ is_default: 0 })
-						.where(eq(userAddressTable.user_id, userId));
-				}
-
-				// Update specific address
-				const [result] = await tx
-					.update(userAddressTable)
-					.set({
-						...addressData,
-						updated_at: new Date().toISOString(), // Ensure timestamp update
-					})
-					.where(and(eq(userAddressTable.id, addressId), eq(userAddressTable.user_id, userId)))
-					.returning();
-
-				return [result];
-			});
-
-			if (!updatedAddress) {
-				throw new NotFoundError('Address not found or does not belong to this user.');
-			}
-
-			return updatedAddress;
-		} catch (error) {
-			if (error instanceof NotFoundError) throw error;
-			console.error('Update Address Error:', error);
-			throw new InternalServerError('Failed to update address.');
-		}
-	}
-
-	async deleteUserAddress(userId: string, addressId: number) {
-		const [deletedAddress] = await this.db
-			.delete(userAddressTable)
-			.where(and(eq(userAddressTable.id, addressId), eq(userAddressTable.user_id, userId)))
-			.returning();
-
-		if (!deletedAddress) {
-			throw new NotFoundError('Address not found or does not belong to this user.');
-		}
-
-		return { message: 'Address deleted successfully.' };
-	}
-
-	async createRefreshToken(userId: string) {
-		const refreshToken = Bun.randomUUIDv7();
-		const time_ms = 7 * 24 * 60 * 60 * 1000;
-		const expiresAt = new Date(Date.now() + time_ms);
-
-		await this.db.insert(refreshTokensTable).values({
-			user_id: userId,
-			token: refreshToken,
-			expires_at: expiresAt,
-		});
-
-		return refreshToken;
-	}
-
-	async refreshAccessToken(refreshToken: string) {
-		const [storedToken] = await this.db
-			.select()
-			.from(refreshTokensTable)
-			.where(eq(refreshTokensTable.token, refreshToken));
-
-		if (!storedToken) {
-			throw new UnauthorizedError('Invalid refresh token');
-		}
-
-		if (storedToken.expires_at < new Date()) {
-			await this.db.delete(refreshTokensTable).where(eq(refreshTokensTable.token, refreshToken));
-			throw new UnauthorizedError('Refresh token expired');
-		}
-
-		const [user] = await this.db
-			.select()
-			.from(usersTable)
-			.where(eq(usersTable.id, storedToken.user_id));
-
-		if (!user) {
-			throw new UnauthorizedError('User not found');
-		}
-
-		const userPayload = { id: user.id, email: user.email, role: user.role };
-		const newAccessToken = await this.jwt.sign(userPayload);
-
-		return { accessToken: newAccessToken };
-	}
-
-	async loginWithGoogle(token: string) {
-		try {
-			const ticket = await this.googleClient.verifyIdToken({
-				idToken: token,
-				audience: process.env.GOOGLE_CLIENT_ID,
-			});
-			const payload = ticket.getPayload();
-			if (!payload || !payload.email) {
-				throw new UnauthorizedError('Invalid Google Token');
-			}
-
-			const [userFromDb] = await this.db
-				.select()
-				.from(usersTable)
-				.where(eq(usersTable.email, payload.email));
-
-			if (userFromDb) {
-				const userPayload = {
-					id: userFromDb.id,
-					email: userFromDb.email,
-					role: userFromDb.role,
-				};
-				const accessToken = await this.jwt.sign(userPayload);
-				const refreshToken = await this.createRefreshToken(userFromDb.id);
-				return { status: 'login', accessToken, refreshToken };
-			}
-
-			// Auto-register logic
-			const newPassword = Bun.randomUUIDv7();
-			const funnyUsername = faker.internet.username() + Bun.randomUUIDv7().slice(0, 4);
-
-			const newUser = await this.createUser({
-				email: payload.email,
-				username: funnyUsername,
-				password: newPassword,
-				first_name: payload.given_name || 'User',
-				last_name: payload.family_name || 'Name',
-			});
-
-			return {
-				status: 'login',
-				accessToken: newUser.accessToken,
-				refreshToken: newUser.refreshToken,
-			};
-		} catch (error) {
-			console.error('Google login error:', error);
-			throw new UnauthorizedError('Google authentication failed');
-		}
-	}
-
-	async login(credentials: Static<typeof LoginSchema>) {
+	async login(credentials: Static<typeof LoginSchema>, jwt: JwtClient) {
 		let userFromDb;
 
 		if (credentials.email) {
@@ -271,19 +67,70 @@ export class UserService {
 		}
 
 		const userPayload = { id: userFromDb.id, email: userFromDb.email, role: userFromDb.role };
-		const accessToken = await this.jwt.sign(userPayload);
+
+		// Sử dụng instance jwt được truyền vào để ký token
+		const accessToken = await jwt.sign(userPayload);
 		const refreshToken = await this.createRefreshToken(userFromDb.id);
 
 		return { accessToken, refreshToken };
 	}
 
-	async logout(refreshToken: string) {
-		await this.db.delete(refreshTokensTable).where(eq(refreshTokensTable.token, refreshToken));
-		return { message: 'Logged out successfully' };
+	async loginWithGoogle(token: string, jwt: JwtClient) {
+		try {
+			const ticket = await this.googleClient.verifyIdToken({
+				idToken: token,
+				audience: process.env.GOOGLE_CLIENT_ID,
+			});
+			const payload = ticket.getPayload();
+			if (!payload || !payload.email) {
+				throw new UnauthorizedError('Invalid Google Token');
+			}
+
+			const [userFromDb] = await this.db
+				.select()
+				.from(usersTable)
+				.where(eq(usersTable.email, payload.email));
+
+			if (userFromDb) {
+				const userPayload = {
+					id: userFromDb.id,
+					email: userFromDb.email,
+					role: userFromDb.role,
+				};
+				const accessToken = await jwt.sign(userPayload);
+				const refreshToken = await this.createRefreshToken(userFromDb.id);
+				return { status: 'login', accessToken, refreshToken };
+			}
+
+			// Auto-register logic
+			const newPassword = Bun.randomUUIDv7();
+			const funnyUsername = faker.internet.username() + Bun.randomUUIDv7().slice(0, 4);
+
+			const newUser = await this.createUser(
+				{
+					email: payload.email,
+					username: funnyUsername,
+					password: newPassword,
+					first_name: payload.given_name || 'User',
+					last_name: payload.family_name || 'Name',
+				},
+				jwt,
+			);
+
+			return {
+				status: 'login',
+				accessToken: newUser.accessToken,
+				refreshToken: newUser.refreshToken,
+			};
+		} catch (error) {
+			console.error('Google login error:', error);
+			throw new UnauthorizedError('Google authentication failed');
+		}
 	}
 
 	async createUser(
 		userData: Omit<Static<typeof SignUpSchema>, 'id' | 'role' | 'created_at' | 'updated_at'>,
+		jwt: JwtClient,
 	) {
 		const existingEmail = await this.db
 			.select()
@@ -303,7 +150,7 @@ export class UserService {
 
 		const hashedPassword = await hashPassword(userData.password);
 
-		return await this.db.transaction(async (tx) => {
+		return await this.db.transaction(async (tx: any) => {
 			const [newUser] = await tx
 				.insert(usersTable)
 				.values({ ...userData, password: hashedPassword })
@@ -314,7 +161,7 @@ export class UserService {
 			}
 
 			const userPayload = { id: newUser.id, email: newUser.email, role: newUser.role };
-			const accessToken = await this.jwt.sign(userPayload);
+			const accessToken = await jwt.sign(userPayload);
 
 			// Create refresh token within the same transaction
 			const refreshToken = Bun.randomUUIDv7();
@@ -330,6 +177,57 @@ export class UserService {
 			return { user: newUser, accessToken, refreshToken };
 		});
 	}
+
+	async refreshAccessToken(refreshToken: string, jwt: JwtClient) {
+		const [storedToken] = await this.db
+			.select()
+			.from(refreshTokensTable)
+			.where(eq(refreshTokensTable.token, refreshToken));
+
+		if (!storedToken) {
+			throw new UnauthorizedError('Invalid refresh token');
+		}
+
+		if (storedToken.expires_at < new Date()) {
+			await this.db.delete(refreshTokensTable).where(eq(refreshTokensTable.token, refreshToken));
+			throw new UnauthorizedError('Refresh token expired');
+		}
+
+		const [user] = await this.db
+			.select()
+			.from(usersTable)
+			.where(eq(usersTable.id, storedToken.user_id));
+
+		if (!user) {
+			throw new UnauthorizedError('User not found');
+		}
+
+		const userPayload = { id: user.id, email: user.email, role: user.role };
+		const newAccessToken = await jwt.sign(userPayload);
+
+		return { accessToken: newAccessToken };
+	}
+
+	async createRefreshToken(userId: string) {
+		const refreshToken = Bun.randomUUIDv7();
+		const time_ms = 7 * 24 * 60 * 60 * 1000;
+		const expiresAt = new Date(Date.now() + time_ms);
+
+		await this.db.insert(refreshTokensTable).values({
+			user_id: userId,
+			token: refreshToken,
+			expires_at: expiresAt,
+		});
+
+		return refreshToken;
+	}
+
+	async logout(refreshToken: string) {
+		await this.db.delete(refreshTokensTable).where(eq(refreshTokensTable.token, refreshToken));
+		return { message: 'Logged out successfully' };
+	}
+
+	// SECTION 2: USER MANAGEMENT (Không cần JWT)
 
 	async getAllUsers() {
 		const allUsers = await this.db.select().from(usersTable);
@@ -375,11 +273,113 @@ export class UserService {
 		return { message: `User with ID ${id} successfully deleted.` };
 	}
 
-	/**
-	 * Retrieves the Bazi profile for a given user.
-	 * @param userId The ID of the user.
-	 * @returns The user's Bazi profile.
-	 */
+	// SECTION 3: ADDRESS MANAGEMENT
+
+	async getUserAddresses(userId: string) {
+		const addresses = await this.db
+			.select()
+			.from(userAddressTable)
+			.where(eq(userAddressTable.user_id, userId))
+			.orderBy(desc(userAddressTable.is_default));
+
+		return { addresses };
+	}
+
+	async addUserAddress(
+		userId: string,
+		addressData: Omit<Static<typeof UserAddressSchema>, 'id' | 'user_id'>,
+	) {
+		const [userFromDb] = await this.db.select().from(usersTable).where(eq(usersTable.id, userId));
+		if (!userFromDb) {
+			throw new NotFoundError('User not found.');
+		}
+
+		try {
+			const [newAddress] = await this.db.transaction(async (tx: any) => {
+				if (addressData.is_default === 1) {
+					await tx
+						.update(userAddressTable)
+						.set({ is_default: 0 })
+						.where(eq(userAddressTable.user_id, userId));
+				}
+
+				const [inserted] = await tx
+					.insert(userAddressTable)
+					.values({ ...addressData, user_id: userId })
+					.returning();
+
+				return [inserted];
+			});
+
+			if (!newAddress) {
+				throw new InternalServerError('Failed to create address.');
+			}
+
+			return newAddress;
+		} catch (error) {
+			console.error('Add Address Error:', error);
+			throw new InternalServerError('Failed to add address due to a server error.');
+		}
+	}
+
+	async updateUserAddress(
+		userId: string,
+		addressId: number,
+		addressData: Partial<Static<typeof UserAddressSchema>>,
+	) {
+		const [userFromDb] = await this.db.select().from(usersTable).where(eq(usersTable.id, userId));
+		if (!userFromDb) {
+			throw new NotFoundError('User not found.');
+		}
+
+		try {
+			const [updatedAddress] = await this.db.transaction(async (tx: any) => {
+				if (addressData.is_default === 1) {
+					await tx
+						.update(userAddressTable)
+						.set({ is_default: 0 })
+						.where(eq(userAddressTable.user_id, userId));
+				}
+
+				const [result] = await tx
+					.update(userAddressTable)
+					.set({
+						...addressData,
+						updated_at: new Date().toISOString(),
+					})
+					.where(and(eq(userAddressTable.id, addressId), eq(userAddressTable.user_id, userId)))
+					.returning();
+
+				return [result];
+			});
+
+			if (!updatedAddress) {
+				throw new NotFoundError('Address not found or does not belong to this user.');
+			}
+
+			return updatedAddress;
+		} catch (error) {
+			if (error instanceof NotFoundError) throw error;
+			console.error('Update Address Error:', error);
+			throw new InternalServerError('Failed to update address.');
+		}
+	}
+
+	async deleteUserAddress(userId: string, addressId: number) {
+		const [deletedAddress] = await this.db
+			.delete(userAddressTable)
+			.where(and(eq(userAddressTable.id, addressId), eq(userAddressTable.user_id, userId)))
+			.returning();
+
+		if (!deletedAddress) {
+			throw new NotFoundError('Address not found or does not belong to this user.');
+		}
+
+		return { message: 'Address deleted successfully.' };
+	}
+
+	// SECTION 4: BAZI PROFILE MANAGEMENT
+
 	async getBaziProfile(userId: string) {
 		const [profile] = await this.db
 			.select()
@@ -392,15 +392,7 @@ export class UserService {
 		return profile;
 	}
 
-	/**
-	 * Creates or updates a Bazi profile for a user.
-	 * It calculates the Bazi chart and then performs an "upsert" operation.
-	 * @param userId The ID of the user.
-	 * @param baziInput The birth information provided by the user.
-	 * @returns The newly created or updated Bazi profile.
-	 */
 	async createOrUpdateBaziProfile(userId: string, baziInput: Omit<BaziInput, 'id' | 'user_id'>) {
-		// 1. Verify user exists
 		const [user] = await this.db
 			.select({ id: usersTable.id })
 			.from(usersTable)
@@ -409,26 +401,19 @@ export class UserService {
 			throw new NotFoundError('User not found.');
 		}
 
-		// 2. Calculate the full Bazi profile
 		const fullProfileData = await this.baziService.calculateBazi(baziInput);
 
-		// 3. Prepare data for insertion/update
 		const dataToUpsert = {
 			...fullProfileData,
 			user_id: userId,
 		};
 
-		// 4. Perform an "upsert" operation
-		// Drizzle for SQLite uses `onConflictDoUpdate`
 		try {
 			const [result] = await this.db
 				.insert(baziProfilesTable)
 				.values(dataToUpsert)
 				.onConflictDoUpdate({
-					target: baziProfilesTable.user_id, // conflict on the unique user_id
-
-					// Explicitly list the fields to update.
-					// This prevents issues with null/undefined values for JSON fields.
+					target: baziProfilesTable.user_id,
 					set: {
 						profile_name: dataToUpsert.profile_name,
 						gender: dataToUpsert.gender,
@@ -439,8 +424,6 @@ export class UserService {
 						birth_minute: dataToUpsert.birth_minute,
 						longitude: dataToUpsert.longitude,
 						timezone_offset: dataToUpsert.timezone_offset,
-
-						// Calculated fields
 						year_stem: dataToUpsert.year_stem,
 						year_branch: dataToUpsert.year_branch,
 						month_stem: dataToUpsert.month_stem,
@@ -449,8 +432,6 @@ export class UserService {
 						day_branch: dataToUpsert.day_branch,
 						hour_stem: dataToUpsert.hour_stem,
 						hour_branch: dataToUpsert.hour_branch,
-
-						// Analysis fields (handle potential nulls)
 						day_master_status: dataToUpsert.day_master_status,
 						structure_type: dataToUpsert.structure_type,
 						structure_name: dataToUpsert.structure_name,
@@ -465,8 +446,6 @@ export class UserService {
 						enemy_score: dataToUpsert.enemy_score,
 						percentage_self: dataToUpsert.percentage_self,
 						luck_start_age: dataToUpsert.luck_start_age,
-
-						// Manually set the updated_at timestamp
 						updated_at: new Date().toISOString(),
 					},
 				})
@@ -478,7 +457,6 @@ export class UserService {
 			return result;
 		} catch (error) {
 			console.error('Database upsert error:', error);
-			// Re-throw a more generic error to the client
 			throw new InternalServerError('A database error occurred while saving the Bazi profile.');
 		}
 	}

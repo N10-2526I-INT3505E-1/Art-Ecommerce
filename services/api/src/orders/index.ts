@@ -3,6 +3,7 @@ import { db } from './db';
 import {
   CreateOrderSchema,
   OrderResponseSchema,
+  CreateOrderWithItemsSchema,
 } from './order.model';
 import { OrderService } from './order.service';
 import {
@@ -11,7 +12,6 @@ import {
 } from './order_item.model';
 import { rabbitPlugin, QUEUES } from './rabbitmq';
 import type { Channel } from 'amqplib';
-import { updateSourceFile } from 'typescript';
 
 const orderService = new OrderService(db);
 
@@ -63,20 +63,39 @@ export const ordersPlugin = new Elysia()
   })
   .group('/orders', (app) =>
     app
-      // 1. Create Order
+      // 1. Create Order with Items
       .post(
         '/',
         async ({ body, set }) => {
-          const newOrder = await orderService.createOrder(body as any);
+          const { items, ...orderData } = body as any;
+          
+          // Create the order
+          const newOrder = await orderService.createOrder(orderData);
+          
+          // Add items to order if provided
+          let orderItems: any[] = [];
+          if (items && Array.isArray(items) && items.length > 0) {
+            for (const item of items) {
+              const addedItem = await orderService.addItemToOrder(newOrder.id, item);
+              orderItems.push(addedItem);
+            }
+          }
+          
           set.status = 201;
-          return { order: newOrder };
+          return { 
+            order: newOrder,
+            items: orderItems
+          };
         },
         {
-          body: t.Omit(CreateOrderSchema, ['id', 'created_at', 'updated_at']),
+          body: CreateOrderWithItemsSchema,
           response: {
-            201: t.Object({ order: OrderResponseSchema }),
+            201: t.Object({ 
+              order: OrderResponseSchema,
+              items: t.Array(OrderItemResponseSchema)
+            }),
           },
-          detail: { tags: ['Orders'], summary: 'Create a new order' },
+          detail: { tags: ['Orders'], summary: 'Create a new order with items' },
         },
       )
 

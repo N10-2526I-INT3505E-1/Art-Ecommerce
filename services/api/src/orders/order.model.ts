@@ -49,6 +49,23 @@ export const CreateOrderSchema = createInsertSchema(ordersTable, {
 	shipping_address: t.String({ minLength: 5 }),
 });
 
+/** Order Item in creation request */
+export const OrderItemInputSchema = t.Object({
+	product_id: t.Integer({ minimum: 1 }),
+	quantity: t.Integer({ minimum: 1 }),
+	price_per_item: t.Number({ minimum: 0 }),
+	product_snapshot: t.Optional(t.Record(t.String(), t.Any())),
+});
+
+/** Create Order with Items schema */
+export const CreateOrderWithItemsSchema = t.Object({
+	user_id: t.String(),
+	total_amount: t.Number({ minimum: 0 }),
+	status: t.Optional(t.UnionEnum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled'])),
+	shipping_address: t.String({ minLength: 5 }),
+	items: t.Optional(t.Array(OrderItemInputSchema)),
+});
+
 export const OrderResponseSchema = createSelectSchema(ordersTable);
 export type Table = typeof ordersTable;
 export type CreateOrderInput = typeof CreateOrderSchema extends infer R ? R : unknown;

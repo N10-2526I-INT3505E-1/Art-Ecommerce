@@ -9,7 +9,8 @@ import { createVNPPaymentUrl } from './paymentHandle/vnpayPaymentHandle';
 import { rabbitPlugin, QUEUES } from './rabbitmq';
 const paymentService = new PaymentService(db);
 
-export const paymentsPlugin = new Elysia({ prefix: '/payments' })
+export const paymentsPlugin = (dependencies: { paymentService: PaymentService }) =>
+	new Elysia()
 	.decorate('paymentService', paymentService)
 	// POST /api/payments - Creates a new payment record with pending status
 	// Accepts order_id, amount, and payment_gateway in the request body
@@ -112,8 +113,9 @@ function sortObject(obj: Record<string, any>): Record<string, any> {
 
 const paymentIPN = new PaymentIPN(db);
 // VNPay IPN endpoint handler
-export const vnpayIpnHandler = new Elysia()
-	.use(await rabbitPlugin())
+export const vnpayIpnHandler = (dependencies: { paymentIPN: PaymentIPN }) =>
+	new Elysia()
+	.use(rabbitPlugin())
 	.decorate('paymentIPN', paymentIPN)
 	.get('/vnpay_ipn', async ({ query, set, paymentIPN, sendToQueue }) => {
 		const response = await paymentIPN.handleVnpayIpn(query);

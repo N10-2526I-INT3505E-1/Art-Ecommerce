@@ -27,11 +27,11 @@ export const app = new Elysia({ prefix: '/api' })
 		}),
 	)
 
-	.use(usersPlugin)
+	// .use(usersPlugin)
 	.use(productsPlugin)
-	.use(ordersPlugin)
-	.use(paymentsPlugin)
-	.use(vnpayIpnHandler)
+	// .use(ordersPlugin)
+	// .use(paymentsPlugin)
+	// .use(vnpayIpnHandler)
 
 	.get('/', () => ({ status: 'ok' }), {
 		detail: { summary: 'Health check endpoint' },

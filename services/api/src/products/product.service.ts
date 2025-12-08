@@ -147,33 +147,47 @@ export class ProductService {
 
             const conditions = [isNull(products.deletedAt)];
 
-            if (query.search) conditions.push(like(products.name, `%${query.search}%`));
             if (query.categoryId) conditions.push(eq(products.categoryId, query.categoryId));
             if (query.minPrice) conditions.push(gte(products.price, Number(query.minPrice)));
             if (query.maxPrice) conditions.push(lte(products.price, Number(query.maxPrice)));
 
-            const data = await this.db.query.products.findMany({
+            if (query.search) {
+                const searchTerms = query.search.trim().split(/\s+/);
+                const searchConditions = searchTerms.map(term => like(products.name, `%{term}%`));
+                conditions.push(and(...searchConditions));
+            }
+
+            const rawData = await this.db.query.products.findMany({
                 where: and(...conditions),
                 limit: limit,
                 offset: offset,
                 orderBy: [desc(products.createdAt)],
-                with: { category: true }
+                with: {
+                    category: true, 
+                    productTags: {
+                        with: {
+                            tag: true
+                        }
+                    }
+                }
             });
 
-            const allItems = await this.db
-                .select({ count: sql<number>`count(*)` })
-                .from(products)
-                .where(and(...conditions));
+            const data = rawData.map(product => {
+                const flatTags = product.productTags.map(pt=> pt.tag.name);
+                return {...product, tags: flatTags, productTags: undefined};
+            });
 
+            const allItems = await this.db.select({count: sql<number>`count(*)`}).from(products).where(and(...conditions));
             return {
-                data,
+                data, 
                 pagination: {
-                    page,
-                    limit,
-                    total: allItems[0]?.count ?? 0,
-                    totalPages: Math.ceil((allItems[0]?.count ?? 0) / limit)
+                    page, 
+                    limit, 
+                    total: allItems[0]?.count??0,
+                    totalPages: Math.ceil((allItems[0]?.count ?? 0)/limit)
                 }
             };
+            
         } catch (error) {
             console.error('Get All Products Failed:', error);
             throw new InternalServerError('Failed to fetch products.');
@@ -186,23 +200,29 @@ export class ProductService {
     async getById(id: string) {
         try {
             const product = await this.db.query.products.findFirst({
-                where: eq(products.id, id),
+                where: and(
+                    eq(products.id, id),
+                    isNull(products.deletedAt)
+                ),
                 with: {
                     category: true,
-                    productTags: { with: { tag: true } }
+                    productTags: {
+                        with: {
+                            tag : true
+                        }
+                    }
                 }
             });
 
             if (!product) {
                 throw new NotFoundError('Product not found.');
             }
-
             const flatTags = product.productTags.map(pt => pt.tag);
-            return { ...product, tags: flatTags, productTags: undefined };
-        } catch (error) {
+            return {...product, tags: flatTags, productTags: undefined};
+        } catch(error) {
             if (error instanceof NotFoundError) throw error;
-            console.error('Get Product By ID Failed:', error);
-            throw new InternalServerError('Failed to fetch product details.');
+            console.error('Get Product By ID Failed', error);
+            throw new InternalServerError('Failed to fetch product details');
         }
     }
 
@@ -340,5 +360,29 @@ export class ProductService {
         } catch (error) {
             throw new InternalServerError('Failed to fetch tags.');
         }
+    }
+
+    /**
+     * 8. Trừ kho hàng loạt (Dùng cho Order Service gọi sang)
+     */
+    async reduceStock(items: {productId: string, quantity: number} []) {
+        return await this.db.transaction(async (tx) => {
+            for (const item of items) {
+                // lay thong tin san pham 
+                const product = await tx.query.products.findFirst({
+                    where: eq(products.id, item.productId)
+                });
+                if (!product) {
+                    throw new NotFoundError('Sản phẩm ID ${item.productId} không tồn tại');
+                }
+                if (product.stock < item.quantity) {
+                    throw new BadRequestError('Sản phẩm ${product.name} không đủ hàng (Còn: ${product.stock}, Mua: ${item.quantity})');
+                }
+                await tx.update(products)
+                        .set({stock: product.stock - item.quantity})
+                        .where(eq(products.id, item.productId));
+            }
+            return {success: true, message: "Đã trừ kho thành công"};
+        });
     }
 }

@@ -1,4 +1,8 @@
-import { insertProductBody, selectProductSchema, updateProductBody } from '@product/product.model';
+import { insertProductBody, 
+		selectProductSchema, 
+		updateProductBody,
+		reduceStockBody 
+	} from '@product/product.model';
 import { Elysia, t } from 'elysia';
 import { db } from './db';
 import { ProductService } from './product.service';
@@ -123,4 +127,13 @@ export const productsPlugin = new Elysia({ prefix: '/products' })
 			params: t.Object({ id: t.String() }),
 			detail: { tags: ['Products'], summary: 'Delete Product' },
 		},
-	);
+	)
+
+	.post('/reduce-stock', async({body}) => {
+		return await productService.reduceStock(body.items);
+	}, {
+		body: reduceStockBody, 
+		detail: {tags:["Products"], 
+			summary: 'Batch Reduce Story (For Order Service)'
+		}
+	});

@@ -4,8 +4,10 @@ import { cors } from '@elysiajs/cors';
 import { openapi } from '@elysiajs/openapi';
 import { Elysia } from 'elysia';
 import { paymentsPlugin, vnpayIpnHandler } from './index';
+import { db } from './db';
+import { PaymentService, PaymentIPN } from './payment.service';
 
-const app = new Elysia({ prefix: '/api' })
+const app = new Elysia({ prefix: '/payments' })
 	.use(errorHandler)
 	.use(
 		cors({
@@ -25,8 +27,11 @@ const app = new Elysia({ prefix: '/api' })
 			},
 		}),
 	)
-	.use(paymentsPlugin)
-	.use(vnpayIpnHandler)
+
+	// 2. Mount the plugins by calling them as functions and passing in the real services
+	.use(paymentsPlugin({ paymentService: new PaymentService(db) }))
+	.use(vnpayIpnHandler({ paymentIPN: new PaymentIPN(db) }))
+
 	.get('/', () => ({ status: 'ok', service: 'payments' }), {
 		detail: { summary: 'Health check - Payments Service' },
 	})

@@ -23,6 +23,7 @@
 		"@elysiajs/openapi": "^1.4.11",
 		"@faker-js/faker": "^10.1.0",
 		"@libsql/client": "^0.15.15",
+		"@nghiavuive/lunar_date_vi": "^2.0.1",
 		"@sindresorhus/slugify": "^3.0.0",
 		"amqplib": "^0.10.9",
 		"drizzle-orm": "^0.45.0",

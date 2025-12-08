@@ -6,7 +6,7 @@ import { Elysia } from 'elysia';
 import { ordersPlugin } from './orders';
 import { paymentsPlugin, vnpayIpnHandler } from './payments';
 import { productsPlugin } from './products';
-export const app = new Elysia({ prefix: "/api" })
+export const app = new Elysia({ prefix: '/api' })
 	.use(errorHandler)
 	.use(
 		cors({
@@ -20,7 +20,7 @@ export const app = new Elysia({ prefix: "/api" })
 		openapi({
 			documentation: {
 				info: {
-					title: "Novus API Documentation",
+					title: 'Novus API Documentation',
 					version: '1.0.0',
 				},
 			},
@@ -32,13 +32,12 @@ export const app = new Elysia({ prefix: "/api" })
 	.use(ordersPlugin)
 	.use(paymentsPlugin)
 	.use(vnpayIpnHandler)
-	
 
 	.get('/', () => ({ status: 'ok' }), {
 		detail: { summary: 'Health check endpoint' },
 	})
 
-	.listen(3001);
+	.listen(3000);
 
 console.log(`🦊 Elysia server is running at http://${app.server?.hostname}:${app.server?.port}`);
 

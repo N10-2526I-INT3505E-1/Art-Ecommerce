@@ -1,8 +1,6 @@
-import { type Actions, fail } from '@sveltejs/kit';
+import { type Actions, fail, redirect } from '@sveltejs/kit';
 import { HTTPError } from 'ky';
 import { api } from '$lib/server/http';
-
-import { redirect } from '@sveltejs/kit';
 
 export const load = async ({ locals }) => {
 	if (locals.user) {

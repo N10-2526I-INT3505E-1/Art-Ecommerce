@@ -1,22 +1,22 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import {
-		Shield,
-		User,
-		ShoppingBag,
-		CreditCard,
-		Truck,
-		RefreshCw,
-		Copyright,
 		AlertTriangle,
-		HelpCircle,
-		FileText,
 		ArrowLeft,
 		Brain,
+		Copyright,
+		CreditCard,
 		Eye,
+		FileText,
+		HelpCircle,
 		Lock,
 		Mail,
+		RefreshCw,
+		Shield,
+		ShoppingBag,
+		Truck,
+		User,
 	} from 'lucide-svelte';
+	import { onMount } from 'svelte';
 
 	let activeSection = $state('intro');
 	let isMobileNavVisible = $state(false);
@@ -27,6 +27,8 @@
 			title: 'Tổng quan',
 			icon: FileText,
 			content: `
+				<strong>Đây là dự án để học tập và tham khảo, không phải là sản phẩm thương mại thực tế, không thực sự bán hàng và không phục vụ mục đích kinh doanh.</strong>
+				<strong>Mọi thông tin về sản phẩm, dịch vụ, chính sách, và điều khoản đều mang tính minh họa và không áp dụng trong thực tế.</strong>
                 <p>Chào mừng bạn đến với Novus. Nền tảng của chúng tôi cung cấp dịch vụ thương mại điện tử chuyên biệt về vật phẩm phong thủy kết hợp công nghệ tư vấn nội thất thông minh dựa trên trí tuệ nhân tạo. Việc truy cập và sử dụng nền tảng đồng nghĩa với việc bạn chấp nhận tuân thủ toàn bộ các điều khoản dịch vụ được quy định dưới đây.</p>
                 <p>Novus giúp bạn lựa chọn vật phẩm phù hợp với mệnh lý cá nhân và không gian sống theo phương pháp khoa học, mang lại trải nghiệm tiện lợi và tin cậy.</p>
             `,
@@ -51,7 +53,7 @@
 			content: `
                 <p>Chúng tôi tuân thủ nghiêm ngặt Nghị định 13/2023/NĐ-CP về bảo vệ dữ liệu cá nhân và cam kết bảo vệ quyền riêng tư của bạn theo các nguyên tắc sau:</p>
                 <ul class="mt-4 space-y-3">
-                    <li><strong>Dữ liệu mệnh lý:</strong> Thông tin ngày giờ sinh chỉ được sử dụng cho mục đích tính toán Bát tự và Dụng thần. Dữ liệu này được mã hóa và bảo mật tuyệt đối, không chia sẻ với bên thứ ba.</li>
+                    <li><strong>Dữ liệu mệnh lý:</strong> Thông tin ngày giờ sinh chỉ được sử dụng cho mục đích tính toán Bát tự và Dụng thần. Dữ liệu này được bảo mật tuyệt đối, không chia sẻ với bên thứ ba.</li>
                     <li><strong>Hình ảnh nội thất:</strong> Ảnh không gian nội thất do bạn tải lên sẽ tự động xóa vĩnh viễn khỏi hệ thống sau 12 giờ kể từ thời điểm phân tích hoàn tất.</li>
                     <li><strong>Lịch sử tương tác:</strong> Dữ liệu hội thoại được lưu trữ tối đa 12 tháng để cải thiện trải nghiệm người dùng. Bạn có quyền yêu cầu xóa bỏ dữ liệu này bất cứ lúc nào.</li>
                     <li><strong>Quyền kiểm soát:</strong> Bạn có toàn quyền truy cập, chỉnh sửa, hoặc yêu cầu xóa dữ liệu cá nhân thông qua tính năng quản lý tài khoản.</li>
@@ -63,7 +65,7 @@
 			title: 'Quản lý tài khoản',
 			icon: User,
 			content: `
-                <p>Để sử dụng đầy đủ các tính năng của Novus, bạn cần tạo tài khoản và tuân thủ các quy định sau:</p>
+                <p>Để sử dụng đầy đủ các tính năng của Novus, bạn cần tạo tài khoản và tuân thủ các quy tắc sau:</p>
                 <ul class="mt-4 space-y-3">
                     <li><strong>Tính chính xác:</strong> Thông tin ngày giờ sinh cần được cung cấp chính xác để hệ thống AI có thể đưa ra tư vấn phù hợp. Sai lệch thông tin sẽ dẫn đến kết quả phân tích không chính xác.</li>
                     <li><strong>Bảo mật tài khoản:</strong> Bạn có trách nhiệm bảo vệ thông tin đăng nhập và thông báo ngay cho chúng tôi nếu phát hiện truy cập trái phép. Chúng tôi hỗ trợ xác thực qua Google OAuth và Magic Link để tăng cường bảo mật.</li>
@@ -92,7 +94,7 @@
                 <p>Quy trình thanh toán và xử lý đơn hàng được thực hiện theo các nguyên tắc sau:</p>
                 <ul class="mt-4 space-y-3">
                     <li><strong>Giá cả minh bạch:</strong> Giá niêm yết đã bao gồm thuế GTGT theo quy định. Phí vận chuyển được tính toán tự động tại bước thanh toán dựa trên địa chỉ giao hàng.</li>
-                    <li><strong>Phương thức thanh toán:</strong> Chúng tôi chấp nhận thanh toán qua COD (thanh toán khi nhận hàng), VNPAY, chuyển khoản ngân hàng, và các phương thức khác được cập nhật tại trang thanh toán.</li>
+                    <li><strong>Phương thức thanh toán:</strong> Chúng tôi chấp nhận thanh toán qua VNPAY, hoặc các phương thức khác được hiện thị tại trang thanh toán.</li>
                     <li><strong>Xác nhận đơn hàng:</strong> Sau khi đặt hàng thành công, bạn sẽ nhận email xác nhận chi tiết đơn hàng và mã theo dõi.</li>
                     <li><strong>Hủy đơn hàng:</strong> Bạn có thể hủy đơn hàng miễn phí khi đơn hàng đang ở trạng thái "Chờ thanh toán" hoặc "Chờ đóng gói". Đơn hàng đã chuyển sang trạng thái "Đang vận chuyển" không thể hủy.</li>
                 </ul>
@@ -168,10 +170,10 @@
                 <p>Nếu bạn có bất kỳ thắc mắc nào về các điều khoản dịch vụ hoặc cần hỗ trợ, vui lòng liên hệ với chúng tôi qua:</p>
                 <ul class="mt-4 space-y-2">
                     <li class="flex items-center gap-2">
-                        <strong>Email pháp lý:</strong> legal@novus.vn
+                        <strong>Email pháp lý:</strong> legal@novus.io.vn
                     </li>
                     <li class="flex items-center gap-2">
-                        <strong>Email hỗ trợ:</strong> support@novus.vn
+                        <strong>Email hỗ trợ:</strong> support@novus.io.vn
                     </li>
                     <li class="flex items-center gap-2">
                         <strong>Hotline:</strong> 1900 JQKA (8:00 - 22:00 hàng ngày)

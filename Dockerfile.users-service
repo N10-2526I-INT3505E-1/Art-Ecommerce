@@ -1,0 +1,41 @@
+# =============================================================
+# 1. BASE: Use Alpine-based Bun image
+# =============================================================
+FROM oven/bun:1-alpine AS base
+WORKDIR /usr/src/app
+
+# =============================================================
+# 2. INSTALL: Install ALL dependencies
+# =============================================================
+FROM base AS install
+
+# Copy root package files
+COPY package.json bun.lockb* ./
+
+# Copy workspace package.json (preserve structure)
+COPY services/api/package.json ./services/api/
+
+# Install from root - this creates node_modules with all workspace deps
+RUN bun install --frozen-lockfile && \
+    rm -rf /root/.bun/install/cache
+
+# =============================================================
+# 3. RELEASE: Minimal final image
+# =============================================================
+FROM oven/bun:1-alpine AS release
+WORKDIR /usr/src/app
+
+# Copy node_modules from install
+COPY --from=install /usr/src/app/node_modules ./node_modules
+
+# Copy configs and source
+COPY package.json bun.lockb* ./
+COPY tsconfig.json ./
+COPY services ./services
+
+ENV NODE_ENV=production
+EXPOSE 8080
+
+USER bun
+
+ENTRYPOINT ["bun", "run", "./services/api/src/users/server.ts"]

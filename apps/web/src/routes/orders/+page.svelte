@@ -1,32 +1,33 @@
 <script lang="ts">
-	import { fade, slide, fly } from 'svelte/transition';
-	import { flip } from 'svelte/animate';
 	import {
-		Package,
-		Search,
+		AlertCircle,
+		Calendar,
+		Check,
+		CheckCircle,
 		ChevronDown,
 		ChevronUp,
+		CircleDot,
 		Clock,
-		CheckCircle,
-		Truck,
-		XCircle,
-		MapPin,
-		Calendar,
-		Filter,
-		X,
-		SortDesc,
-		ShoppingBag,
-		RotateCcw,
+		Copy,
 		CreditCard,
 		FileText,
+		Filter,
+		MapPin,
+		Package,
+		RotateCcw,
+		Search,
+		ShoppingBag,
+		SortDesc,
 		Star,
-		Copy,
-		Check,
-		AlertCircle,
-		CircleDot,
+		Truck,
+		X,
+		XCircle,
 	} from 'lucide-svelte';
+	import { flip } from 'svelte/animate';
+	import { fade, fly, slide } from 'svelte/transition';
 
 	import LongBg from '$lib/assets/images/Long.webp';
+	import { redirect } from '@sveltejs/kit';
 
 	// Types
 	type OrderStatus = 'pending' | 'paid' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
@@ -355,6 +356,7 @@
 
 	function handlePayNow(orderId: number) {
 		showToast('Đang chuyển đến trang thanh toán...', 'info');
+		redirect(302, `/checkout?orderId=${orderId}`);
 	}
 
 	function handleDownloadInvoice(orderId: number) {

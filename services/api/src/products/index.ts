@@ -5,8 +5,10 @@ import { ProductService } from './product.service';
 import { rabbitPlugin, QUEUES } from './rabbitmq';
 const productService = new ProductService(db);
 
-export const productsPlugin = new Elysia({ prefix: '/products' })
-	.use(await rabbitPlugin())
+export const productsPlugin = (dependencies: { productService: ProductService }) =>
+	new Elysia()
+	.decorate('productService', dependencies.productService)
+	.use(rabbitPlugin())
 	.onStart(async (app) => {
 		const rabbitChannel = app.decorator.rabbitChannel;
 		console.log("Product Service listening...");
@@ -34,10 +36,11 @@ export const productsPlugin = new Elysia({ prefix: '/products' })
 		  }
 		});
 	  })
+
 	// 1. Crawler Upsert
 	.post(
 		'/',
-		async ({ body, set }) => {
+		async ({ body, set, productService }) => {
 			const product = await productService.createProduct(body);
 			set.status = 201;
 			return product;
@@ -48,106 +51,106 @@ export const productsPlugin = new Elysia({ prefix: '/products' })
 		},
 	)
 
-	// 2. AI Recommend
-	.post(
-		'/recommend',
-		async ({ body }) => {
-			return await productService.getRecommendations(body.tags || []);
-		},
-		{
-			body: t.Object({ tags: t.Array(t.String()) }),
-			response: t.Array(selectProductSchema),
-			detail: { tags: ['Products'], summary: 'Get AI Recommendations' },
-		},
-	)
+		// 2. AI Recommend
+		.post(
+			'/recommend',
+			async ({ body, productService }) => {
+				return await productService.getRecommendations(body.tags || []);
+			},
+			{
+				body: t.Object({ tags: t.Array(t.String()) }),
+				response: t.Array(selectProductSchema),
+				detail: { tags: ['Products'], summary: 'Get AI Recommendations' },
+			},
+		)
 
-	// 3. List Products
-	.get(
-		'/',
-		async ({ query }) => {
-			return await productService.getAll(query);
-		},
-		{
-			query: t.Object({
-				page: t.Optional(t.String()),
-				limit: t.Optional(t.String()),
-				search: t.Optional(t.String()),
-				categoryId: t.Optional(t.String()),
-				minPrice: t.Optional(t.String()),
-				maxPrice: t.Optional(t.String()),
-			}),
-			detail: { tags: ['Products'], summary: 'List Products' },
-		},
-	)
+		// 3. List Products
+		.get(
+			'/',
+			async ({ query, productService }) => {
+				return await productService.getAll(query);
+			},
+			{
+				query: t.Object({
+					page: t.Optional(t.String()),
+					limit: t.Optional(t.String()),
+					search: t.Optional(t.String()),
+					categoryId: t.Optional(t.String()),
+					minPrice: t.Optional(t.String()),
+					maxPrice: t.Optional(t.String()),
+				}),
+				detail: { tags: ['Products'], summary: 'List Products' },
+			},
+		)
 
-	// 4. Categories
-	.get(
-		'/categories',
-		async () => {
-			return await productService.getAllCategories();
-		},
-		{
-			detail: { tags: ['Products'], summary: 'Get Categories' },
-		},
-	)
+		// 4. Categories
+		.get(
+			'/categories',
+			async ({ productService }) => {
+				return await productService.getAllCategories();
+			},
+			{
+				detail: { tags: ['Products'], summary: 'Get Categories' },
+			},
+		)
 
-	// 5. Tags
-	.get(
-		'/tags',
-		async () => {
-			return await productService.getAllTags();
-		},
-		{
-			detail: { tags: ['Products'], summary: 'Get Tags' },
-		},
-	)
+		// 5. Tags
+		.get(
+			'/tags',
+			async ({ productService }) => {
+				return await productService.getAllTags();
+			},
+			{
+				detail: { tags: ['Products'], summary: 'Get Tags' },
+			},
+		)
 
-	// 6. Detail
-	.get(
-		'/:id',
-		async ({ params }) => {
-			return await productService.getById(params.id);
-		},
-		{
-			params: t.Object({ id: t.String() }),
-			detail: { tags: ['Products'], summary: 'Get Detail' },
-		},
-	)
+		// 6. Detail
+		.get(
+			'/:id',
+			async ({ params, productService }) => {
+				return await productService.getById(params.id);
+			},
+			{
+				params: t.Object({ id: t.String() }),
+				detail: { tags: ['Products'], summary: 'Get Detail' },
+			},
+		)
 
-	// 7. Related
-	.get(
-		'/:id/related',
-		async ({ params }) => {
-			return await productService.getRelated(params.id);
-		},
-		{
-			params: t.Object({ id: t.String() }),
-			response: t.Array(selectProductSchema),
-			detail: { tags: ['Products'], summary: 'Get Related' },
-		},
-	)
+		// 7. Related
+		.get(
+			'/:id/related',
+			async ({ params, productService }) => {
+				return await productService.getRelated(params.id);
+			},
+			{
+				params: t.Object({ id: t.String() }),
+				response: t.Array(selectProductSchema),
+				detail: { tags: ['Products'], summary: 'Get Related' },
+			},
+		)
 
-	// 8. Update
-	.patch(
-		'/:id',
-		async ({ params, body }) => {
-			return await productService.update(params.id, body);
-		},
-		{
-			params: t.Object({ id: t.String() }),
-			body: updateProductBody,
-			detail: { tags: ['Products'], summary: 'Update Product' },
-		},
-	)
+		// 8. Update
+		.patch(
+			'/:id',
+			async ({ params, body, productService }) => {
+				return await productService.update(params.id, body);
+			},
+			{
+				params: t.Object({ id: t.String() }),
+				body: updateProductBody,
+				detail: { tags: ['Products'], summary: 'Update Product' },
+			},
+		)
 
-	// 9. Soft Delete
-	.delete(
-		'/:id',
-		async ({ params }) => {
-			return await productService.delete(params.id);
-		},
-		{
-			params: t.Object({ id: t.String() }),
-			detail: { tags: ['Products'], summary: 'Delete Product' },
-		},
-	);
+		// 9. Soft Delete
+		.delete(
+			'/:id',
+			async ({ params, productService }) => {
+				return await productService.delete(params.id);
+			},
+			{
+				params: t.Object({ id: t.String() }),
+				detail: { tags: ['Products'], summary: 'Delete Product' },
+			},
+		);

@@ -46,14 +46,14 @@ async function refreshAccessToken(
 }
 
 /**
- * Fetch and set user from /me endpoint
+ * Fetch and set user from /profile endpoint
  */
 async function fetchUser(
 	event: Parameters<Handle>[0]['event'],
 	client: ReturnType<typeof api>,
 ): Promise<boolean> {
 	try {
-		const responseData: unknown = await client.get('api/users/me').json();
+		const responseData: unknown = await client.get('api/users/profile').json();
 
 		if (
 			responseData &&

@@ -5,6 +5,9 @@ import {
 	UnauthorizedError,
 } from '@common/errors/httpErrors';
 import { faker } from '@faker-js/faker';
+import type { BaziInput } from '@user/bazi.model';
+import { baziProfilesTable } from '@user/bazi.model';
+import type { BaziService } from '@user/bazi.service';
 import type { db as defaultDb } from '@user/db';
 import type { LoginSchema, SignUpSchema, UserAddressSchema } from '@user/user.model';
 import { refreshTokensTable, userAddressTable, usersTable } from '@user/user.model';
@@ -23,10 +26,12 @@ export class UserService {
 	private db: DbClient;
 	private jwt: JwtClient;
 	private googleClient: OAuth2Client;
+	private baziService: BaziService;
 
-	constructor(db: DbClient, jwt: JwtClient) {
+	constructor(db: DbClient, jwt: JwtClient, baziService: BaziService) {
 		this.db = db;
 		this.jwt = jwt;
+		this.baziService = baziService;
 		this.googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID || '');
 		if (!process.env.GOOGLE_CLIENT_ID) {
 			console.warn('Warning: GOOGLE_CLIENT_ID is not defined');
@@ -297,20 +302,33 @@ export class UserService {
 		}
 
 		const hashedPassword = await hashPassword(userData.password);
-		const [newUser] = await this.db
-			.insert(usersTable)
-			.values({ ...userData, password: hashedPassword })
-			.returning();
 
-		if (!newUser) {
-			throw new InternalServerError('Failed to create user account due to server error.');
-		}
+		return await this.db.transaction(async (tx) => {
+			const [newUser] = await tx
+				.insert(usersTable)
+				.values({ ...userData, password: hashedPassword })
+				.returning();
 
-		const userPayload = { id: newUser.id, email: newUser.email, role: newUser.role };
-		const accessToken = await this.jwt.sign(userPayload);
-		const refreshToken = await this.createRefreshToken(newUser.id);
+			if (!newUser) {
+				throw new InternalServerError('Failed to create user account due to server error.');
+			}
 
-		return { ...newUser, accessToken, refreshToken };
+			const userPayload = { id: newUser.id, email: newUser.email, role: newUser.role };
+			const accessToken = await this.jwt.sign(userPayload);
+
+			// Create refresh token within the same transaction
+			const refreshToken = Bun.randomUUIDv7();
+			const time_ms = 7 * 24 * 60 * 60 * 1000;
+			const expiresAt = new Date(Date.now() + time_ms);
+
+			await tx.insert(refreshTokensTable).values({
+				user_id: newUser.id,
+				token: refreshToken,
+				expires_at: expiresAt,
+			});
+
+			return { user: newUser, accessToken, refreshToken };
+		});
 	}
 
 	async getAllUsers() {
@@ -355,5 +373,113 @@ export class UserService {
 			throw new NotFoundError('User not found.');
 		}
 		return { message: `User with ID ${id} successfully deleted.` };
+	}
+
+	/**
+	 * Retrieves the Bazi profile for a given user.
+	 * @param userId The ID of the user.
+	 * @returns The user's Bazi profile.
+	 */
+	async getBaziProfile(userId: string) {
+		const [profile] = await this.db
+			.select()
+			.from(baziProfilesTable)
+			.where(eq(baziProfilesTable.user_id, userId));
+
+		if (!profile) {
+			throw new NotFoundError('Bazi profile not found for this user.');
+		}
+		return profile;
+	}
+
+	/**
+	 * Creates or updates a Bazi profile for a user.
+	 * It calculates the Bazi chart and then performs an "upsert" operation.
+	 * @param userId The ID of the user.
+	 * @param baziInput The birth information provided by the user.
+	 * @returns The newly created or updated Bazi profile.
+	 */
+	async createOrUpdateBaziProfile(userId: string, baziInput: Omit<BaziInput, 'id' | 'user_id'>) {
+		// 1. Verify user exists
+		const [user] = await this.db
+			.select({ id: usersTable.id })
+			.from(usersTable)
+			.where(eq(usersTable.id, userId));
+		if (!user) {
+			throw new NotFoundError('User not found.');
+		}
+
+		// 2. Calculate the full Bazi profile
+		const fullProfileData = await this.baziService.calculateBazi(baziInput);
+
+		// 3. Prepare data for insertion/update
+		const dataToUpsert = {
+			...fullProfileData,
+			user_id: userId,
+		};
+
+		// 4. Perform an "upsert" operation
+		// Drizzle for SQLite uses `onConflictDoUpdate`
+		try {
+			const [result] = await this.db
+				.insert(baziProfilesTable)
+				.values(dataToUpsert)
+				.onConflictDoUpdate({
+					target: baziProfilesTable.user_id, // conflict on the unique user_id
+
+					// Explicitly list the fields to update.
+					// This prevents issues with null/undefined values for JSON fields.
+					set: {
+						profile_name: dataToUpsert.profile_name,
+						gender: dataToUpsert.gender,
+						birth_day: dataToUpsert.birth_day,
+						birth_month: dataToUpsert.birth_month,
+						birth_year: dataToUpsert.birth_year,
+						birth_hour: dataToUpsert.birth_hour,
+						birth_minute: dataToUpsert.birth_minute,
+						longitude: dataToUpsert.longitude,
+						timezone_offset: dataToUpsert.timezone_offset,
+
+						// Calculated fields
+						year_stem: dataToUpsert.year_stem,
+						year_branch: dataToUpsert.year_branch,
+						month_stem: dataToUpsert.month_stem,
+						month_branch: dataToUpsert.month_branch,
+						day_stem: dataToUpsert.day_stem,
+						day_branch: dataToUpsert.day_branch,
+						hour_stem: dataToUpsert.hour_stem,
+						hour_branch: dataToUpsert.hour_branch,
+
+						// Analysis fields (handle potential nulls)
+						day_master_status: dataToUpsert.day_master_status,
+						structure_type: dataToUpsert.structure_type,
+						structure_name: dataToUpsert.structure_name,
+						analysis_reason: dataToUpsert.analysis_reason,
+						favorable_elements: dataToUpsert.favorable_elements,
+						element_scores: dataToUpsert.element_scores,
+						god_scores: dataToUpsert.god_scores,
+						interactions: dataToUpsert.interactions,
+						score_details: dataToUpsert.score_details,
+						shen_sha: dataToUpsert.shen_sha,
+						party_score: dataToUpsert.party_score,
+						enemy_score: dataToUpsert.enemy_score,
+						percentage_self: dataToUpsert.percentage_self,
+						luck_start_age: dataToUpsert.luck_start_age,
+
+						// Manually set the updated_at timestamp
+						updated_at: new Date().toISOString(),
+					},
+				})
+				.returning();
+
+			if (!result) {
+				throw new InternalServerError('Failed to create or update Bazi profile.');
+			}
+			return result;
+		} catch (error) {
+			console.error('Database upsert error:', error);
+			// Re-throw a more generic error to the client
+			throw new InternalServerError('A database error occurred while saving the Bazi profile.');
+		}
 	}
 }

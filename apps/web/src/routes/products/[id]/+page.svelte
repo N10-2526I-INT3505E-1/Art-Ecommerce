@@ -1,29 +1,29 @@
 <script lang="ts">
-	import { page } from '$app/stores';
-	import { onMount } from 'svelte';
+	import AutoHeight from 'embla-carousel-auto-height';
+	import emblaCarouselSvelte from 'embla-carousel-svelte';
 	import {
-		ShoppingBag,
-		Heart,
-		Truck,
-		Shield,
-		RotateCcw,
-		Info,
-		Tag,
+		Check,
 		ChevronLeft,
 		ChevronRight,
-		X,
+		Heart,
+		Info,
 		Minus,
-		Plus,
-		Check,
 		Package,
+		Plus,
+		RotateCcw,
+		Shield,
+		ShoppingBag,
 		Star,
+		Tag,
+		Truck,
+		X,
 	} from 'lucide-svelte';
+	import { onMount } from 'svelte';
+	import { page } from '$app/state';
 	import TreeBg from '$lib/assets/backgrounds/Tree.jpg';
-	import emblaCarouselSvelte from 'embla-carousel-svelte';
-	import AutoHeight from 'embla-carousel-auto-height';
 
 	const product = {
-		id: $page.params.id,
+		id: page.params.id,
 		name: 'Tranh phong cảnh rừng',
 		price: 2500000,
 		imageUrl: TreeBg,

@@ -1,27 +1,27 @@
 <script lang="ts">
-	import { fade, fly, slide } from 'svelte/transition';
-	import { flip } from 'svelte/animate';
 	import {
-		Trash2,
+		AlertCircle,
 		ArrowLeft,
-		Plus,
-		Minus,
-		CreditCard,
-		ShoppingBag,
-		Heart,
-		Shield,
-		Truck,
-		RotateCcw,
-		Tag,
+		Check,
 		ChevronDown,
 		ChevronUp,
 		Clock,
+		CreditCard,
+		Heart,
+		MessageCircle,
+		Minus,
 		Package,
 		Phone,
-		MessageCircle,
-		Check,
-		AlertCircle,
+		Plus,
+		RotateCcw,
+		Shield,
+		ShoppingBag,
+		Tag,
+		Trash2,
+		Truck,
 	} from 'lucide-svelte';
+	import { flip } from 'svelte/animate';
+	import { fade, fly, slide } from 'svelte/transition';
 	import LongBg from '$lib/assets/images/Long.webp';
 
 	// Types
@@ -600,9 +600,12 @@
 							</div>
 
 							<!-- Checkout Button -->
-							<button class="btn btn-primary btn-lg shadow-primary/25 mt-6 w-full gap-2 shadow-lg">
+							<button
+								class="btn btn-primary btn-lg shadow-primary/25 mt-6 w-full gap-2 shadow-lg"
+								onclick={() => (window.location.href = '/checkout')}
+							>
 								<CreditCard size={20} />
-								Thanh toán ngay
+								Đặt hàng
 							</button>
 
 							<!-- Trust Signals -->

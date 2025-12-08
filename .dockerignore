@@ -1,0 +1,20 @@
+# Directories to ignore
+node_modules
+.git
+.env
+dist
+tests
+
+# Files to ignore
+*.test.ts
+*.md
+Dockerfile*
+docker-compose*
+
+*.log
+.DS_Store
+coverage
+build
+.vscode
+.idea
+.github

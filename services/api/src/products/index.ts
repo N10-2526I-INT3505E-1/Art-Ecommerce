@@ -5,10 +5,10 @@ import { ProductService } from './product.service';
 import { rabbitPlugin, QUEUES } from './rabbitmq';
 const productService = new ProductService(db);
 
-export const productsPlugin = (dependencies: { productService: ProductService }) =>
+export const productsPlugin = async (dependencies: { productService: ProductService }) =>
 	new Elysia()
 	.decorate('productService', dependencies.productService)
-	.use(rabbitPlugin())
+	.use(await rabbitPlugin())
 	.onStart(async (app) => {
 		const rabbitChannel = app.decorator.rabbitChannel;
 		console.log("Product Service listening...");
@@ -36,7 +36,8 @@ export const productsPlugin = (dependencies: { productService: ProductService })
 		  }
 		});
 	  })
-
+	.group('/products', (app) =>
+	app
 	// 1. Crawler Upsert
 	.post(
 		'/',
@@ -153,4 +154,4 @@ export const productsPlugin = (dependencies: { productService: ProductService })
 				params: t.Object({ id: t.String() }),
 				detail: { tags: ['Products'], summary: 'Delete Product' },
 			},
-		);
+		))

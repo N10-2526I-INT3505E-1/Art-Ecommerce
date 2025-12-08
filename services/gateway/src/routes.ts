@@ -53,7 +53,7 @@ async function proxyRequest(
 export function setupRoutes(app: Elysia) {
 	return app
 		// Auth routes (public, no JWT required)
-		.all('/api/auth/*', async (ctx: ContextWithUser) => {
+		.all('/sessions*', async (ctx: ContextWithUser) => {
 			const urlPath = new URL(ctx.request.url).pathname;
 			const response = await proxyRequest(
 				USERS_SERVICE_URL,
@@ -70,7 +70,7 @@ export function setupRoutes(app: Elysia) {
 		})
 
 		// Orders routes
-		.all('/api/orders/*', async (ctx: ContextWithUser) => {
+		.all('/orders*', async (ctx: ContextWithUser) => {
 			const urlPath = new URL(ctx.request.url).pathname;
 			const response = await proxyRequest(
 				ORDERS_SERVICE_URL,
@@ -87,7 +87,7 @@ export function setupRoutes(app: Elysia) {
 		})
 
 		// Payments routes
-		.all('/api/payments/*', async (ctx: ContextWithUser) => {
+		.all('/payments*', async (ctx: ContextWithUser) => {
 			const urlPath = new URL(ctx.request.url).pathname;
 			const response = await proxyRequest(
 				PAYMENTS_SERVICE_URL,
@@ -104,7 +104,7 @@ export function setupRoutes(app: Elysia) {
 		})
 
 		// Products routes
-		.all('/api/products/*', async (ctx: ContextWithUser) => {
+		.all('/products*', async (ctx: ContextWithUser) => {
 			const urlPath = new URL(ctx.request.url).pathname;
 			const response = await proxyRequest(
 				PRODUCTS_SERVICE_URL,
@@ -121,7 +121,7 @@ export function setupRoutes(app: Elysia) {
 		})
 
 		// Users routes
-		.all('/api/users/*', async (ctx: ContextWithUser) => {
+		.all('/users*', async (ctx: ContextWithUser) => {
 			const urlPath = new URL(ctx.request.url).pathname;
 			const response = await proxyRequest(
 				USERS_SERVICE_URL,

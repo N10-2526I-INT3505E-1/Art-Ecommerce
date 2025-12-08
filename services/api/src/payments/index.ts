@@ -15,9 +15,11 @@ export const paymentsPlugin = (dependencies: { paymentService: PaymentService })
 	// POST /api/payments - Creates a new payment record with pending status
 	// Accepts order_id, amount, and payment_gateway in the request body
 	// Returns the created payment with a generated payment URL
-	.post('/', async ({ body, set, paymentService }) => {
-		//try {
-			// A transaction ensures the insert is an all-or-nothing operation.
+	.group('/payments', (app) =>
+		app
+		.post('/', async ({ body, set, paymentService }) => {
+			//try {
+				// A transaction ensures the insert is an all-or-nothing operation.
 
 				// If transaction is successful, set status and return the new payment
 				const apiResponse = await paymentService.createPayment(
@@ -99,7 +101,7 @@ export const paymentsPlugin = (dependencies: { paymentService: PaymentService })
 					tags: ['Payments'],
 				},
 			},
-		);
+		));
 
 // Helper function to sort object keys
 function sortObject(obj: Record<string, any>): Record<string, any> {

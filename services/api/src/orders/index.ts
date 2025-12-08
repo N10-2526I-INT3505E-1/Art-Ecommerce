@@ -12,13 +12,14 @@ import {
 } from './order_item.model';
 import { rabbitPlugin, QUEUES } from './rabbitmq';
 import type { Channel } from 'amqplib';
+import { group } from 'node:console';
 
 const orderService = new OrderService(db);
 
-export const ordersPlugin = (dependencies: { orderService: OrderService }) =>
+export const ordersPlugin = async (dependencies: { orderService: OrderService }) =>
 	new Elysia({ name: 'orders-plugin' })
   .decorate('orderService', dependencies.orderService)
-  .use(rabbitPlugin())
+  .use(await rabbitPlugin())
   .onStart(async (app) => {
     const rabbitChannel: Channel = app.decorator.rabbitChannel;
     const sendToQueue = app.decorator.sendToQueue;
@@ -200,5 +201,4 @@ export const ordersPlugin = (dependencies: { orderService: OrderService }) =>
 						detail: { tags: ['Order Items'], summary: 'Get all items of an order' },
 					},
 				),
-    )
-  );
+    ));

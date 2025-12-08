@@ -7,7 +7,7 @@ import { Elysia } from 'elysia';
 import { ordersPlugin } from './index';
 import { OrderService } from './order.service';
 
-const app = new Elysia({ prefix: '/orders' })
+const app = new Elysia()
 	.use(errorHandler)
 	.use(
 		cors({
@@ -27,7 +27,7 @@ const app = new Elysia({ prefix: '/orders' })
 			},
 		}),
 	)
-	.use(ordersPlugin({ orderService: new OrderService(db) }))
+	.use(await ordersPlugin({ orderService: new OrderService(db) }))
 	.get('/', () => ({ status: 'ok', service: 'orders' }), {
 		detail: { summary: 'Health check - Orders Service' },
 	})

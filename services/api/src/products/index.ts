@@ -105,6 +105,15 @@ export const productsPlugin = new Elysia({ prefix: '/products' })
 	)
 
 	// 8. Update
+	.patch('/', async({body}) => {
+		if (body.action == 'reduce_stock') {
+			return await productService.reduceStock(body.items);
+		}
+	}, {
+		body: reduceStockBody,
+		detail: {tags: ["Products"], summary: 'Batch Actions'}
+	})
+
 	.patch(
 		'/:id',
 		async ({ params, body }) => {
@@ -127,13 +136,4 @@ export const productsPlugin = new Elysia({ prefix: '/products' })
 			params: t.Object({ id: t.String() }),
 			detail: { tags: ['Products'], summary: 'Delete Product' },
 		},
-	)
-
-	.post('/stock-adjustments', async({body}) => {
-		return await productService.reduceStock(body.items);
-	}, {
-		body: reduceStockBody, 
-		detail: {tags:["Products"], 
-			summary: 'Batch Reduce Story (For Order Service)'
-		}
-	});
+	);

@@ -90,5 +90,6 @@ const orderItemSchema = t.Object({
 });
 
 export const reduceStockBody = t.Object({
+  action: t.Literal('reduce_stock'),
   items: t.Array(orderItemSchema)
 })

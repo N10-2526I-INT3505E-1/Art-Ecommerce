@@ -373,10 +373,10 @@ export class ProductService {
                     where: eq(products.id, item.productId)
                 });
                 if (!product) {
-                    throw new NotFoundError('Sản phẩm ID ${item.productId} không tồn tại');
+                    throw new NotFoundError(`Sản phẩm ID ${item.productId} không tồn tại`);
                 }
                 if (product.stock < item.quantity) {
-                    throw new BadRequestError('Sản phẩm ${product.name} không đủ hàng (Còn: ${product.stock}, Mua: ${item.quantity})');
+                    throw new BadRequestError(`Sản phẩm '${product.name}' không đủ hàng (Còn: ${product.stock}, Mua: ${item.quantity})`);
                 }
                 await tx.update(products)
                         .set({stock: product.stock - item.quantity})

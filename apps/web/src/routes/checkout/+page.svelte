@@ -13,7 +13,7 @@
 		Lock,
 		Award,
 	} from 'lucide-svelte';
-	import LongBg from '$lib/assets/images/long.webp';
+	import LongBg from '$lib/assets/images/Long.webp';
 	import { fade, slide } from 'svelte/transition';
 
 	// --- SHARED CONSTANTS (SHOULD MATCH CART PAGE) ---

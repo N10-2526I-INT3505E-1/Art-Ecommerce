@@ -129,7 +129,7 @@ export const productsPlugin = new Elysia({ prefix: '/products' })
 		},
 	)
 
-	.post('/reduce-stock', async({body}) => {
+	.post('/stock-adjustments', async({body}) => {
 		return await productService.reduceStock(body.items);
 	}, {
 		body: reduceStockBody, 

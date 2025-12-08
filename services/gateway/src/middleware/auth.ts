@@ -1,7 +1,7 @@
 import { type Context } from 'elysia';
 import jwt from '@elysiajs/jwt';
 
-interface User {
+export interface User {
 	id: number;
 	email: string;
 	role: string;
@@ -11,7 +11,7 @@ export async function verifyToken(ctx: Context & { jwt: ReturnType<typeof jwt> }
 	const authHeader = ctx.request.headers.get('Authorization');
 
 	// Public endpoints that don't need auth
-	if (ctx.request.url.includes('/health') || ctx.request.url.includes('/api/auth')) {
+	if (ctx.request.url.includes('/health') || ctx.request.url.includes('/sessions')) {
 		return { user: null };
 	}
 
@@ -26,7 +26,6 @@ export async function verifyToken(ctx: Context & { jwt: ReturnType<typeof jwt> }
 		const payload = await ctx.jwt.verify(token) as unknown as User;
 		return { user: payload };
 	} catch (error) {
-		console.error('JWT verification failed:', error);
 		throw new Error('Invalid or expired token');
 	}
 }

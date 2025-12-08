@@ -24,7 +24,7 @@ if (!process.env.JWT_SECRET) {
 	process.exit(1);
 }
 
-export const usersPlugin = (dependencies: { db: DbClient; baziService: BaziService }) =>
+export const usersPlugin = (dependencies: { db: typeof DbClient; baziService: BaziService }) =>
 	new Elysia({ name: 'users-plugin' })
 		.decorate('db', dependencies.db)
 		.decorate('baziService', dependencies.baziService)
@@ -201,6 +201,23 @@ export const usersPlugin = (dependencies: { db: DbClient; baziService: BaziServi
 						},
 					)
 
+					//2.1 Patch profile - PATCH /profile
+					.patch(
+						'/profile',
+						async ({ body, user, userService }) => {
+							const updatedUser = await userService.updateUser(user.id, body);
+							return { user: updatedUser };
+						},
+						{
+							response: {
+								200: t.Object({ user: SafeUserResponseSchema }),
+								404: ErrorSchema,
+							},
+							body: t.Partial(t.Omit(SignUpSchema, ['email', 'password'])),
+							detail: { tags: ['User Management'], summary: 'Update my profile' },
+						},
+					)
+
 					// 3. Get User By ID - GET /:user_id
 					.get(
 						'/:user_id',
@@ -322,7 +339,7 @@ export const usersPlugin = (dependencies: { db: DbClient; baziService: BaziServi
 						},
 					)
 
-					// 9. Add User Address (Explicit) - POST /:user_id/addresses
+					// 9. Add User Address - POST /:user_id/addresses
 					.post(
 						'/:user_id/addresses',
 						async ({ params, body, set, user, userService }) => {
@@ -346,7 +363,6 @@ export const usersPlugin = (dependencies: { db: DbClient; baziService: BaziServi
 					)
 
 					// 10. Update Address - PATCH /addresses/:address_id
-					// Lưu ý: Route này cần cẩn thận vì param :address_id có thể conflict nếu đặt sai vị trí
 					.patch(
 						'/addresses/:address_id',
 						async ({ params, body, user, userService }) => {
@@ -373,14 +389,14 @@ export const usersPlugin = (dependencies: { db: DbClient; baziService: BaziServi
 					// 11. Delete Address - DELETE /addresses/:address_id
 					.delete(
 						'/addresses/:address_id',
-						async ({ params, user, userService }) => {
-							const result = await userService.deleteUserAddress(user.id, params.address_id);
-							return result;
+						async ({ set, params, user, userService }) => {
+							await userService.deleteUserAddress(user.id, params.address_id);
+							set.status = 204;
 						},
 						{
 							params: t.Object({ address_id: t.Numeric() }),
 							response: {
-								200: t.Object({ message: t.String() }),
+								204: t.Void(),
 								404: ErrorSchema,
 							},
 							detail: { tags: ['Address Management'], summary: 'Delete an address' },

@@ -1,11 +1,13 @@
 // Standalone Orders Service Server (Port 4001)
 import { errorHandler } from '@common/errors/errorHandler';
+import { db } from '@order/db';
 import { cors } from '@elysiajs/cors';
 import { openapi } from '@elysiajs/openapi';
 import { Elysia } from 'elysia';
 import { ordersPlugin } from './index';
+import { OrderService } from './order.service';
 
-const app = new Elysia({ prefix: '/api' })
+const app = new Elysia({ prefix: '/orders' })
 	.use(errorHandler)
 	.use(
 		cors({
@@ -25,7 +27,7 @@ const app = new Elysia({ prefix: '/api' })
 			},
 		}),
 	)
-	.use(ordersPlugin)
+	.use(ordersPlugin({ orderService: new OrderService(db) }))
 	.get('/', () => ({ status: 'ok', service: 'orders' }), {
 		detail: { summary: 'Health check - Orders Service' },
 	})

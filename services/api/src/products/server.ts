@@ -4,8 +4,9 @@ import { cors } from '@elysiajs/cors';
 import { openapi } from '@elysiajs/openapi';
 import { Elysia } from 'elysia';
 import { productsPlugin } from './index';
-
-const app = new Elysia({ prefix: '/api' })
+import { ProductService } from './product.service';
+import { db } from './db';
+const app = new Elysia({ prefix: '/products' })
 	.use(errorHandler)
 	.use(
 		cors({
@@ -25,7 +26,7 @@ const app = new Elysia({ prefix: '/api' })
 			},
 		}),
 	)
-	.use(productsPlugin)
+	.use(productsPlugin({ productService: new ProductService(db) }))
 	.get('/', () => ({ status: 'ok', service: 'products' }), {
 		detail: { summary: 'Health check - Products Service' },
 	})

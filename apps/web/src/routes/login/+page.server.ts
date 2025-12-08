@@ -27,7 +27,7 @@ export const actions: Actions = {
 
 		try {
 			const response = await client
-				.post('api/auth/login', { json: payload })
+				.post('api/sessions', { json: payload })
 				.json<{ accessToken: string; refreshToken: string }>();
 
 			event.cookies.set('auth', response.accessToken, {
@@ -64,7 +64,7 @@ export const actions: Actions = {
 
 		if (refreshToken) {
 			try {
-				await client.post('api/auth/logout', { json: { refreshToken } });
+				await client.delete('api/session', { json: { refreshToken } });
 			} catch (e) {
 				console.error('Logout failed', e);
 			}

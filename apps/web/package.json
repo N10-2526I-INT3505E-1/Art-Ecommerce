@@ -13,7 +13,9 @@
 		"svelte-check": "^4.3.4",
 		"tailwindcss": "^4.1.17",
 		"typescript": "^5.9.3",
-		"vite": "^7.2.6"
+		"vite": "^7.2.6",
+		"dotenv": "^17.2.3",
+		"google-auth-library": "^10.5.0"
 	},
 	"private": true,
 	"scripts": {

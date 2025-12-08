@@ -15,8 +15,10 @@ import type { Channel } from 'amqplib';
 
 const orderService = new OrderService(db);
 
-export const ordersPlugin = new Elysia()
-  .use(await rabbitPlugin())
+export const ordersPlugin = (dependencies: { orderService: OrderService }) =>
+	new Elysia({ name: 'orders-plugin' })
+  .decorate('orderService', dependencies.orderService)
+  .use(rabbitPlugin())
   .onStart(async (app) => {
     const rabbitChannel: Channel = app.decorator.rabbitChannel;
     const sendToQueue = app.decorator.sendToQueue;
@@ -66,7 +68,7 @@ export const ordersPlugin = new Elysia()
       // 1. Create Order with Items
       .post(
         '/',
-        async ({ body, set }) => {
+        async ({ body, set, orderService }) => {
           const { items, ...orderData } = body as any;
           
           // Create the order
@@ -102,7 +104,7 @@ export const ordersPlugin = new Elysia()
 		// 2. Get Orders (All or Filter by User ID)
 		.get(
 			'/',
-			async ({ query, orderService }) => {
+			async ({ query }) => {
 				// Truyền user_id vào hàm getOrders (nếu có)
 				const orders = await orderService.getOrders(query.user_id);
 				return { orders };
@@ -120,7 +122,7 @@ export const ordersPlugin = new Elysia()
 		// 3. Get Order By ID
 		.get(
 			'/:id',
-			async ({ params, orderService }) => {
+			async ({ params }) => {
 				const order = await orderService.getOrderById(Number(params.id));
 				return { order };
 			},
@@ -198,4 +200,5 @@ export const ordersPlugin = new Elysia()
 						detail: { tags: ['Order Items'], summary: 'Get all items of an order' },
 					},
 				),
-		);
+    )
+  );

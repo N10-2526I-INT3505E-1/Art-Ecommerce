@@ -1,53 +1,43 @@
-// services/gateway/middlewares/auth.ts
+import { type Context } from 'elysia';
+import jwt from '@elysiajs/jwt';
 
-import { jwt } from "@elysiajs/jwt";
-import type { Elysia } from "elysia";
-import { JWT_SECRET } from "../config";
+export interface User {
+	id: number;
+	email: string;
+	role: string;
+}
 
-// 1. Setup Plugin
-export const authPlugin = (app: Elysia) =>
-  app.use(
-    jwt({
-      name: "jwt",
-      secret: JWT_SECRET,
-      exp: "15m", // Thời gian này chỉ để verify, không quan trọng bằng exp trong token
-    })
-  );
+export async function verifyToken(ctx: Context & { jwt: ReturnType<typeof jwt> }) {
+	const authHeader = ctx.request.headers.get('Authorization');
 
-// 2. Logic lấy User từ Token (Hỗ trợ cả Header và Cookie)
-export const getAuthUser = async ({ jwt, request, cookie: { auth } }: any) => {
-  let token;
+	// Public endpoints that don't need auth
+	if (ctx.request.url.includes('/health') || ctx.request.url.includes('/sessions')|| ctx.request.url.includes('/vnpay_ipn')) {
+		return { user: null };
+	}
 
-  // Ưu tiên 1: Lấy từ Header (Authorization: Bearer <token>)
-  const authHeader = request.headers.get("authorization");
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    token = authHeader.split(" ")[1];
-  } 
-  // Ưu tiên 2: Lấy từ Cookie (nếu header không có)
-  else if (auth && auth.value) {
-    token = auth.value;
-  }
+	if (!authHeader || !authHeader.startsWith('Bearer ')) {
+		throw new Error('Missing or invalid Authorization header');
+	}
 
-  if (!token) {
-    return { user: null };
-  }
+	const token = authHeader.substring(7);
 
-  // Verify token
-  const payload = await jwt.verify(token);
+	try {
+		// Verify JWT token
+		const payload = await ctx.jwt.verify(token) as unknown as User;
+		return { user: payload };
+	} catch (error) {
+		throw new Error('Invalid or expired token');
+	}
+}
 
-  if (!payload) {
-    return { user: null };
-  }
+export function requireRole(allowedRoles: string[]) {
+	return (ctx: Context & { user?: User }) => {
+		if (!ctx.user) {
+			throw new Error('User not authenticated');
+		}
 
-  return { user: payload };
-};
-
-// 3. Guard chặn request (không thay đổi)
-export const requireAuth = ({ user, error }: any) => {
-  if (!user) {
-    return error(401, {
-        message: "Unauthorized",
-        detail: "Token missing in both Header and Cookie"
-    });
-  }
-};
+		if (!allowedRoles.includes(ctx.user.role)) {
+			throw new Error(`Access denied. Required roles: ${allowedRoles.join(', ')}`);
+		}
+	};
+}

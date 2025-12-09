@@ -7,7 +7,7 @@ import { paymentsPlugin, vnpayIpnHandler } from './index';
 import { db } from './db';
 import { PaymentService, PaymentIPN } from './payment.service';
 
-const app = new Elysia({ prefix: '/payments' })
+const app = new Elysia()
 	.use(errorHandler)
 	.use(
 		cors({

@@ -3,23 +3,25 @@ import { BadRequestError, InternalServerError, NotFoundError } from '../common/e
 import type { db } from './db';
 import { ordersTable } from './order.model';
 import { orderItemsTable } from './order_item.model';
+import { randomUUIDv7 } from 'bun';
+import { UserAddressSchema } from './order.model';
 
 // URL của Payment Service (Lấy từ .env hoặc mặc định)
-const PAYMENT_SERVICE_URL = process.env.PAYMENT_SERVICE_URL || 'http://localhost:4003/api';
-
+const PAYMENT_SERVICE_URL = process.env.PAYMENT_SERVICE_URL || 'http://localhost:4003';
+const PRODUCT_SERVICE_URL = process.env.PRODUCT_SERVICE_URL || 'http://localhost:4002';
 export type NewOrder = typeof ordersTable.$inferInsert;
 export type NewOrderItem = typeof orderItemsTable.$inferInsert;
 
 // Interface cho kết quả trả về từ Payment Service
 export interface PaymentLinkResponse {
-	id: number;
-	order_id: number;
+	id: string;
+	order_id: string;
 	amount: string | number;
 	payment_gateway: string;
 	status: string;
-	transaction_id: string | null;
 	paymentUrl: string;
 }
+
 
 type DrizzleDB = typeof db;
 
@@ -29,8 +31,14 @@ export class OrderService {
 	// 1. Create Order
 	async createOrder(data: NewOrder) {
 		try {
-			const [newOrder] = await this.database.insert(ordersTable).values(data).returning();
-
+			const orderData = { ...data };
+			const shipping_address = data.shipping_address;
+			const addressErrors = validateAddress(shipping_address);
+			if (Object.keys(addressErrors).length > 0) {
+				throw new BadRequestError(String(JSON.stringify(addressErrors)));
+			}
+			orderData.id = randomUUIDv7();
+			const [newOrder] = await this.database.insert(ordersTable).values(orderData).returning();
 			if (!newOrder) {
 				throw new InternalServerError('Không thể tạo đơn hàng (Database Error).');
 			}
@@ -50,9 +58,7 @@ export class OrderService {
 
 			// Nếu có userId, thêm điều kiện WHERE
 			if (userId) {
-				// --- SỬA LỖI TẠI ĐÂY ---
-				// Ép kiểu userId từ string sang Number vì trong DB user_id là số
-				query = query.where(eq(ordersTable.user_id, Number(userId)));
+				query = query.where(eq(ordersTable.user_id, userId));
 			}
 
 			// Luôn sắp xếp đơn mới nhất lên đầu (DESC)
@@ -66,7 +72,7 @@ export class OrderService {
 	}
 
 	// 3. Get Order By ID
-	async getOrderById(id: number) {
+	async getOrderById(id: string) {
 		const [order] = await this.database.select().from(ordersTable).where(eq(ordersTable.id, id));
 
 		if (!order) {
@@ -76,7 +82,7 @@ export class OrderService {
 	}
 
 	// 4. Update Order
-	async updateOrder(id: number, data: Partial<NewOrder>) {
+	async updateOrder(id: string, data: Partial<NewOrder>) {
 		const [updated] = await this.database
 			.update(ordersTable)
 			.set(data)
@@ -90,7 +96,7 @@ export class OrderService {
 	}
 
 	// 5. Delete Order
-	async deleteOrder(id: number) {
+	async deleteOrder(id: string) {
 		const [deleted] = await this.database
 			.delete(ordersTable)
 			.where(eq(ordersTable.id, id))
@@ -104,7 +110,7 @@ export class OrderService {
 
 	// 6. Add Item to Order
 	async addItemToOrder(
-		orderId: number,
+		orderId: string,
 		data: Omit<NewOrderItem, 'id' | 'order_id' | 'product_snapshot'> & { product_snapshot?: any },
 	) {
 		const snapshot = data.product_snapshot
@@ -128,7 +134,7 @@ export class OrderService {
 	}
 
 	// 7. Get Order Items
-	async getOrderItems(orderId: number) {
+	async getOrderItems(orderId: string) {
 		const items = await this.database
 			.select()
 			.from(orderItemsTable)
@@ -145,7 +151,7 @@ export class OrderService {
 
 	// 8. Create Payment Link (Gọi sang Payment Service)
 	async createPaymentLink(
-		orderId: number,
+		orderId: string,
 		gateway: string = 'vnpay',
 	): Promise<PaymentLinkResponse> {
 		const order = await this.getOrderById(orderId);
@@ -158,11 +164,10 @@ export class OrderService {
 		}
 
 		try {
-			console.log(`Calling Payment Service at: ${PAYMENT_SERVICE_URL}/payments`);
-
 			const response = await fetch(`${PAYMENT_SERVICE_URL}/payments`, {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers: { 
+					'Content-Type': 'application/json',	'x-internal-secret': process.env.INTERNAL_HEADER_SECRET || '' },
 				body: JSON.stringify({
 					order_id: order.id,
 					amount: Number(order.total_amount),
@@ -171,8 +176,7 @@ export class OrderService {
 			});
 
 			if (!response.ok) {
-				const errorData = await response.json().catch(() => ({}));
-				console.error('Payment Service Error:', errorData);
+				const errorData = response.json().catch(() => ({}));
 				throw new InternalServerError(`Lỗi từ Payment Service: ${JSON.stringify(errorData)}`);
 			}
 
@@ -198,4 +202,138 @@ export class OrderService {
 			throw new InternalServerError('Không thể lấy danh sách đơn hàng.');
 		}
 	}
+
+	// 10. Fetch Product Details from Product Service
+	async getProductDetails(productId: string): Promise<{ price: number; name: string; id: string }> {
+		try {
+			const response = await fetch(`${PRODUCT_SERVICE_URL}/products/${productId}`, {
+				method: 'GET',
+				headers: { 'Content-Type': 'application/json' },
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				console.error('Product Service Error:', errorData);
+				throw new InternalServerError(
+					`Lỗi từ Product Service khi lấy sản phẩm ${productId}: ${JSON.stringify(errorData)}`,
+				);
+			}
+
+			const product = (await response.json()) as any;
+			return {
+				id: product.id,
+				name: product.name,
+				price: Number(product.price),
+			};
+		} catch (error) {
+			console.log(PRODUCT_SERVICE_URL);
+			console.error(`Failed to fetch product ${productId}:`, error);
+			if (error instanceof Error && (error as any).status) throw error;
+			throw new InternalServerError(`Không thể lấy thông tin sản phẩm ${productId} từ dịch vụ.`);
+		}
+	}
+
+	// 11. Calculate Total Amount from Order Items
+	async calculateTotalAmount(
+		items: Array<{ product_id: string; quantity: number }>,
+	): Promise<{ total: number; itemDetails: Array<{ product_id: string; quantity: number; price: number }> }> {
+		let total = 0;
+		const itemDetails: Array<{ product_id: string; quantity: number; price: number }> = [];
+
+		try {
+			for (const item of items) {
+				const product = await this.getProductDetails(item.product_id);
+				const itemTotal = product.price * item.quantity;
+				total += itemTotal;
+				itemDetails.push({
+					product_id: item.product_id,
+					quantity: item.quantity,
+					price: product.price,
+				});
+			}
+
+			return { total, itemDetails };
+		} catch (error) {
+			console.error('Calculate Total Amount Error:', error);
+			if (error instanceof Error && (error as any).status) throw error;
+			throw new InternalServerError('Lỗi khi tính tổng tiền đơn hàng.');
+		}
+	}
+
+	// 12. Create Payment and Get Payment URL
+	async createPaymentAndGetUrl(orderId: string, gateway: string = 'vnpay'): Promise<string> {
+		try {
+			const paymentData = await this.createPaymentLink(orderId, gateway);
+			return paymentData.paymentUrl;
+		} catch (error) {
+			console.error('Create Payment and Get URL Error:', error);
+			if (error instanceof Error && (error as any).status) throw error;
+			throw new InternalServerError('Lỗi khi tạo liên kết thanh toán.');
+		}
+	}
 }
+// Validate User Address Object
+const validateAddress = (shipping_address: any) => {
+    const errors: Record<string, string> = {};
+
+    // 1. Validate Address (String, min 5, max 255)
+    if (typeof shipping_address.address !== 'string') {
+        errors.address = "Address must be a string";
+    } else if (shipping_address.address.length < 5 || shipping_address.address.length > 255) {
+        errors.address = "Address must be between 5 and 255 characters";
+    }
+
+    // 2. Validate Phone (String, max 10, pattern match)
+    // Note: Your schema had a conflict (maxLength: 10 but pattern allows 11). 
+    // I enforced the regex pattern here since that is usually stricter.
+    const phoneRegex = /^[0-9]{9,11}$/;
+    if (typeof shipping_address.phone !== 'string') {
+        errors.phone = "Phone must be a string";
+    } else if (!phoneRegex.test(shipping_address.phone)) {
+        errors.phone = "Invalid phone number";
+    } else if (shipping_address.phone.length > 10) { 
+        // Explicitly checking your schema's maxLength limit
+        errors.phone = "Phone number cannot be longer than 10 characters"; 
+    }
+
+    // 3. Validate Ward (String, max 100)
+    if (typeof shipping_address.ward !== 'string') {
+        errors.ward = "Ward must be a string";
+    } else if (shipping_address.ward.length > 100) {
+        errors.ward = "Ward cannot exceed 100 characters";
+    }
+
+    // 4. Validate State (String, max 100)
+    if (typeof shipping_address.state !== 'string') {
+        errors.state = "State must be a string";
+    } else if (shipping_address.state.length > 100) {
+        errors.state = "State cannot exceed 100 characters";
+    }
+
+    // 5. Validate Postal Code (Optional, Union: String max 20 OR Null)
+    if (shipping_address.postal_code !== undefined && shipping_address.postal_code !== null) {
+        if (typeof shipping_address.postal_code !== 'string') {
+            errors.postal_code = "Postal code must be a string";
+        } else if (shipping_address.postal_code.length > 20) {
+            errors.postal_code = "Postal code cannot exceed 20 characters";
+        }
+    }
+
+    // 6. Validate Country (String, max 100)
+    if (typeof shipping_address.country !== 'string') {
+        errors.country = "Country must be a string";
+    } else if (shipping_address.country.length > 100) {
+        errors.country = "Country cannot exceed 100 characters";
+    }
+
+    // 7. Validate is_default (Optional, Integer: 0 or 1)
+    if (shipping_address.is_default !== undefined) {
+        if (!Number.isInteger(shipping_address.is_default)) {
+            errors.is_default = "is_default must be an integer";
+        } else if (shipping_address.is_default !== 0 && shipping_address.is_default !== 1) {
+            errors.is_default = "is_default must be 0 or 1";
+        }
+    }
+
+    return errors;
+};

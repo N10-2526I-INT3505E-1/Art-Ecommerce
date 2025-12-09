@@ -378,7 +378,8 @@ export class ProductService {
                     })
                     .where(and(
                         eq(products.id, item.productId),
-                        gte(products.stock, item.quantity)
+                        gte(products.stock, item.quantity),
+                        isNull(products.deletedAt)
                     ))
                     .returning({ id: products.id, name: products.name });
                 if (!updatedProduct) {

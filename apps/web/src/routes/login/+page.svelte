@@ -10,6 +10,7 @@
 	let submitting = $state(false);
 
 	let googleBtn = $state<HTMLDivElement>();
+	let submitBtn = $state<HTMLButtonElement>();
 
 	let loginId = $state(page.url.searchParams.get('loginId') || '');
 	let password = $state('');
@@ -27,11 +28,12 @@
 			callback: handleGoogleLogin,
 		});
 
-		if (googleBtn) {
+		if (googleBtn && submitBtn) {
+			const btnWidth = submitBtn.offsetWidth;
 			google.accounts.id.renderButton(googleBtn, {
 				theme: 'outline',
 				size: 'large',
-				width: '400',
+				width: btnWidth.toString(),
 			});
 		}
 	});
@@ -207,6 +209,7 @@
 
 				<div class="form-control pt-2 text-center md:text-left">
 					<button
+						bind:this={submitBtn}
 						type="submit"
 						class="btn btn-primary w-full px-6"
 						disabled={submitting}
@@ -226,7 +229,7 @@
 
 			<div
 				bind:this={googleBtn}
-				class="flex w-full justify-center"
+				class="flex !w-full justify-center overflow-hidden"
 				aria-label="Continue with Google"
 			></div>
 

@@ -10,6 +10,8 @@
 	let submitting = $state(false);
 
 	let googleBtn = $state<HTMLDivElement>();
+	let submitBtn = $state<HTMLButtonElement>();
+	let termsAccepted = $state(false);
 
 	let firstName = $state(page.url.searchParams.get('firstName') || '');
 	let lastName = $state(page.url.searchParams.get('lastName') || '');
@@ -38,11 +40,12 @@
 			callback: handleGoogleLogin,
 		});
 
-		if (googleBtn) {
+		if (googleBtn && submitBtn) {
+			const btnWidth = submitBtn.offsetWidth;
 			google.accounts.id.renderButton(googleBtn, {
 				theme: 'outline',
 				size: 'large',
-				width: '400',
+				width: btnWidth.toString(),
 			});
 		}
 	});
@@ -158,7 +161,7 @@
 				<span class="text-2xl font-bold">Novus</span>
 			</a>
 			<h1 class="font-josefin text-4xl font-bold">Tạo tài khoản mới</h1>
-			<p class="text-base-content/70 mt-2">Hành trình của bạn sẽ bắt đầu tại đây.</p>
+			<p class="text-base-content/70 mt-2">Hãy bắt đầu hành trình.</p>
 
 			<form
 				class="mt-8 space-y-4"
@@ -299,11 +302,24 @@
 					</div>
 				</div>
 
+				<div class="form-control flex items-center gap-2">
+					<input
+						type="checkbox"
+						bind:checked={termsAccepted}
+						required
+						class="checkbox checkbox-sm md:checkbox-md text-base-content/80 flex items-center gap-2"
+					/>
+					<div class="text-sm">
+						Tôi đã đọc và đồng ý với
+						<a href="/terms" class="link-primary link">Điều khoản dịch vụ</a>
+					</div>
+				</div>
 				<div class="form-control pt-2 text-center md:text-left">
 					<button
+						bind:this={submitBtn}
 						type="submit"
 						class="btn btn-primary w-full px-6"
-						disabled={submitting}
+						disabled={submitting || !termsAccepted}
 						style="view-transition-name: auth-submit"
 					>
 						{#if submitting}

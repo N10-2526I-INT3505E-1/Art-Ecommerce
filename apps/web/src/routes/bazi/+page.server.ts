@@ -71,7 +71,7 @@ export const actions: Actions = {
 		try {
 			const client = api({ fetch, request });
 			const response = await client
-				.put(`api/users/${locals.user.id}/bazi`, {
+				.put(`api/users/profile/bazi`, {
 					json: {
 						profile_name,
 						gender,

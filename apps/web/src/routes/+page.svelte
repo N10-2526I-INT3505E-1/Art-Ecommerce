@@ -184,7 +184,6 @@
 	<title>Trang chủ Novus</title>
 </svelte:head>
 
-<!-- HERO SECTION -->
 <section class="snap-section hero-section relative">
 	<div
 		class="embla h-full w-full"
@@ -201,7 +200,7 @@
 					<div
 						class="absolute inset-0 z-0 h-full w-full transition-transform duration-1000 group-hover:scale-105"
 					>
-						<img
+						<enhanced:img
 							src={slide.image}
 							alt={slide.subtitle}
 							class="h-full w-full object-cover transition-opacity duration-700 {i === currentSlide
@@ -214,11 +213,9 @@
 						></div>
 					</div>
 
-					<!-- Content with fixed CTA position -->
 					<div
 						class="relative z-20 flex h-full flex-col items-center px-6 text-center text-white md:px-8"
 					>
-						<!-- Centered title + subtitle block -->
 						<div class="flex w-full flex-1 flex-col items-center justify-center">
 							<div class="mb-6 w-full max-w-[240px] md:mb-8 md:max-w-[380px] lg:max-w-[480px]">
 								<img
@@ -231,17 +228,16 @@
 							{#if slide.subtitle}
 								<p
 									class="font-raleway flex min-h-[3.5rem] max-w-2xl items-center justify-center text-base
-                         font-medium text-white/90 md:min-h-[4rem] md:text-xl lg:text-2xl"
+                          font-medium text-white/90 md:min-h-[4rem] md:text-xl lg:text-2xl"
 								>
 									{slide.subtitle}
 								</p>
 							{/if}
 						</div>
 
-						<!-- CTA anchored near bottom -->
 						<div
 							class="mb-12 translate-y-2 opacity-0 transition-all duration-300 group-hover:translate-y-0
-                     group-hover:opacity-100 md:mb-16"
+                      group-hover:opacity-100 md:mb-16"
 						>
 							<span
 								class="border-b border-white pb-1 text-xs font-bold tracking-widest uppercase md:text-sm"
@@ -291,353 +287,349 @@
 	</div>
 </section>
 
-<!-- PRODUCTS CAROUSEL 1 -->
-<section
-	class="snap-section products-section products-section-1 flex flex-col justify-center bg-gray-50"
->
-	<div class="container mx-auto w-full max-w-[1600px] px-4 py-10 md:px-6 md:py-12 lg:px-8">
-		<div
-			class="mb-8 flex flex-col gap-4 md:mb-10 md:flex-row md:items-end md:justify-between md:gap-6"
-		>
-			<div>
-				<h2 class="font-montserrat text-2xl font-black text-gray-900 md:text-4xl lg:text-5xl">
-					Bộ sưu tập
-				</h2>
-				<p class="mt-1 max-w-xl text-sm text-gray-600 md:mt-2 md:text-base">
-					Tuyệt tác phong thủy hội tụ tinh hoa đất trời.
-				</p>
-			</div>
-
-			<div class="flex gap-2">
-				<button
-					onclick={() => {
-						productEmblaApi1?.scrollPrev();
-						updateProductScrollState1();
-					}}
-					disabled={!canScrollPrev1}
-					class="btn btn-circle btn-sm btn-outline md:btn-md border-gray-300 hover:border-black hover:bg-black hover:text-white disabled:opacity-30"
-					aria-label="Sản phẩm trước"
-				>
-					<ChevronLeft size={18} class="md:hidden" />
-					<ChevronLeft size={22} class="hidden md:block" />
-				</button>
-				<button
-					onclick={() => {
-						productEmblaApi1?.scrollNext();
-						updateProductScrollState1();
-					}}
-					disabled={!canScrollNext1}
-					class="btn btn-circle btn-sm btn-outline md:btn-md border-gray-300 hover:border-black hover:bg-black hover:text-white disabled:opacity-30"
-					aria-label="Sản phẩm tiếp theo"
-				>
-					<ChevronRight size={18} class="md:hidden" />
-					<ChevronRight size={22} class="hidden md:block" />
-				</button>
-			</div>
-		</div>
-
-		<div
-			class="embla overflow-hidden"
-			use:emblaCarouselSvelte={{ options: productOptions }}
-			onemblaInit={(event) => {
-				productEmblaApi1 = event.detail;
-				productEmblaApi1.on('select', updateProductScrollState1);
-				updateProductScrollState1();
-			}}
-		>
+<div class="snap-section">
+	<!-- PRODUCTS CAROUSEL 1 -->
+	<section class="products-section products-section-1 flex flex-col justify-center bg-gray-50">
+		<div class="container mx-auto w-full max-w-[1600px] px-4 py-10 md:px-6 md:py-12 lg:px-8">
 			<div
-				class="embla__container flex touch-pan-y gap-3 py-3 pl-2 md:gap-4 md:py-4 md:pl-4 lg:gap-5"
+				class="mb-8 flex flex-col gap-4 md:mb-10 md:flex-row md:items-end md:justify-between md:gap-6"
 			>
-				{#each skeletonProducts as product}
-					<div
-						class="product-card min-w-0 flex-[0_0_70%] sm:flex-[0_0_45%] md:flex-[0_0_30%] lg:flex-[0_0_22%] xl:flex-[0_0_18%]"
+				<div>
+					<h2 class="font-montserrat text-2xl font-black text-gray-900 md:text-4xl lg:text-5xl">
+						Bộ sưu tập
+					</h2>
+					<p class="mt-1 max-w-xl text-sm text-gray-600 md:mt-2 md:text-base">
+						Tuyệt tác phong thủy hội tụ tinh hoa đất trời.
+					</p>
+				</div>
+
+				<div class="flex gap-2">
+					<button
+						onclick={() => {
+							productEmblaApi1?.scrollPrev();
+							updateProductScrollState1();
+						}}
+						disabled={!canScrollPrev1}
+						class="btn btn-circle btn-sm btn-outline md:btn-md border-gray-300 hover:border-black hover:bg-black hover:text-white disabled:opacity-30"
+						aria-label="Sản phẩm trước"
 					>
-						<article
-							class="group relative h-full overflow-hidden rounded-xl bg-white shadow-sm transition-all hover:shadow-lg md:rounded-2xl"
+						<ChevronLeft size={18} class="md:hidden" />
+						<ChevronLeft size={22} class="hidden md:block" />
+					</button>
+					<button
+						onclick={() => {
+							productEmblaApi1?.scrollNext();
+							updateProductScrollState1();
+						}}
+						disabled={!canScrollNext1}
+						class="btn btn-circle btn-sm btn-outline md:btn-md border-gray-300 hover:border-black hover:bg-black hover:text-white disabled:opacity-30"
+						aria-label="Sản phẩm tiếp theo"
+					>
+						<ChevronRight size={18} class="md:hidden" />
+						<ChevronRight size={22} class="hidden md:block" />
+					</button>
+				</div>
+			</div>
+
+			<div
+				class="embla overflow-hidden"
+				use:emblaCarouselSvelte={{ options: productOptions }}
+				onemblaInit={(event) => {
+					productEmblaApi1 = event.detail;
+					productEmblaApi1.on('select', updateProductScrollState1);
+					updateProductScrollState1();
+				}}
+			>
+				<div
+					class="embla__container flex touch-pan-y gap-3 py-3 pl-2 md:gap-4 md:py-4 md:pl-4 lg:gap-5"
+				>
+					{#each skeletonProducts as product}
+						<div
+							class="product-card min-w-0 flex-[0_0_70%] sm:flex-[0_0_45%] md:flex-[0_0_30%] lg:flex-[0_0_22%] xl:flex-[0_0_18%]"
 						>
-							<figure class="relative aspect-[3/4] overflow-hidden">
-								<img
-									src={product.image}
-									alt={product.title}
-									class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
-									loading="lazy"
-								/>
-								<div
-									class="badge badge-sm badge-neutral md:badge-md absolute top-2 left-2 border-none bg-black/70 text-[10px] text-white backdrop-blur-md md:top-3 md:left-3 md:text-xs"
-								>
-									{product.category}
-								</div>
-
-								<div
-									class="absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-black/80 to-transparent p-2 transition-transform duration-300 group-hover:translate-y-0 md:p-3"
-								>
-									<button
-										class="btn btn-primary btn-xs md:btn-sm w-full shadow-lg"
-										aria-label={`Thêm ${product.title} vào giỏ`}
+							<article
+								class="group relative h-full overflow-hidden rounded-xl bg-white shadow-sm transition-all hover:shadow-lg md:rounded-2xl"
+							>
+								<figure class="relative aspect-[3/4] overflow-hidden">
+									<enhanced:img
+										src={product.image}
+										alt={product.title}
+										class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+										loading="lazy"
+									/>
+									<div
+										class="badge badge-sm badge-neutral md:badge-md absolute top-2 left-2 border-none bg-black/70 text-[10px] text-white backdrop-blur-md md:top-3 md:left-3 md:text-xs"
 									>
-										<ShoppingCart size={14} class="md:hidden" />
-										<ShoppingCart size={16} class="hidden md:block" />
-										<span class="text-[10px] md:text-xs">Thêm vào giỏ</span>
-									</button>
-								</div>
-							</figure>
+										{product.category}
+									</div>
 
-							<div class="p-3 md:p-4">
-								<h3
-									class="group-hover:text-primary line-clamp-2 text-sm font-bold text-gray-900 transition-colors md:text-base"
-								>
-									{product.title}
-								</h3>
-								<div class="mt-2 flex items-center justify-between">
-									<span class="text-primary text-base font-semibold md:text-lg"
-										>${product.price}</span
+									<div
+										class="absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-black/80 to-transparent p-2 transition-transform duration-300 group-hover:translate-y-0 md:p-3"
 									>
-									<div class="flex items-center gap-1">
-										<Star size={12} class="fill-orange-400 text-orange-400 md:hidden" />
-										<Star size={14} class="hidden fill-orange-400 text-orange-400 md:block" />
-										<span class="text-[10px] text-gray-600 md:text-xs">{product.rating}</span>
+										<button
+											class="btn btn-primary btn-xs md:btn-sm w-full shadow-lg"
+											aria-label={`Thêm ${product.title} vào giỏ`}
+										>
+											<ShoppingCart size={14} class="md:hidden" />
+											<ShoppingCart size={16} class="hidden md:block" />
+											<span class="text-[10px] md:text-xs">Thêm vào giỏ</span>
+										</button>
+									</div>
+								</figure>
+
+								<div class="p-3 md:p-4">
+									<h3
+										class="group-hover:text-primary line-clamp-2 text-sm font-bold text-gray-900 transition-colors md:text-base"
+									>
+										{product.title}
+									</h3>
+									<div class="mt-2 flex items-center justify-between">
+										<span class="text-primary text-base font-semibold md:text-lg"
+											>${product.price}</span
+										>
+										<div class="flex items-center gap-1">
+											<Star size={12} class="fill-orange-400 text-orange-400 md:hidden" />
+											<Star size={14} class="hidden fill-orange-400 text-orange-400 md:block" />
+											<span class="text-[10px] text-gray-600 md:text-xs">{product.rating}</span>
+										</div>
 									</div>
 								</div>
-							</div>
-						</article>
-					</div>
-				{/each}
+							</article>
+						</div>
+					{/each}
+				</div>
 			</div>
 		</div>
-	</div>
-</section>
+	</section>
 
-<!-- PRODUCTS CAROUSEL 2 -->
-<section
-	class="snap-section products-section products-section-2 flex flex-col justify-center bg-white"
->
-	<div class="container mx-auto w-full max-w-[1600px] px-4 py-10 md:px-6 md:py-12 lg:px-8">
-		<div
-			class="mb-8 flex flex-col gap-4 md:mb-10 md:flex-row md:items-end md:justify-between md:gap-6"
-		>
-			<div>
-				<h2 class="font-montserrat text-2xl font-black text-gray-900 md:text-4xl lg:text-5xl">
-					Mới ra mắt
-				</h2>
-				<p class="mt-1 max-w-xl text-sm text-gray-600 md:mt-2 md:text-base">
-					Những thiết kế phong thủy mới nhất, dẫn đầu xu hướng.
-				</p>
-			</div>
-
-			<div class="flex gap-2">
-				<button
-					onclick={() => {
-						productEmblaApi2?.scrollPrev();
-						updateProductScrollState2();
-					}}
-					disabled={!canScrollPrev2}
-					class="btn btn-circle btn-sm btn-outline md:btn-md border-gray-300 hover:border-black hover:bg-black hover:text-white disabled:opacity-30"
-					aria-label="Sản phẩm trước"
-				>
-					<ChevronLeft size={18} class="md:hidden" />
-					<ChevronLeft size={22} class="hidden md:block" />
-				</button>
-				<button
-					onclick={() => {
-						productEmblaApi2?.scrollNext();
-						updateProductScrollState2();
-					}}
-					disabled={!canScrollNext2}
-					class="btn btn-circle btn-sm btn-outline md:btn-md border-gray-300 hover:border-black hover:bg-black hover:text-white disabled:opacity-30"
-					aria-label="Sản phẩm tiếp theo"
-				>
-					<ChevronRight size={18} class="md:hidden" />
-					<ChevronRight size={22} class="hidden md:block" />
-				</button>
-			</div>
-		</div>
-
-		<div
-			class="embla overflow-hidden"
-			use:emblaCarouselSvelte={{ options: productOptions }}
-			onemblaInit={(event) => {
-				productEmblaApi2 = event.detail;
-				productEmblaApi2.on('select', updateProductScrollState2);
-				updateProductScrollState2();
-			}}
-		>
+	<!-- PRODUCTS CAROUSEL 2 -->
+	<section class="products-section products-section-2 flex flex-col justify-center bg-white">
+		<div class="container mx-auto w-full max-w-[1600px] px-4 py-10 md:px-6 md:py-12 lg:px-8">
 			<div
-				class="embla__container flex touch-pan-y gap-3 py-3 pl-2 md:gap-4 md:py-4 md:pl-4 lg:gap-5"
+				class="mb-8 flex flex-col gap-4 md:mb-10 md:flex-row md:items-end md:justify-between md:gap-6"
 			>
-				{#each skeletonProducts as product}
-					<div
-						class="product-card min-w-0 flex-[0_0_70%] sm:flex-[0_0_45%] md:flex-[0_0_30%] lg:flex-[0_0_22%] xl:flex-[0_0_18%]"
+				<div>
+					<h2 class="font-montserrat text-2xl font-black text-gray-900 md:text-4xl lg:text-5xl">
+						Mới ra mắt
+					</h2>
+					<p class="mt-1 max-w-xl text-sm text-gray-600 md:mt-2 md:text-base">
+						Những thiết kế phong thủy mới nhất, dẫn đầu xu hướng.
+					</p>
+				</div>
+
+				<div class="flex gap-2">
+					<button
+						onclick={() => {
+							productEmblaApi2?.scrollPrev();
+							updateProductScrollState2();
+						}}
+						disabled={!canScrollPrev2}
+						class="btn btn-circle btn-sm btn-outline md:btn-md border-gray-300 hover:border-black hover:bg-black hover:text-white disabled:opacity-30"
+						aria-label="Sản phẩm trước"
 					>
-						<article
-							class="group relative h-full overflow-hidden rounded-xl bg-white shadow-sm transition-all hover:shadow-lg md:rounded-2xl"
+						<ChevronLeft size={18} class="md:hidden" />
+						<ChevronLeft size={22} class="hidden md:block" />
+					</button>
+					<button
+						onclick={() => {
+							productEmblaApi2?.scrollNext();
+							updateProductScrollState2();
+						}}
+						disabled={!canScrollNext2}
+						class="btn btn-circle btn-sm btn-outline md:btn-md border-gray-300 hover:border-black hover:bg-black hover:text-white disabled:opacity-30"
+						aria-label="Sản phẩm tiếp theo"
+					>
+						<ChevronRight size={18} class="md:hidden" />
+						<ChevronRight size={22} class="hidden md:block" />
+					</button>
+				</div>
+			</div>
+
+			<div
+				class="embla overflow-hidden"
+				use:emblaCarouselSvelte={{ options: productOptions }}
+				onemblaInit={(event) => {
+					productEmblaApi2 = event.detail;
+					productEmblaApi2.on('select', updateProductScrollState2);
+					updateProductScrollState2();
+				}}
+			>
+				<div
+					class="embla__container flex touch-pan-y gap-3 py-3 pl-2 md:gap-4 md:py-4 md:pl-4 lg:gap-5"
+				>
+					{#each skeletonProducts as product}
+						<div
+							class="product-card min-w-0 flex-[0_0_70%] sm:flex-[0_0_45%] md:flex-[0_0_30%] lg:flex-[0_0_22%] xl:flex-[0_0_18%]"
 						>
-							<figure class="relative aspect-[3/4] overflow-hidden">
-								<img
-									src={product.image}
-									alt={product.title}
-									class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
-									loading="lazy"
-								/>
-								<div
-									class="badge badge-sm badge-neutral md:badge-md absolute top-2 left-2 border-none bg-black/70 text-[10px] text-white backdrop-blur-md md:top-3 md:left-3 md:text-xs"
-								>
-									{product.category}
-								</div>
-
-								<div
-									class="absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-black/80 to-transparent p-2 transition-transform duration-300 group-hover:translate-y-0 md:p-3"
-								>
-									<button
-										class="btn btn-primary btn-xs md:btn-sm w-full shadow-lg"
-										aria-label={`Thêm ${product.title} vào giỏ`}
+							<article
+								class="group relative h-full overflow-hidden rounded-xl bg-white shadow-sm transition-all hover:shadow-lg md:rounded-2xl"
+							>
+								<figure class="relative aspect-[3/4] overflow-hidden">
+									<enhanced:img
+										src={product.image}
+										alt={product.title}
+										class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+										loading="lazy"
+									/>
+									<div
+										class="badge badge-sm badge-neutral md:badge-md absolute top-2 left-2 border-none bg-black/70 text-[10px] text-white backdrop-blur-md md:top-3 md:left-3 md:text-xs"
 									>
-										<ShoppingCart size={14} class="md:hidden" />
-										<ShoppingCart size={16} class="hidden md:block" />
-										<span class="text-[10px] md:text-xs">Thêm vào giỏ</span>
-									</button>
-								</div>
-							</figure>
+										{product.category}
+									</div>
 
-							<div class="p-3 md:p-4">
-								<h3
-									class="group-hover:text-primary line-clamp-2 text-sm font-bold text-gray-900 transition-colors md:text-base"
-								>
-									{product.title}
-								</h3>
-								<div class="mt-2 flex items-center justify-between">
-									<span class="text-primary text-base font-semibold md:text-lg"
-										>${product.price}</span
+									<div
+										class="absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-black/80 to-transparent p-2 transition-transform duration-300 group-hover:translate-y-0 md:p-3"
 									>
-									<div class="flex items-center gap-1">
-										<Star size={12} class="fill-orange-400 text-orange-400 md:hidden" />
-										<Star size={14} class="hidden fill-orange-400 text-orange-400 md:block" />
-										<span class="text-[10px] text-gray-600 md:text-xs">{product.rating}</span>
+										<button
+											class="btn btn-primary btn-xs md:btn-sm w-full shadow-lg"
+											aria-label={`Thêm ${product.title} vào giỏ`}
+										>
+											<ShoppingCart size={14} class="md:hidden" />
+											<ShoppingCart size={16} class="hidden md:block" />
+											<span class="text-[10px] md:text-xs">Thêm vào giỏ</span>
+										</button>
+									</div>
+								</figure>
+
+								<div class="p-3 md:p-4">
+									<h3
+										class="group-hover:text-primary line-clamp-2 text-sm font-bold text-gray-900 transition-colors md:text-base"
+									>
+										{product.title}
+									</h3>
+									<div class="mt-2 flex items-center justify-between">
+										<span class="text-primary text-base font-semibold md:text-lg"
+											>${product.price}</span
+										>
+										<div class="flex items-center gap-1">
+											<Star size={12} class="fill-orange-400 text-orange-400 md:hidden" />
+											<Star size={14} class="hidden fill-orange-400 text-orange-400 md:block" />
+											<span class="text-[10px] text-gray-600 md:text-xs">{product.rating}</span>
+										</div>
 									</div>
 								</div>
-							</div>
-						</article>
-					</div>
-				{/each}
+							</article>
+						</div>
+					{/each}
+				</div>
 			</div>
 		</div>
-	</div>
-</section>
+	</section>
 
-<!-- PRODUCTS CAROUSEL 3 -->
-<section
-	class="snap-section products-section products-section-3 flex flex-col justify-center bg-gray-50"
->
-	<div class="container mx-auto w-full max-w-[1600px] px-4 py-10 md:px-6 md:py-12 lg:px-8">
-		<div
-			class="mb-8 flex flex-col gap-4 md:mb-10 md:flex-row md:items-end md:justify-between md:gap-6"
-		>
-			<div>
-				<h2 class="font-montserrat text-2xl font-black text-gray-900 md:text-4xl lg:text-5xl">
-					Bán chạy nhất
-				</h2>
-				<p class="mt-1 max-w-xl text-sm text-gray-600 md:mt-2 md:text-base">
-					Những tác phẩm được khách hàng yêu thích và lựa chọn nhiều nhất.
-				</p>
-			</div>
-
-			<div class="flex gap-2">
-				<button
-					onclick={() => {
-						productEmblaApi3?.scrollPrev();
-						updateProductScrollState3();
-					}}
-					disabled={!canScrollPrev3}
-					class="btn btn-circle btn-sm btn-outline md:btn-md border-gray-300 hover:border-black hover:bg-black hover:text-white disabled:opacity-30"
-					aria-label="Sản phẩm trước"
-				>
-					<ChevronLeft size={18} class="md:hidden" />
-					<ChevronLeft size={22} class="hidden md:block" />
-				</button>
-				<button
-					onclick={() => {
-						productEmblaApi3?.scrollNext();
-						updateProductScrollState3();
-					}}
-					disabled={!canScrollNext3}
-					class="btn btn-circle btn-sm btn-outline md:btn-md border-gray-300 hover:border-black hover:bg-black hover:text-white disabled:opacity-30"
-					aria-label="Sản phẩm tiếp theo"
-				>
-					<ChevronRight size={18} class="md:hidden" />
-					<ChevronRight size={22} class="hidden md:block" />
-				</button>
-			</div>
-		</div>
-
-		<div
-			class="embla overflow-hidden"
-			use:emblaCarouselSvelte={{ options: productOptions }}
-			onemblaInit={(event) => {
-				productEmblaApi3 = event.detail;
-				productEmblaApi3.on('select', updateProductScrollState3);
-				updateProductScrollState3();
-			}}
-		>
+	<!-- PRODUCTS CAROUSEL 3 -->
+	<section class="products-section products-section-3 flex flex-col justify-center bg-gray-50">
+		<div class="container mx-auto w-full max-w-[1600px] px-4 py-10 md:px-6 md:py-12 lg:px-8">
 			<div
-				class="embla__container flex touch-pan-y gap-3 py-3 pl-2 md:gap-4 md:py-4 md:pl-4 lg:gap-5"
+				class="mb-8 flex flex-col gap-4 md:mb-10 md:flex-row md:items-end md:justify-between md:gap-6"
 			>
-				{#each skeletonProducts as product}
-					<div
-						class="product-card min-w-0 flex-[0_0_70%] sm:flex-[0_0_45%] md:flex-[0_0_30%] lg:flex-[0_0_22%] xl:flex-[0_0_18%]"
+				<div>
+					<h2 class="font-montserrat text-2xl font-black text-gray-900 md:text-4xl lg:text-5xl">
+						Bán chạy nhất
+					</h2>
+					<p class="mt-1 max-w-xl text-sm text-gray-600 md:mt-2 md:text-base">
+						Những tác phẩm được khách hàng yêu thích và lựa chọn nhiều nhất.
+					</p>
+				</div>
+
+				<div class="flex gap-2">
+					<button
+						onclick={() => {
+							productEmblaApi3?.scrollPrev();
+							updateProductScrollState3();
+						}}
+						disabled={!canScrollPrev3}
+						class="btn btn-circle btn-sm btn-outline md:btn-md border-gray-300 hover:border-black hover:bg-black hover:text-white disabled:opacity-30"
+						aria-label="Sản phẩm trước"
 					>
-						<article
-							class="group relative h-full overflow-hidden rounded-xl bg-white shadow-sm transition-all hover:shadow-lg md:rounded-2xl"
+						<ChevronLeft size={18} class="md:hidden" />
+						<ChevronLeft size={22} class="hidden md:block" />
+					</button>
+					<button
+						onclick={() => {
+							productEmblaApi3?.scrollNext();
+							updateProductScrollState3();
+						}}
+						disabled={!canScrollNext3}
+						class="btn btn-circle btn-sm btn-outline md:btn-md border-gray-300 hover:border-black hover:bg-black hover:text-white disabled:opacity-30"
+						aria-label="Sản phẩm tiếp theo"
+					>
+						<ChevronRight size={18} class="md:hidden" />
+						<ChevronRight size={22} class="hidden md:block" />
+					</button>
+				</div>
+			</div>
+
+			<div
+				class="embla overflow-hidden"
+				use:emblaCarouselSvelte={{ options: productOptions }}
+				onemblaInit={(event) => {
+					productEmblaApi3 = event.detail;
+					productEmblaApi3.on('select', updateProductScrollState3);
+					updateProductScrollState3();
+				}}
+			>
+				<div
+					class="embla__container flex touch-pan-y gap-3 py-3 pl-2 md:gap-4 md:py-4 md:pl-4 lg:gap-5"
+				>
+					{#each skeletonProducts as product}
+						<div
+							class="product-card min-w-0 flex-[0_0_70%] sm:flex-[0_0_45%] md:flex-[0_0_30%] lg:flex-[0_0_22%] xl:flex-[0_0_18%]"
 						>
-							<figure class="relative aspect-[3/4] overflow-hidden">
-								<img
-									src={product.image}
-									alt={product.title}
-									class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
-									loading="lazy"
-								/>
-								<div
-									class="badge badge-sm badge-neutral md:badge-md absolute top-2 left-2 border-none bg-black/70 text-[10px] text-white backdrop-blur-md md:top-3 md:left-3 md:text-xs"
-								>
-									{product.category}
-								</div>
-
-								<div
-									class="absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-black/80 to-transparent p-2 transition-transform duration-300 group-hover:translate-y-0 md:p-3"
-								>
-									<button
-										class="btn btn-primary btn-xs md:btn-sm w-full shadow-lg"
-										aria-label={`Thêm ${product.title} vào giỏ`}
+							<article
+								class="group relative h-full overflow-hidden rounded-xl bg-white shadow-sm transition-all hover:shadow-lg md:rounded-2xl"
+							>
+								<figure class="relative aspect-[3/4] overflow-hidden">
+									<enhanced:img
+										src={product.image}
+										alt={product.title}
+										class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+										loading="lazy"
+									/>
+									<div
+										class="badge badge-sm badge-neutral md:badge-md absolute top-2 left-2 border-none bg-black/70 text-[10px] text-white backdrop-blur-md md:top-3 md:left-3 md:text-xs"
 									>
-										<ShoppingCart size={14} class="md:hidden" />
-										<ShoppingCart size={16} class="hidden md:block" />
-										<span class="text-[10px] md:text-xs">Thêm vào giỏ</span>
-									</button>
-								</div>
-							</figure>
+										{product.category}
+									</div>
 
-							<div class="p-3 md:p-4">
-								<h3
-									class="group-hover:text-primary line-clamp-2 text-sm font-bold text-gray-900 transition-colors md:text-base"
-								>
-									{product.title}
-								</h3>
-								<div class="mt-2 flex items-center justify-between">
-									<span class="text-primary text-base font-semibold md:text-lg"
-										>${product.price}</span
+									<div
+										class="absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-black/80 to-transparent p-2 transition-transform duration-300 group-hover:translate-y-0 md:p-3"
 									>
-									<div class="flex items-center gap-1">
-										<Star size={12} class="fill-orange-400 text-orange-400 md:hidden" />
-										<Star size={14} class="hidden fill-orange-400 text-orange-400 md:block" />
-										<span class="text-[10px] text-gray-600 md:text-xs">{product.rating}</span>
+										<button
+											class="btn btn-primary btn-xs md:btn-sm w-full shadow-lg"
+											aria-label={`Thêm ${product.title} vào giỏ`}
+										>
+											<ShoppingCart size={14} class="md:hidden" />
+											<ShoppingCart size={16} class="hidden md:block" />
+											<span class="text-[10px] md:text-xs">Thêm vào giỏ</span>
+										</button>
+									</div>
+								</figure>
+
+								<div class="p-3 md:p-4">
+									<h3
+										class="group-hover:text-primary line-clamp-2 text-sm font-bold text-gray-900 transition-colors md:text-base"
+									>
+										{product.title}
+									</h3>
+									<div class="mt-2 flex items-center justify-between">
+										<span class="text-primary text-base font-semibold md:text-lg"
+											>${product.price}</span
+										>
+										<div class="flex items-center gap-1">
+											<Star size={12} class="fill-orange-400 text-orange-400 md:hidden" />
+											<Star size={14} class="hidden fill-orange-400 text-orange-400 md:block" />
+											<span class="text-[10px] text-gray-600 md:text-xs">{product.rating}</span>
+										</div>
 									</div>
 								</div>
-							</div>
-						</article>
-					</div>
-				{/each}
+							</article>
+						</div>
+					{/each}
+				</div>
 			</div>
 		</div>
-	</div>
-</section>
+	</section>
+</div>
 
 <style>
 	.snap-section {

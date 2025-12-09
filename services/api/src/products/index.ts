@@ -6,6 +6,7 @@ import { insertProductBody,
 import { Elysia, t } from 'elysia';
 import { db } from './db';
 import { ProductService } from './product.service';
+import { UnauthorizedError } from '@common/errors/httpErrors';
 
 const ErrorSchema = t.Object({
 	message: t.String(),
@@ -15,23 +16,26 @@ const productService = new ProductService(db);
 
 export const productsPlugin = new Elysia({ prefix: '/products' })
 
-	// 1. Crawler Upsert
-	.post(
-		'/',
-		async ({ body, set }) => {
-			const product = await productService.createProduct(body);
-			set.status = 201;
-			return product;
-		},
-		{
-			body: insertProductBody,
-			response: {
-				201: selectProductSchema,
-				500: ErrorSchema,
-			},
-			detail: { tags: ['Products'], summary: 'Upsert Product (Crawler)' },
-		},
-	)
+	.derive(({headers}) => {
+		const userId = headers['x-user-id'];
+		const userRole = headers['x-user-role'];
+
+		if (!userId || !userRole) {
+			throw new UnauthorizedError('Missing Gateway Headers (x-user-id)');
+		}	
+
+		return {
+			user: {
+				id: userId as string | undefined, 
+				role: userRole as string || 'guest',
+			}
+		};
+	})
+
+
+	// ==================================================
+	// GROUP 1: PUBLIC ROUTES
+	// ==================================================
 
 	// 2. AI Recommend
 	.post(
@@ -157,6 +161,32 @@ export const productsPlugin = new Elysia({ prefix: '/products' })
                 500: ErrorSchema
             },
 			detail: { tags: ['Products'], summary: 'Get Detail' }
+		},
+	)
+
+
+	// ==================================================
+	// GROUP 2: PROTECTED ROUTES
+	// ==================================================
+
+	// 1. Crawler Upsert
+	.post(
+		'/',
+		async ({ body, set, user }) => {
+			// if (user.role !== 'admin') {
+			// 	throw new UnauthorizedError('Unauthorized');
+			// }
+			const product = await productService.createProduct(body);
+			set.status = 201;
+			return product;
+		},
+		{
+			body: insertProductBody,
+			response: {
+				201: selectProductSchema,
+				500: ErrorSchema,
+			},
+			detail: { tags: ['Products'], summary: 'Upsert Product (Crawler)' },
 		},
 	)
 

@@ -1,21 +1,65 @@
 <script lang="ts">
 	import { yinYang } from '@lucide/lab';
-	import { ChevronDown, Icon, LogOut, Package, Settings, ShoppingCart, User } from 'lucide-svelte';
+	import {
+		ChevronDown,
+		Icon,
+		LogOut,
+		Package,
+		Settings,
+		ShoppingCart,
+		User,
+		Menu,
+		UserPlus,
+	} from 'lucide-svelte';
 	import { page } from '$app/state';
 
 	let { user = null } = $props();
 	let currentUser = $derived(user || page.data.user);
+	let currentPath = $derived(page.url.pathname);
 
 	// Mock cart state
 	let cartCount = $state(8);
 	let cartSubtotal = $state(1200000);
+
+	const categories = [
+		{ label: 'Tranh', href: '/c/tranh' },
+		{ label: 'Tượng', href: '/c/tuong' },
+		{ label: 'Cây', href: '/c/cay' },
+		{ label: 'Đồ vật phong thuỷ', href: '/c/do-vat-phong-thuy' },
+	];
 </script>
 
 <div
 	class="navbar border-base-200/50 bg-base-100/95 fixed inset-x-0 top-0 z-50 h-14 border-b px-3 shadow-sm backdrop-blur transition-all md:px-6"
 >
-	<!-- Brand -->
-	<div class="navbar-start">
+	<!-- Left: mobile menu + brand -->
+	<div class="navbar-start gap-1 md:gap-3">
+		<!-- Mobile categories dropdown -->
+		<div class="dropdown md:hidden">
+			<button
+				type="button"
+				tabindex="0"
+				class="btn btn-ghost btn-circle btn-sm hover:bg-base-200 h-9 w-9"
+				aria-label="Mở danh mục sản phẩm"
+			>
+				<Menu class="h-4 w-4" />
+			</button>
+
+			<ul
+				tabindex="-1"
+				class="menu menu-sm dropdown-content bg-base-100 rounded-box z-[1] mt-3 w-48 p-2 shadow"
+			>
+				{#each categories as category}
+					<li>
+						<a href={category.href} class:active={currentPath.startsWith(category.href)}>
+							{category.label}
+						</a>
+					</li>
+				{/each}
+			</ul>
+		</div>
+
+		<!-- Brand -->
 		<a
 			href="/"
 			class="group flex items-center gap-2 transition-transform hover:scale-105 active:scale-95 md:gap-3"
@@ -34,10 +78,23 @@
 					<path fill="#825F41" d="m54 12 31 76q30-38-31-76Z" />
 				</g>
 			</svg>
-			<span class="font-montserrat text-base-content text-lg font-bold tracking-tight md:text-xl"
-				>Novus</span
-			>
+			<span class="font-montserrat text-base-content text-lg font-bold tracking-tight md:text-xl">
+				Novus
+			</span>
 		</a>
+	</div>
+
+	<!-- Center: desktop categories -->
+	<div class="navbar-center hidden md:flex">
+		<ul class="menu menu-horizontal gap-1 px-1 text-sm">
+			{#each categories as category}
+				<li>
+					<a href={category.href} class:active={currentPath.startsWith(category.href)}>
+						{category.label}
+					</a>
+				</li>
+			{/each}
+		</ul>
 	</div>
 
 	<!-- Right side -->
@@ -190,7 +247,43 @@
 				</ul>
 			</div>
 		{:else}
-			<div class="flex items-center gap-2">
+			<!-- Mobile: user icon dropdown -->
+			<div class="dropdown dropdown-end md:hidden">
+				<button
+					type="button"
+					tabindex="0"
+					class="btn btn-ghost btn-circle btn-sm hover:bg-base-200 h-9 w-9"
+					aria-label="Tài khoản"
+				>
+					<User class="h-4 w-4" />
+				</button>
+
+				<ul
+					tabindex="-1"
+					class="menu menu-md dropdown-content bg-base-100 rounded-box ring-base-content/10 z-[1] mt-3 w-52 p-3 shadow-xl ring-1"
+				>
+					<!-- Header -->
+					<li class="menu-title text-base-content/80 px-2 py-2">
+						<span>Tài khoản</span>
+					</li>
+
+					<li>
+						<a href="/login" class="justify-start gap-3 px-4 py-3">
+							<User class="h-5 w-5 opacity-70" />
+							<span class="font-medium">Đăng nhập</span>
+						</a>
+					</li>
+					<li>
+						<a href="/register" class="justify-start gap-3 px-4 py-3">
+							<UserPlus class="h-5 w-5 opacity-70" />
+							<span class="font-bold">Đăng ký</span>
+						</a>
+					</li>
+				</ul>
+			</div>
+
+			<!-- Desktop: full buttons -->
+			<div class="hidden items-center gap-2 md:flex">
 				<a href="/login" class="btn btn-ghost btn-sm h-9 min-h-[36px] font-medium"> Đăng nhập </a>
 				<a
 					href="/register"

@@ -1,12 +1,9 @@
 import { Elysia, t } from 'elysia';
-import { stringify } from 'qs';
-import type { VerifyReturnUrl } from 'vnpay';
-import { InpOrderAlreadyConfirmed, IpnFailChecksum, IpnInvalidAmount, IpnOrderNotFound, IpnSuccess, IpnUnknownError } from 'vnpay';
 import { db } from './db';
 import { createPaymentBodySchema, errorResponseSchema, paymentResponseSchema, paymentsTable, updatePaymentBodySchema, updatePaymentParamsSchema, updatePaymentResponseSchema } from './payment.model';
 import { PaymentIPN, PaymentService } from './payment.service';
-import { createVNPPaymentUrl } from './paymentHandle/vnpayPaymentHandle';
 import { rabbitPlugin, QUEUES } from './rabbitmq';
+import { ForbiddenError, UnauthorizedError } from '@common/errors/httpErrors';
 const paymentService = new PaymentService(db);
 
 export const paymentsPlugin = (dependencies: { paymentService: PaymentService }) =>
@@ -17,7 +14,29 @@ export const paymentsPlugin = (dependencies: { paymentService: PaymentService })
 	// Returns the created payment with a generated payment URL
 	.group('/payments', (app) =>
 		app
-		.post('/', async ({ body, set, paymentService }) => {
+				.guard(
+					{}, // Không cần beforeHandle verify token nữa
+					(app) =>
+						app
+							// Trích xuất thông tin User từ Header do Gateway gửi xuống
+							.derive(({ headers }) => {
+								const userId = headers['x-user-id'];
+								const userRole = headers['x-user-role'];
+
+								// Nếu không có header -> Ai đó đang gọi thẳng vào Service bỏ qua Gateway -> Chặn
+								if (!userId) {
+									throw new UnauthorizedError('Missing Gateway Headers (x-user-id)');
+								}
+
+								return {
+									user: {
+										id: userId as string,
+										email: '', // Gateway thường không gửi email, service tự fetch nếu cần
+										role: (userRole as string) || 'user',
+									},
+								};
+							})
+		.post('/', async ({ body, set, user, paymentService }) => {
 			//try {
 				// A transaction ensures the insert is an all-or-nothing operation.
 
@@ -52,7 +71,10 @@ export const paymentsPlugin = (dependencies: { paymentService: PaymentService })
 		// Used primarily for webhook callbacks from payment providers
 		.patch(
 			'/:id',
-			async ({ params, body, set, paymentService }) => {
+			async ({ params, body, user, set, paymentService }) => {
+				if (user.role !== 'admin') {
+					throw new ForbiddenError("You do not have permission to update payment status.");
+				}
 				const apiResponse = await paymentService.updatePaymentStatus(
 					String(params.id),
 					body.status,
@@ -83,7 +105,10 @@ export const paymentsPlugin = (dependencies: { paymentService: PaymentService })
 		// Returns the payment record with all its information (id, order_id, amount, gateway, status, timestamps)
 		.get(
 			'/:id',
-			async ({ params, set, paymentService }) => {
+			async ({ params, user, set, paymentService }) => {
+				if (user.role !== 'admin') {
+					throw new ForbiddenError("You do not have permission to access payment information.");
+				}
 				const apiResponse = await paymentService.getPaymentById(String(params.id));
 				set.status = 200;
 				return apiResponse;
@@ -101,7 +126,7 @@ export const paymentsPlugin = (dependencies: { paymentService: PaymentService })
 					tags: ['Payments'],
 				},
 			},
-		));
+		)));
 
 // Helper function to sort object keys
 function sortObject(obj: Record<string, any>): Record<string, any> {
@@ -140,8 +165,8 @@ export const vnpayIpnHandler = (dependencies: { paymentIPN: PaymentIPN }) =>
 				}
 			}
 			return {
-				RspCode: '00',
-				Message: 'success',
+				RspCode: response.RspCode,
+				Message: response.Message,
 			}
         }
 		set.status = 200;

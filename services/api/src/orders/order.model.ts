@@ -51,7 +51,7 @@ export const CreateOrderSchema = createInsertSchema(ordersTable, {
 
 /** Order Item in creation request */
 export const OrderItemInputSchema = t.Object({
-	product_id: t.Integer({ minimum: 1 }),
+	product_id: t.String(),
 	quantity: t.Integer({ minimum: 1 }),
 	price_per_item: t.Number({ minimum: 0 }),
 	product_snapshot: t.Optional(t.Record(t.String(), t.Any())),

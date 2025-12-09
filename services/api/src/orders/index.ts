@@ -72,8 +72,26 @@ export const ordersPlugin = async (dependencies: { orderService: OrderService })
         async ({ body, set, orderService }) => {
           const { items, ...orderData } = body as any;
           
-          // Create the order
-          const newOrder = await orderService.createOrder(orderData);
+          // Calculate total amount from products
+          let calculatedTotal = 0;
+          let paymentUrl = null;
+          
+          if (items && Array.isArray(items) && items.length > 0) {
+            // Get total amount from Product Service
+            const { total } = await orderService.calculateTotalAmount(
+              items.map((item: any) => ({
+                product_id: item.product_id.toString(),
+                quantity: item.quantity,
+              }))
+            );
+            calculatedTotal = total;
+          }
+          
+          // Create the order with calculated total
+          const newOrder = await orderService.createOrder({
+            ...orderData,
+            total_amount: calculatedTotal,
+          });
           
           // Add items to order if provided
           let orderItems: any[] = [];
@@ -84,10 +102,22 @@ export const ordersPlugin = async (dependencies: { orderService: OrderService })
             }
           }
           
+          // Get payment URL from Payment Service
+          if (calculatedTotal > 0) {
+            try {
+              paymentUrl = await orderService.createPaymentAndGetUrl(newOrder.id, 'vnpay');
+            } catch (err) {
+              console.error('Failed to create payment URL:', err);
+              // Don't throw error, just return order without payment URL
+              paymentUrl = null;
+            }
+          }
+          
           set.status = 201;
           return { 
             order: newOrder,
-            items: orderItems
+            items: orderItems,
+            paymentUrl: paymentUrl,
           };
         },
         {
@@ -95,28 +125,69 @@ export const ordersPlugin = async (dependencies: { orderService: OrderService })
           response: {
             201: t.Object({ 
               order: OrderResponseSchema,
-              items: t.Array(OrderItemResponseSchema)
+              items: t.Array(OrderItemResponseSchema),
+              paymentUrl: t.Union([t.String(), t.Null()]),
             }),
           },
           detail: { tags: ['Orders'], summary: 'Create a new order with items' },
         },
       )
+    
 
-		// 2. Get All Orders
+    // Guard to extract user from headers
+    .guard(
+              {},
+              (app) =>
+                app
+                  .derive(({ headers }) => {
+                    const userId = headers['x-user-id'];
+                    const userRole = headers['x-user-role'];
+    
+                    if (!userId) {
+                      throw new UnauthorizedError('Missing Gateway Headers (x-user-id)');
+                    }
+    
+                    return {
+                      user: {
+                        id: userId as string,
+                        email: '',
+                        role: (userRole as string) || 'user',
+                      },
+                    };
+                  })
+    // 2. Get Orders by User ID
+		.get(
+			'/me',
+			async ({ user }) => {
+				const orders = await orderService.getOrders(user.id);
+				return { orders };
+			},
+			{
+				response: { 200: t.Object({ orders: t.Array(OrderResponseSchema) }) },
+				detail: { tags: ['Orders'], summary: 'Get all orders for a specific user by user ID' },
+			},
+		)
+		// 3. Get All Orders
 		.get(
 			'/',
-			async ({ headers }) => {
-				// Get all orders
-        const userId = headers['x-user-id'] as string | undefined;
-        const userRoles = headers['x-user-roles'] as string | undefined;
-        if ( userId && userRoles?.includes('admin')) {
-          // If admin role is present, return all orders
-          const orders = await orderService.getOrders();
+			async ({ user, query }) => {
+        // Check if user is admin
+        if ( user && user.role === 'admin') {
+          const queryParams = query as { user_id?: string };
+
+          // If user_id is provided in query, fetch orders for that user
+          if (queryParams.user_id) {
+          const orders = await orderService.getOrders(queryParams.user_id);
           return { orders };
-        } else if (!userId) {
-          throw new UnauthorizedError("Authentication required to access orders.");
+          } else {
+            // Otherwise, fetch all orders
+            const orders = await orderService.getOrders();
+            return { orders };
+          }
+        } else if (!user) {
+          throw new UnauthorizedError("Authentication required to access this resource.");
         } else {
-          throw new ForbiddenError("Access denied. Regular users can only access their own orders.");
+          throw new ForbiddenError("Access denied. Admins only.");
         }
 				
 			},
@@ -126,24 +197,14 @@ export const ordersPlugin = async (dependencies: { orderService: OrderService })
 			},
 		)
     
-		// 2.5. Get Orders by User ID
-		.get(
-			'/user/:userId',
-			async ({ params }) => {
-				const orders = await orderService.getOrders(params.userId);
-				return { orders };
-			},
-			{
-				params: t.Object({ userId: t.String() }),
-				response: { 200: t.Object({ orders: t.Array(OrderResponseSchema) }) },
-				detail: { tags: ['Orders'], summary: 'Get all orders for a specific user by user ID' },
-			},
-		)
 		// 3. Get Order By ID
 		.get(
 			'/:id',
-			async ({ params }) => {
+			async ({ params, user }) => {
 				const order = await orderService.getOrderById(Number(params.id));
+        if (order.user_id !== user.id && user.role !== 'admin') {
+          throw new ForbiddenError("You do not have permission to access this order.");
+        }
 				return { order };
 			},
 			{
@@ -158,7 +219,11 @@ export const ordersPlugin = async (dependencies: { orderService: OrderService })
 		// 4. Update Order
 		.patch(
 			'/:id',
-			async ({ params, body, orderService }) => {
+			async ({ params, body, user, orderService }) => {
+        const order = await orderService.getOrderById(Number(params.id));
+        if (order.user_id !== user.id && user.role !== 'admin') {
+          throw new ForbiddenError("You do not have permission to update this order.");
+        }
 				const updated = await orderService.updateOrder(Number(params.id), body as any);
 				return { order: updated };
 			},
@@ -175,7 +240,11 @@ export const ordersPlugin = async (dependencies: { orderService: OrderService })
       // 5. Delete Order
       .delete(
         '/:id',
-        async ({ params }) => {
+        async ({ params, user }) => {
+          const order = await orderService.getOrderById(Number(params.id));
+          if (user.role !== 'admin') {
+            throw new ForbiddenError("You do not have permission to delete this order.");
+          }
           await orderService.deleteOrder(Number(params.id));
           return { message: `Đã xóa đơn hàng ID ${params.id}.` };
         },
@@ -191,7 +260,11 @@ export const ordersPlugin = async (dependencies: { orderService: OrderService })
 			items
 				.post(
 					'/',
-					async ({ params, body, set, orderService }) => {
+					async ({ params, body, set, user, orderService }) => {
+            const order = await orderService.getOrderById(Number(params.id));
+            if (order.user_id !== user.id && user.role !== 'admin') {
+              throw new ForbiddenError("You do not have permission to modify items in this order.");
+            }
 						const newItem = await orderService.addItemToOrder(Number(params.id), body);
 						set.status = 201;
 						return { item: newItem };
@@ -208,16 +281,20 @@ export const ordersPlugin = async (dependencies: { orderService: OrderService })
 
 				.get(
 					'/',
-					async ({ params, orderService }) => {
+					async ({ params, user, orderService }) => {
+            const order = await orderService.getOrderById(Number(params.id));
+            if (order.user_id !== user.id && user.role !== 'admin') {
+              throw new ForbiddenError("You do not have permission to access items in this order.");
+            }
 						const items = await orderService.getOrderItems(Number(params.id));
 						return { items };
 					},
 					{
-						params: t.Object({ id: t.Numeric() }), // Sửa params.orderId thành params.id cho khớp group
+						params: t.Object({ id: t.Numeric() }),
 						response: {
 							200: t.Object({ items: t.Array(OrderItemResponseSchema) }),
 						},
 						detail: { tags: ['Order Items'], summary: 'Get all items of an order' },
 					},
 				),
-    ));
+    )));

@@ -5,8 +5,8 @@ import { ordersTable } from './order.model';
 import { orderItemsTable } from './order_item.model';
 
 // URL của Payment Service (Lấy từ .env hoặc mặc định)
-const PAYMENT_SERVICE_URL = process.env.PAYMENT_SERVICE_URL || 'http://localhost:4003/api';
-
+const PAYMENT_SERVICE_URL = process.env.PAYMENT_SERVICE_URL || 'http://localhost:4003';
+const PRODUCT_SERVICE_URL = process.env.PRODUCT_SERVICE_URL || 'http://localhost:4002';
 export type NewOrder = typeof ordersTable.$inferInsert;
 export type NewOrderItem = typeof orderItemsTable.$inferInsert;
 
@@ -50,9 +50,7 @@ export class OrderService {
 
 			// Nếu có userId, thêm điều kiện WHERE
 			if (userId) {
-				// --- SỬA LỖI TẠI ĐÂY ---
-				// Ép kiểu userId từ string sang Number vì trong DB user_id là số
-				query = query.where(eq(ordersTable.user_id, Number(userId)));
+				query = query.where(eq(ordersTable.user_id, userId));
 			}
 
 			// Luôn sắp xếp đơn mới nhất lên đầu (DESC)
@@ -162,7 +160,8 @@ export class OrderService {
 
 			const response = await fetch(`${PAYMENT_SERVICE_URL}/payments`, {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
+				headers: { 
+					'Content-Type': 'application/json',	'x-user-id': order.user_id, 'x-user-role': 'user' },
 				body: JSON.stringify({
 					order_id: order.id,
 					amount: Number(order.total_amount),
@@ -196,6 +195,75 @@ export class OrderService {
 		} catch (error) {
 			console.error('Get All Orders Error:', error);
 			throw new InternalServerError('Không thể lấy danh sách đơn hàng.');
+		}
+	}
+
+	// 10. Fetch Product Details from Product Service
+	async getProductDetails(productId: string): Promise<{ price: number; name: string; id: string }> {
+		try {
+			const response = await fetch(`${PRODUCT_SERVICE_URL}/products/${productId}`, {
+				method: 'GET',
+				headers: { 'Content-Type': 'application/json' },
+			});
+
+			if (!response.ok) {
+				const errorData = await response.json().catch(() => ({}));
+				console.error('Product Service Error:', errorData);
+				throw new InternalServerError(
+					`Lỗi từ Product Service khi lấy sản phẩm ${productId}: ${JSON.stringify(errorData)}`,
+				);
+			}
+
+			const product = (await response.json()) as any;
+			return {
+				id: product.id,
+				name: product.name,
+				price: Number(product.price),
+			};
+		} catch (error) {
+			console.log(PRODUCT_SERVICE_URL);
+			console.error(`Failed to fetch product ${productId}:`, error);
+			if (error instanceof Error && (error as any).status) throw error;
+			throw new InternalServerError(`Không thể lấy thông tin sản phẩm ${productId} từ dịch vụ.`);
+		}
+	}
+
+	// 11. Calculate Total Amount from Order Items
+	async calculateTotalAmount(
+		items: Array<{ product_id: string; quantity: number }>,
+	): Promise<{ total: number; itemDetails: Array<{ product_id: string; quantity: number; price: number }> }> {
+		let total = 0;
+		const itemDetails: Array<{ product_id: string; quantity: number; price: number }> = [];
+
+		try {
+			for (const item of items) {
+				const product = await this.getProductDetails(item.product_id);
+				const itemTotal = product.price * item.quantity;
+				total += itemTotal;
+				itemDetails.push({
+					product_id: item.product_id,
+					quantity: item.quantity,
+					price: product.price,
+				});
+			}
+
+			return { total, itemDetails };
+		} catch (error) {
+			console.error('Calculate Total Amount Error:', error);
+			if (error instanceof Error && (error as any).status) throw error;
+			throw new InternalServerError('Lỗi khi tính tổng tiền đơn hàng.');
+		}
+	}
+
+	// 12. Create Payment and Get Payment URL
+	async createPaymentAndGetUrl(orderId: number, gateway: string = 'vnpay'): Promise<string> {
+		try {
+			const paymentData = await this.createPaymentLink(orderId, gateway);
+			return paymentData.paymentUrl;
+		} catch (error) {
+			console.error('Create Payment and Get URL Error:', error);
+			if (error instanceof Error && (error as any).status) throw error;
+			throw new InternalServerError('Lỗi khi tạo liên kết thanh toán.');
 		}
 	}
 }

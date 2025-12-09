@@ -369,24 +369,32 @@ export class ProductService {
     /**
      * 8. Trừ kho hàng loạt (Dùng cho Order Service gọi sang)
      */
-    async reduceStock(items: {productId: string, quantity: number} []) {
+    async reduceStock(items: { productId: string, quantity: number }[]) {
         return await this.db.transaction(async (tx) => {
             for (const item of items) {
-                // lay thong tin san pham 
-                const product = await tx.query.products.findFirst({
-                    where: eq(products.id, item.productId)
-                });
-                if (!product) {
-                    throw new NotFoundError(`Sản phẩm ID ${item.productId} không tồn tại`);
+                const [updatedProduct] = await tx.update(products)
+                    .set({ 
+                        stock: sql`${products.stock} - ${item.quantity}`
+                    })
+                    .where(and(
+                        eq(products.id, item.productId),
+                        gte(products.stock, item.quantity)
+                    ))
+                    .returning({ id: products.id, name: products.name });
+                if (!updatedProduct) {
+                    const productExist = await tx.query.products.findFirst({
+                        where: eq(products.id, item.productId),
+                        columns: { id: true, name: true, stock: true }
+                    });
+
+                    if (!productExist) {
+                        throw new NotFoundError(`Sản phẩm ID ${item.productId} không tồn tại`);
+                    } else {
+                        throw new BadRequestError(`Sản phẩm '${productExist.name}' không đủ hàng (Còn: ${productExist.stock}, Mua: ${item.quantity})`);
+                    }
                 }
-                if (product.stock < item.quantity) {
-                    throw new BadRequestError(`Sản phẩm '${product.name}' không đủ hàng (Còn: ${product.stock}, Mua: ${item.quantity})`);
-                }
-                await tx.update(products)
-                        .set({stock: product.stock - item.quantity})
-                        .where(eq(products.id, item.productId));
             }
-            return {success: true, message: "Đã trừ kho thành công"};
+            return { success: true, message: "Đã trừ kho thành công" };
         });
     }
 }

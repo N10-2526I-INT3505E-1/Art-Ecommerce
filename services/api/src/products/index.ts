@@ -123,6 +123,23 @@ export const productsPlugin = new Elysia({ prefix: '/products' })
 		},
 	)
 
+	// 7. Related
+	.get(
+		'/:id/related',
+		async ({ params }) => {
+			return await productService.getRelated(params.id);
+		},
+		{
+			params: t.Object({ id: t.String() }),
+			response: {
+                200: t.Array(selectProductSchema),
+                404: ErrorSchema, // Trường hợp ID gốc không tìm thấy
+                500: ErrorSchema
+            },
+			detail: { tags: ['Products'], summary: 'Get Related' },
+		},
+	)
+
 	// 6. Detail
 	.get(
 		'/:id',
@@ -140,23 +157,6 @@ export const productsPlugin = new Elysia({ prefix: '/products' })
                 500: ErrorSchema
             },
 			detail: { tags: ['Products'], summary: 'Get Detail' }
-		},
-	)
-
-	// 7. Related
-	.get(
-		'/:id/related',
-		async ({ params }) => {
-			return await productService.getRelated(params.id);
-		},
-		{
-			params: t.Object({ id: t.String() }),
-			response: {
-                200: t.Array(selectProductSchema),
-                404: ErrorSchema, // Trường hợp ID gốc không tìm thấy
-                500: ErrorSchema
-            },
-			detail: { tags: ['Products'], summary: 'Get Related' },
 		},
 	)
 

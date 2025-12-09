@@ -11,7 +11,7 @@ export async function verifyToken(ctx: Context & { jwt: ReturnType<typeof jwt> }
 	const authHeader = ctx.request.headers.get('Authorization');
 
 	// Public endpoints that don't need auth
-	if (ctx.request.url.includes('/health') || ctx.request.url.includes('/sessions')) {
+	if (ctx.request.url.includes('/health') || ctx.request.url.includes('/sessions')|| ctx.request.url.includes('/vnpay_ipn')) {
 		return { user: null };
 	}
 

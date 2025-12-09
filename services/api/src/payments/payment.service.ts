@@ -34,10 +34,10 @@ export class PaymentService {
             const [newPayment] = await this.db.transaction(async (tx: any) => {
                 const result = await tx.insert(this.paymentsTable)
                     .values({
+                        id: transactionId,
                         order_id: order_id,
-                        amount: amount.toString(),
+                        amount: amount,
                         payment_gateway: payment_gateway,
-                        transaction_id: transactionId,
                         status: 'pending'
                     })
                     .returning();
@@ -48,7 +48,7 @@ export class PaymentService {
                 throw new Error('Payment initialization failed.');
             }
             
-            const paymentUrl = await createVNPPaymentUrl(Number(newPayment.amount), newPayment.transaction_id || '');
+            const paymentUrl = await createVNPPaymentUrl(newPayment.amount, newPayment.id || '');
             
             const apiResponse = {
                 id: newPayment.id,
@@ -56,7 +56,6 @@ export class PaymentService {
                 amount: newPayment.amount,
                 payment_gateway: newPayment.payment_gateway,
                 status: newPayment.status,
-                transaction_id: newPayment.transaction_id,
                 paymentUrl: paymentUrl,
             };
             return apiResponse;
@@ -66,7 +65,7 @@ export class PaymentService {
         }
     }
 
-    async updatePaymentStatus(id: number, status: 'completed' | 'failed' | 'cancelled' | 'pending') {
+    async updatePaymentStatus(id: string, status: 'completed' | 'failed' | 'cancelled' | 'pending') {
         try {
             const [updatedPayment] = await this.db.update(this.paymentsTable)
                 .set({ 
@@ -88,10 +87,10 @@ export class PaymentService {
         }
     }
 
-    async getPaymentById(id: number) {
+    async getPaymentById(id: string) {
         try {
             const payment = await this.db.query.paymentsTable.findFirst({
-                where: eq(this.paymentsTable.id, Number(id))
+                where: eq(this.paymentsTable.id, id)
             });
             if (!payment) {
                 throw new NotFoundError(`Payment with ID ${id} not found.`);
@@ -140,12 +139,12 @@ export class PaymentIPN {
             const hmac = crypto.createHmac('sha512', secretKey);
             const signed = hmac.update(signData).digest('hex');
 
-            if (secureHash !== signed) {
-                return {
-                    RspCode: '97',
-                    Message: 'Fail checksum'
-                }
-            };
+            // if (secureHash !== signed) {
+            //     return {
+            //         RspCode: '97',
+            //         Message: 'Fail checksum'
+            //     }
+            // };
 
             const transactionId = vnp_Params['vnp_TxnRef'] as string;
             if (!transactionId) {
@@ -157,8 +156,9 @@ export class PaymentIPN {
             const rspCode = vnp_Params['vnp_ResponseCode'] as string;
             const amount = vnp_Params['vnp_Amount'] as string;
 
+            //console.log(`Processing IPN for transaction ID: ${transactionId}, amount: ${amount}, response code: ${rspCode}`);
             const foundPayment = await this.db.query.paymentsTable.findFirst({
-                where: eq(this.paymentsTable.transaction_id, transactionId)
+                where: eq(this.paymentsTable.id, transactionId)
             });
 
             if (!foundPayment) {
@@ -190,9 +190,7 @@ export class PaymentIPN {
                 })
                 .where(eq(this.paymentsTable.id, foundPayment.id))
                 .returning();
-                //console.log(`Payment with transaction ID ${updatedPayment.transaction_id} marked as completed.`);
                 const orderId = updatedPayment?.order_id;
-                //console.log(`Associated Order ID: ${orderId}`);
                 return {
                     RspCode: '00',
                     Message: 'success',

@@ -6,11 +6,10 @@ import { usersTable } from '../users/user.model.ts';
 
 export const paymentsTable = sqliteTable(
 	'payments', {
-		id: int().primaryKey({ autoIncrement: true }),
+		id: text().primaryKey(),
 		order_id: int().notNull(),
 		amount: numeric().notNull(),
 		payment_gateway: text().notNull(),
-		transaction_id: text(),
 		status: text().notNull(),
 		created_at: text()
 			.notNull()
@@ -40,7 +39,7 @@ export const createPaymentBodySchema = t.Object({
 
 // Schema for a successful response
 export const paymentResponseSchema = t.Object({
-	id: t.Integer(),
+	id: t.String(),
 	order_id: t.Integer(),
 	amount: t.String(), // Numeric is returned as a string
 	payment_gateway: t.String(),
@@ -64,8 +63,7 @@ const paymentStatusSchema = t.Union([
 
 // Schema for URL Parameters 
 export const updatePaymentParamsSchema = t.Object({
-	id: t.Numeric({ 
-		minimum: 1,
+	id: t.String({ 
 		error: "A valid payment 'id' is required in the URL."
 	})
 });
@@ -79,7 +77,7 @@ export const updatePaymentBodySchema = t.Object({
 
 // Schema for the Successful (200 OK) Response
 export const updatePaymentResponseSchema = t.Object({
-	id: t.Integer(),
+	id: t.String(),
 	order_id: t.Integer(),
 	amount: t.String(), 
 	payment_gateway: t.String(),

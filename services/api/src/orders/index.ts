@@ -33,12 +33,12 @@ export const ordersPlugin = async (dependencies: { orderService: OrderService })
         // Update the Order Status in Database
         if (data.type === 'PAYMENT_RESULT' && data.status === 'PAID') {
           console.log(`Received PAYMENT_RESULT for Order ID ${data.orderId}, updating order status to 'paid'`);
-          const updateState = await orderService.updateOrder(Number(data.orderId), {
+          const updateState = await orderService.updateOrder(data.orderId, {
             status: 'paid', // Update order status to 'paid'
           });
           // If order status updated successfully, send product stock update to Product Service
           if (updateState) {
-            const order_item = await orderService.getOrderItems(Number(data.orderId));
+            const order_item = await orderService.getOrderItems(data.orderId);
             const sent = sendToQueue(QUEUES.PRODUCT_UPDATES, {
               type: 'PRODUCT_STOCK_UPDATE',
               // Send order items to Product Service to update stock
@@ -172,7 +172,7 @@ export const ordersPlugin = async (dependencies: { orderService: OrderService })
 			'/',
 			async ({ user, query }) => {
         // Check if user is manager or operator
-        if ( user && user.role === 'manager' || user.role === 'operator') {
+        if ( user && (user.role === 'manager' || user.role === 'operator')) {
           const queryParams = query as { user_id?: string };
 
           // If user_id is provided in query, fetch orders for that user
@@ -201,14 +201,14 @@ export const ordersPlugin = async (dependencies: { orderService: OrderService })
 		.get(
 			'/:id',
 			async ({ params, user }) => {
-				const order = await orderService.getOrderById(Number(params.id));
+				const order = await orderService.getOrderById(params.id);
         if (order.user_id !== user.id && user.role !== 'manager' && user.role !== 'operator') {
           throw new ForbiddenError("You do not have permission to access this order.");
         }
 				return { order };
 			},
 			{
-				params: t.Object({ id: t.Numeric() }),
+				params: t.Object({ id: t.String() }),
 				response: {
 					200: t.Object({ order: OrderResponseSchema }),
 				},
@@ -220,15 +220,15 @@ export const ordersPlugin = async (dependencies: { orderService: OrderService })
 		.patch(
 			'/:id',
 			async ({ params, body, user, orderService }) => {
-        const order = await orderService.getOrderById(Number(params.id));
+        const order = await orderService.getOrderById(params.id);
         if (order.user_id !== user.id && user.role !== 'manager' && user.role !== 'operator') {
           throw new ForbiddenError("You do not have permission to update this order.");
         }
-				const updated = await orderService.updateOrder(Number(params.id), body as any);
+				const updated = await orderService.updateOrder(params.id, body as any);
 				return { order: updated };
 			},
 			{
-				params: t.Object({ id: t.Numeric() }),
+				params: t.Object({ id: t.String() }),
 				body: t.Partial(t.Omit(CreateOrderSchema, ['id', 'created_at', 'updated_at'])),
 				response: {
 					200: t.Object({ order: OrderResponseSchema }),
@@ -241,15 +241,15 @@ export const ordersPlugin = async (dependencies: { orderService: OrderService })
       .delete(
         '/:id',
         async ({ params, user }) => {
-          const order = await orderService.getOrderById(Number(params.id));
+          const order = await orderService.getOrderById(params.id);
           if (user.role !== 'manager' && user.role !== 'operator') {
             throw new ForbiddenError("You do not have permission to delete this order.");
           }
-          await orderService.deleteOrder(Number(params.id));
+          await orderService.deleteOrder(params.id);
           return { message: `Đã xóa đơn hàng ID ${params.id}.` };
         },
         {
-          params: t.Object({ id: t.Numeric() }),
+          params: t.Object({ id: t.String() }),
           response: { 200: t.Object({ message: t.String() }) },
           detail: { tags: ['Orders'], summary: 'Delete an order' },
         },
@@ -261,16 +261,16 @@ export const ordersPlugin = async (dependencies: { orderService: OrderService })
 				.post(
 					'/',
 					async ({ params, body, set, user, orderService }) => {
-            const order = await orderService.getOrderById(Number(params.id));
+            const order = await orderService.getOrderById(params.id);
             if (order.user_id !== user.id && user.role !== 'manager' && user.role !== 'operator') {
               throw new ForbiddenError("You do not have permission to modify items in this order.");
             }
-						const newItem = await orderService.addItemToOrder(Number(params.id), body);
+						const newItem = await orderService.addItemToOrder(params.id, body);
 						set.status = 201;
 						return { item: newItem };
 					},
 					{
-						params: t.Object({ id: t.Numeric() }),
+						params: t.Object({ id: t.String() }),
 						body: t.Omit(CreateOrderItemSchema, ['id', 'order_id']),
 						response: {
 							201: t.Object({ item: OrderItemResponseSchema }),
@@ -282,15 +282,15 @@ export const ordersPlugin = async (dependencies: { orderService: OrderService })
 				.get(
 					'/',
 					async ({ params, user, orderService }) => {
-            const order = await orderService.getOrderById(Number(params.id));
+            const order = await orderService.getOrderById(params.id);
             if (order.user_id !== user.id && user.role !== 'manager' && user.role !== 'operator') {
               throw new ForbiddenError("You do not have permission to access items in this order.");
             }
-						const items = await orderService.getOrderItems(Number(params.id));
+						const items = await orderService.getOrderItems(params.id);
 						return { items };
 					},
 					{
-						params: t.Object({ id: t.Numeric() }),
+						params: t.Object({ id: t.String() }),
 						response: {
 							200: t.Object({ items: t.Array(OrderItemResponseSchema) }),
 						},

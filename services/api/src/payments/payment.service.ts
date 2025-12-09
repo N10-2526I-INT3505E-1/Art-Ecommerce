@@ -21,11 +21,11 @@ export class PaymentService {
         this.paymentsTable = schema.paymentsTable;
     }
 
-    createPayment = async (order_id: number, amount: number, payment_gateway: string) => {
+    createPayment = async (order_id: string, amount: number, payment_gateway: string) => {
         try {
             // Check if order_id exists
             const exitsPayment = await this.db.query.paymentsTable.findFirst({
-                where: eq(this.paymentsTable.order_id, Number(order_id))
+                where: eq(this.paymentsTable.order_id, order_id)
             });
             if (exitsPayment) {
                 throw new Error(` Payment for order_id ${order_id} already exists.`);
@@ -65,7 +65,7 @@ export class PaymentService {
         }
     }
 
-    async updatePaymentStatus(id: string, status: 'completed' | 'failed' | 'cancelled' | 'pending') {
+    async updatePaymentStatus(id: string, status: 'paid' | 'failed' | 'cancelled' | 'pending') {
         try {
             const [updatedPayment] = await this.db.update(this.paymentsTable)
                 .set({ 
@@ -175,7 +175,7 @@ export class PaymentIPN {
                 };
             }
 
-            if (foundPayment.status === 'completed') {
+            if (foundPayment.status === 'paid') {
                 return {
                     RspCode: '02',
                     Message: 'Order already confirmed'
@@ -185,7 +185,7 @@ export class PaymentIPN {
             if (rspCode === '00') {
                 const [updatedPayment] = await this.db.update(this.paymentsTable)
                 .set({ 
-                    status: 'completed',
+                    status: 'paid',
                 })
                 .where(eq(this.paymentsTable.id, foundPayment.id))
                 .returning();

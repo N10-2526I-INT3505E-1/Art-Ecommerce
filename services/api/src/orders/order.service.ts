@@ -3,6 +3,8 @@ import { BadRequestError, InternalServerError, NotFoundError } from '../common/e
 import type { db } from './db';
 import { ordersTable } from './order.model';
 import { orderItemsTable } from './order_item.model';
+import { randomUUIDv7 } from 'bun';
+import { UserAddressSchema } from './order.model';
 
 // URL của Payment Service (Lấy từ .env hoặc mặc định)
 const PAYMENT_SERVICE_URL = process.env.PAYMENT_SERVICE_URL || 'http://localhost:4003';
@@ -12,14 +14,14 @@ export type NewOrderItem = typeof orderItemsTable.$inferInsert;
 
 // Interface cho kết quả trả về từ Payment Service
 export interface PaymentLinkResponse {
-	id: number;
-	order_id: number;
+	id: string;
+	order_id: string;
 	amount: string | number;
 	payment_gateway: string;
 	status: string;
-	transaction_id: string | null;
 	paymentUrl: string;
 }
+
 
 type DrizzleDB = typeof db;
 
@@ -29,8 +31,11 @@ export class OrderService {
 	// 1. Create Order
 	async createOrder(data: NewOrder) {
 		try {
-			const [newOrder] = await this.database.insert(ordersTable).values(data).returning();
-
+			const orderData = { ...data };
+			const shipping_address = data.shipping_address;
+			
+			orderData.id = randomUUIDv7();
+			const [newOrder] = await this.database.insert(ordersTable).values(orderData).returning();
 			if (!newOrder) {
 				throw new InternalServerError('Không thể tạo đơn hàng (Database Error).');
 			}
@@ -64,7 +69,7 @@ export class OrderService {
 	}
 
 	// 3. Get Order By ID
-	async getOrderById(id: number) {
+	async getOrderById(id: string) {
 		const [order] = await this.database.select().from(ordersTable).where(eq(ordersTable.id, id));
 
 		if (!order) {
@@ -74,7 +79,7 @@ export class OrderService {
 	}
 
 	// 4. Update Order
-	async updateOrder(id: number, data: Partial<NewOrder>) {
+	async updateOrder(id: string, data: Partial<NewOrder>) {
 		const [updated] = await this.database
 			.update(ordersTable)
 			.set(data)
@@ -88,7 +93,7 @@ export class OrderService {
 	}
 
 	// 5. Delete Order
-	async deleteOrder(id: number) {
+	async deleteOrder(id: string) {
 		const [deleted] = await this.database
 			.delete(ordersTable)
 			.where(eq(ordersTable.id, id))
@@ -102,7 +107,7 @@ export class OrderService {
 
 	// 6. Add Item to Order
 	async addItemToOrder(
-		orderId: number,
+		orderId: string,
 		data: Omit<NewOrderItem, 'id' | 'order_id' | 'product_snapshot'> & { product_snapshot?: any },
 	) {
 		const snapshot = data.product_snapshot
@@ -126,7 +131,7 @@ export class OrderService {
 	}
 
 	// 7. Get Order Items
-	async getOrderItems(orderId: number) {
+	async getOrderItems(orderId: string) {
 		const items = await this.database
 			.select()
 			.from(orderItemsTable)
@@ -143,7 +148,7 @@ export class OrderService {
 
 	// 8. Create Payment Link (Gọi sang Payment Service)
 	async createPaymentLink(
-		orderId: number,
+		orderId: string,
 		gateway: string = 'vnpay',
 	): Promise<PaymentLinkResponse> {
 		const order = await this.getOrderById(orderId);
@@ -168,8 +173,7 @@ export class OrderService {
 			});
 
 			if (!response.ok) {
-				const errorData = await response.json().catch(() => ({}));
-				console.error('Payment Service Error:', errorData);
+				const errorData = response.json().catch(() => ({}));
 				throw new InternalServerError(`Lỗi từ Payment Service: ${JSON.stringify(errorData)}`);
 			}
 
@@ -254,7 +258,7 @@ export class OrderService {
 	}
 
 	// 12. Create Payment and Get Payment URL
-	async createPaymentAndGetUrl(orderId: number, gateway: string = 'vnpay'): Promise<string> {
+	async createPaymentAndGetUrl(orderId: string, gateway: string = 'vnpay'): Promise<string> {
 		try {
 			const paymentData = await this.createPaymentLink(orderId, gateway);
 			return paymentData.paymentUrl;

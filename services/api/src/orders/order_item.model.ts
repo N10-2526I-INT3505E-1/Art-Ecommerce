@@ -7,7 +7,7 @@ import { ordersTable } from './order.model';
 export const orderItemsTable = sqliteTable('order_items', {
   id: int().primaryKey({ autoIncrement: true }),
   
-  order_id: int()
+  order_id: text()
     .notNull()
     // Dòng này tạo liên kết khóa ngoại trong Database
     .references(() => ordersTable.id, { onDelete: 'cascade' }), 

@@ -1,126 +1,43 @@
-import { insertProductBody, 
-		selectProductSchema, 
-		updateProductBody,
-		reduceStockBody 
-	} from '@product/product.model';
+import { insertProductBody, selectProductSchema, updateProductBody, reduceStockBody } from '@product/product.model';
 import { Elysia, t } from 'elysia';
 import { db } from './db';
 import { ProductService } from './product.service';
-import { UnauthorizedError } from '@common/errors/httpErrors';
+import { UnauthorizedError, ForbiddenError } from '@common/errors/httpErrors';
 
-const ErrorSchema = t.Object({
-	message: t.String(),
-});
+const ErrorSchema = t.Object({ message: t.String(), });
 
 const productService = new ProductService(db);
 
+export const authDerive = ({ headers }: any) => {
+  const rawUserId = headers['x-user-id'];
+  const rawUserRole = headers['x-user-role'];
+
+  const userId = Array.isArray(rawUserId) ? rawUserId[0] : rawUserId;
+  const userRole = Array.isArray(rawUserRole) ? rawUserRole[0] : rawUserRole;
+
+  if (!userId) {
+    throw new UnauthorizedError('Missing Gateway Headers (x-user-id)');
+  }
+
+  return {
+    user: {
+      id: String(userId),
+      role: (userRole as string) ?? 'user',
+    },
+  };
+};
+
+export const ensureRole = (user: any, role: string) => {
+  if (!user || user.role !== role) {
+    throw new ForbiddenError(`Requires role: ${role}`);
+  }
+};
+
 export const productsPlugin = new Elysia({ prefix: '/products' })
 
-	.guard({}, (app) => app
-
-		.derive(({headers}) => {
-			const userId = headers['x-user-id'];
-			const userRole = headers['x-user-role'];
-
-			if (!userId || !userRole) {
-				throw new UnauthorizedError('Missing Gateway Headers (x-user-id)');
-			}	
-
-			return {
-				user: {
-					id: userId as string, 
-					role: userRole as string || 'user',
-				}
-			};
-		})
-
-		// ==================================================
-		// GROUP 1: PROTECTED ROUTES
-		// ==================================================
-
-		// 1. Crawler Upsert
-		.post('/', async ({ body, set, user }) => {
-				// if (user.role !== 'admin') {
-				// 	throw new UnauthorizedError('Unauthorized');
-				// }
-				const product = await productService.createProduct(body);
-				set.status = 201;
-				return product;
-			} , {
-				body: insertProductBody,
-				response: {
-					201: selectProductSchema,
-					500: ErrorSchema,
-				},
-				detail: { tags: ['Products'], summary: 'Upsert Product (Crawler)' },
-			},
-		)
-
-		// 2. AI Recommend
-		.post('/recommend', async ({ body, user }) => {
-				return await productService.getRecommendations(body.tags || []);
-			} , {
-				body: t.Object({ tags: t.Array(t.String()) }),
-				response: {
-					200: t.Array(selectProductSchema),
-					500: ErrorSchema,
-				},
-				detail: { tags: ['Products'], summary: 'Get AI Recommendations' },
-			},
-		)
-
-		// 8. Update
-		.patch('/', async({body, user}) => {
-				if (body.action == 'reduce_stock') {
-					return await productService.reduceStock(body.items);
-				}
-				return null; 
-			} , {
-				body: reduceStockBody,
-				response: {
-						200: t.Object({ message: t.String() }),
-						400: ErrorSchema,
-						404: ErrorSchema, // Lỗi không tìm thấy sản phẩm khi trừ kho
-						500: ErrorSchema
-					},
-				detail: {tags: ["Products"], summary: 'Batch Actions'}
-			},
-		)
-
-		.patch('/:id', async ({ params, body, user }) => {
-				return await productService.update(params.id, body);
-			} , {
-				params: t.Object({ id: t.String() }),
-				body: updateProductBody,
-				response: {
-					200: t.Object({ message: t.String() }),
-					404: ErrorSchema,
-					500: ErrorSchema
-				},
-				detail: { tags: ['Products'], summary: 'Update Product' },
-			},
-		)
-
-		// 9. Soft Delete
-		.delete('/:id', async ({ params, set, user }) => {
-				await productService.delete(params.id);
-				set.status = 204;
-				return;
-			} , {
-				params: t.Object({ id: t.String() }),
-				response: {
-					204: t.Void(), // Khai báo rõ ràng 204 trả về Null/Void
-					404: ErrorSchema,
-					500: ErrorSchema
-				},
-				detail: { tags: ['Products'], summary: 'Delete Product' },
-			},
-		)
-	)
-
-	// ==================================================
-	// GROUP 2: PUBLIC ROUTES
-	// ==================================================
+	// ====================================================================================================
+	// GROUP 1: PUBLIC ROUTES
+	// ====================================================================================================
 
 	// 3. List Products
 	.get('/', async ({ query }) => {
@@ -216,4 +133,90 @@ export const productsPlugin = new Elysia({ prefix: '/products' })
             },
 			detail: { tags: ['Products'], summary: 'Get Detail' }
 		},
+	)
+
+	// ====================================================================================================
+	// GROUP 2: PROTECTED ROUTES
+	// ====================================================================================================
+
+	.guard({}, (app) => app
+
+		.derive(authDerive)
+
+		// 1. Crawler Upsert
+		.post('/', async ({ body, set, user }) => {
+				// ensureRole(user, 'admin')
+				const product = await productService.createProduct(body);
+				set.status = 201;
+				return product;
+			} , {
+				body: insertProductBody,
+				response: {
+					201: selectProductSchema,
+					500: ErrorSchema,
+				},
+				detail: { tags: ['Products'], summary: 'Upsert Product (Crawler)' },
+			},
+		)
+
+		// 2. AI Recommend
+		.post('/recommend', async ({ body, user }) => {
+				return await productService.getRecommendations(body.tags || []);
+			} , {
+				body: t.Object({ tags: t.Array(t.String()) }),
+				response: {
+					200: t.Array(selectProductSchema),
+					500: ErrorSchema,
+				},
+				detail: { tags: ['Products'], summary: 'Get AI Recommendations' },
+			},
+		)
+
+		// 8. Update
+		.patch('/', async({body, user}) => {
+				if (body.action == 'reduce_stock') {
+					return await productService.reduceStock(body.items);
+				}
+				return null; 
+			} , {
+				body: reduceStockBody,
+				response: {
+						200: t.Object({ message: t.String() }),
+						400: ErrorSchema,
+						404: ErrorSchema, // Lỗi không tìm thấy sản phẩm khi trừ kho
+						500: ErrorSchema
+					},
+				detail: {tags: ["Products"], summary: 'Batch Actions'}
+			},
+		)
+
+		.patch('/:id', async ({ params, body, user }) => {
+				return await productService.update(params.id, body);
+			} , {
+				params: t.Object({ id: t.String() }),
+				body: updateProductBody,
+				response: {
+					200: t.Object({ message: t.String() }),
+					404: ErrorSchema,
+					500: ErrorSchema
+				},
+				detail: { tags: ['Products'], summary: 'Update Product' },
+			},
+		)
+
+		// 9. Soft Delete
+		.delete('/:id', async ({ params, set, user }) => {
+				await productService.delete(params.id);
+				set.status = 204;
+				return;
+			} , {
+				params: t.Object({ id: t.String() }),
+				response: {
+					204: t.Void(), // Khai báo rõ ràng 204 trả về Null/Void
+					404: ErrorSchema,
+					500: ErrorSchema
+				},
+				detail: { tags: ['Products'], summary: 'Delete Product' },
+			},
+		)
 	);

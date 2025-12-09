@@ -33,7 +33,10 @@ export class OrderService {
 		try {
 			const orderData = { ...data };
 			const shipping_address = data.shipping_address;
-			
+			const addressErrors = validateAddress(shipping_address);
+			if (Object.keys(addressErrors).length > 0) {
+				throw new BadRequestError(String(JSON.stringify(addressErrors)));
+			}
 			orderData.id = randomUUIDv7();
 			const [newOrder] = await this.database.insert(ordersTable).values(orderData).returning();
 			if (!newOrder) {
@@ -269,3 +272,68 @@ export class OrderService {
 		}
 	}
 }
+// Validate User Address Object
+const validateAddress = (shipping_address: any) => {
+    const errors: Record<string, string> = {};
+
+    // 1. Validate Address (String, min 5, max 255)
+    if (typeof shipping_address.address !== 'string') {
+        errors.address = "Address must be a string";
+    } else if (shipping_address.address.length < 5 || shipping_address.address.length > 255) {
+        errors.address = "Address must be between 5 and 255 characters";
+    }
+
+    // 2. Validate Phone (String, max 10, pattern match)
+    // Note: Your schema had a conflict (maxLength: 10 but pattern allows 11). 
+    // I enforced the regex pattern here since that is usually stricter.
+    const phoneRegex = /^[0-9]{9,11}$/;
+    if (typeof shipping_address.phone !== 'string') {
+        errors.phone = "Phone must be a string";
+    } else if (!phoneRegex.test(shipping_address.phone)) {
+        errors.phone = "Invalid phone number";
+    } else if (shipping_address.phone.length > 10) { 
+        // Explicitly checking your schema's maxLength limit
+        errors.phone = "Phone number cannot be longer than 10 characters"; 
+    }
+
+    // 3. Validate Ward (String, max 100)
+    if (typeof shipping_address.ward !== 'string') {
+        errors.ward = "Ward must be a string";
+    } else if (shipping_address.ward.length > 100) {
+        errors.ward = "Ward cannot exceed 100 characters";
+    }
+
+    // 4. Validate State (String, max 100)
+    if (typeof shipping_address.state !== 'string') {
+        errors.state = "State must be a string";
+    } else if (shipping_address.state.length > 100) {
+        errors.state = "State cannot exceed 100 characters";
+    }
+
+    // 5. Validate Postal Code (Optional, Union: String max 20 OR Null)
+    if (shipping_address.postal_code !== undefined && shipping_address.postal_code !== null) {
+        if (typeof shipping_address.postal_code !== 'string') {
+            errors.postal_code = "Postal code must be a string";
+        } else if (shipping_address.postal_code.length > 20) {
+            errors.postal_code = "Postal code cannot exceed 20 characters";
+        }
+    }
+
+    // 6. Validate Country (String, max 100)
+    if (typeof shipping_address.country !== 'string') {
+        errors.country = "Country must be a string";
+    } else if (shipping_address.country.length > 100) {
+        errors.country = "Country cannot exceed 100 characters";
+    }
+
+    // 7. Validate is_default (Optional, Integer: 0 or 1)
+    if (shipping_address.is_default !== undefined) {
+        if (!Number.isInteger(shipping_address.is_default)) {
+            errors.is_default = "is_default must be an integer";
+        } else if (shipping_address.is_default !== 0 && shipping_address.is_default !== 1) {
+            errors.is_default = "is_default must be 0 or 1";
+        }
+    }
+
+    return errors;
+};

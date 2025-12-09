@@ -27,8 +27,8 @@
 			title: 'Tổng quan',
 			icon: FileText,
 			content: `
-				<strong>Đây là dự án để học tập và tham khảo, không phải là sản phẩm thương mại thực tế, không thực sự bán hàng và không phục vụ mục đích kinh doanh.</strong>
-				<strong>Mọi thông tin về sản phẩm, dịch vụ, chính sách, và điều khoản đều mang tính minh họa và không áp dụng trong thực tế.</strong>
+				<strong>Đây là dự án để học tập, mang tính chất tham khảo, không được là/không phải là sản phẩm thương mại thực tế, không thực sự bán hàng và không phục vụ mục đích kinh doanh.</strong>
+				<strong>Mọi thông tin về sản phẩm, dịch vụ, chính sách, và điều khoản đều mang tính minh họa và không áp dụng trong thực tế. Thuật toán bát tự được sử dụng trên trang web này là có tham khảo và có cơ sở, tuy vậy, có nhiều trường phái, pháp pháp tính toán Bát tự Tử Bình khác nhau và trang web có thể đưa ra kết quả dự đoán khác. Ngoài ra, không thể đánh giá được Bát tự Tử Bình hay các môn huyền học khác có ảnh hưởng như thế nào tới vận mệnh, đời sống (một cách khoa học).</strong>
                 <p>Chào mừng bạn đến với Novus. Nền tảng của chúng tôi cung cấp dịch vụ thương mại điện tử chuyên biệt về vật phẩm phong thủy kết hợp công nghệ tư vấn nội thất thông minh dựa trên trí tuệ nhân tạo. Việc truy cập và sử dụng nền tảng đồng nghĩa với việc bạn chấp nhận tuân thủ toàn bộ các điều khoản dịch vụ được quy định dưới đây.</p>
                 <p>Novus giúp bạn lựa chọn vật phẩm phù hợp với mệnh lý cá nhân và không gian sống theo phương pháp khoa học, mang lại trải nghiệm tiện lợi và tin cậy.</p>
             `,

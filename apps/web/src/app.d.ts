@@ -22,8 +22,8 @@ declare global {
 		 */
 		interface User {
 			id: string;
-			username: string;
 			email: string;
+			username: string;
 			first_name: string;
 			last_name: string;
 			role: 'user' | 'operator' | 'manager';

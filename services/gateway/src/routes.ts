@@ -18,7 +18,7 @@ async function proxyRequest(
 	method: string,
 	headers: Headers,
 	body?: RequestInit['body'],
-	user?: User
+	user?: User,
 ): Promise<Response> {
 	const finalPath = fullPath.replace(/^\/api/, '');
 	const url = `${serviceUrl}${finalPath}`;
@@ -26,7 +26,7 @@ async function proxyRequest(
 	// Prepare headers for forwarding
 	const forwardHeaders = new Headers(headers);
 	forwardHeaders.delete('host');
-	
+
 	// Add user context headers if authenticated
 	if (user) {
 		forwardHeaders.set('x-user-id', user.id.toString());
@@ -46,90 +46,92 @@ async function proxyRequest(
 }
 
 export function setupRoutes(app: Elysia) {
-	return app
-		// Sessions routes (public, no JWT required)
-		.all('/sessions*', async (ctx: ContextWithUser) => {
-			const urlPath = new URL(ctx.request.url).pathname;
-			const response = await proxyRequest(
-				USERS_SERVICE_URL,
-				urlPath,
-				ctx.request.method,
-				ctx.request.headers,
-				ctx.request.body,
-				ctx.user
-			);
-			
-			return new Response(response.body, {
-				status: response.status,
-				headers: response.headers,
-			});
-		})
+	return (
+		app
+			// Sessions routes (public, no JWT required)
+			.all('/sessions*', async (ctx: ContextWithUser) => {
+				const urlPath = new URL(ctx.request.url).pathname;
+				const response = await proxyRequest(
+					USERS_SERVICE_URL,
+					urlPath,
+					ctx.request.method,
+					ctx.request.headers,
+					ctx.request.body,
+					ctx.user,
+				);
 
-		// Orders routes
-		.all('/orders*', async (ctx: ContextWithUser) => {
-			const urlPath = new URL(ctx.request.url).pathname;
-			const response = await proxyRequest(
-				ORDERS_SERVICE_URL,
-				urlPath,
-				ctx.request.method,
-				ctx.request.headers,
-				ctx.request.body,
-				ctx.user
-			);
-			return new Response(response.body, {
-				status: response.status,
-				headers: response.headers,
-			});
-		})
+				return new Response(response.body, {
+					status: response.status,
+					headers: response.headers,
+				});
+			})
 
-		// Payments routes
-		.all('/payments*', async (ctx: ContextWithUser) => {
-			const urlPath = new URL(ctx.request.url).pathname;
-			const response = await proxyRequest(
-				PAYMENTS_SERVICE_URL,
-				urlPath,
-				ctx.request.method,
-				ctx.request.headers,
-				ctx.request.body,
-				ctx.user
-			);
-			return new Response(response.body, {
-				status: response.status,
-				headers: response.headers,
-			});
-		})
+			// Orders routes
+			.all('/orders*', async (ctx: ContextWithUser) => {
+				const urlPath = new URL(ctx.request.url).pathname;
+				const response = await proxyRequest(
+					ORDERS_SERVICE_URL,
+					urlPath,
+					ctx.request.method,
+					ctx.request.headers,
+					ctx.request.body,
+					ctx.user,
+				);
+				return new Response(response.body, {
+					status: response.status,
+					headers: response.headers,
+				});
+			})
 
-		// Products routes
-		.all('/products*', async (ctx: ContextWithUser) => {
-			const urlPath = new URL(ctx.request.url).pathname;
-			const response = await proxyRequest(
-				PRODUCTS_SERVICE_URL,
-				urlPath,
-				ctx.request.method,
-				ctx.request.headers,
-				ctx.request.body,
-				ctx.user
-			);
-			return new Response(response.body, {
-				status: response.status,
-				headers: response.headers,
-			});
-		})
+			// Payments routes
+			.all('/payments*', async (ctx: ContextWithUser) => {
+				const urlPath = new URL(ctx.request.url).pathname;
+				const response = await proxyRequest(
+					PAYMENTS_SERVICE_URL,
+					urlPath,
+					ctx.request.method,
+					ctx.request.headers,
+					ctx.request.body,
+					ctx.user,
+				);
+				return new Response(response.body, {
+					status: response.status,
+					headers: response.headers,
+				});
+			})
 
-		// Users routes
-		.all('/users*', async (ctx: ContextWithUser) => {
-			const urlPath = new URL(ctx.request.url).pathname;
-			const response = await proxyRequest(
-				USERS_SERVICE_URL,
-				urlPath,
-				ctx.request.method,
-				ctx.request.headers,
-				ctx.request.body,
-				ctx.user
-			);
-			return new Response(response.body, {
-				status: response.status,
-				headers: response.headers,
-			});
-		});
+			// Products routes
+			.all('/products*', async (ctx: ContextWithUser) => {
+				const urlPath = new URL(ctx.request.url).pathname;
+				const response = await proxyRequest(
+					PRODUCTS_SERVICE_URL,
+					urlPath,
+					ctx.request.method,
+					ctx.request.headers,
+					ctx.request.body,
+					ctx.user,
+				);
+				return new Response(response.body, {
+					status: response.status,
+					headers: response.headers,
+				});
+			})
+
+			// Users routes
+			.all('/users*', async (ctx: ContextWithUser) => {
+				const urlPath = new URL(ctx.request.url).pathname;
+				const response = await proxyRequest(
+					USERS_SERVICE_URL,
+					urlPath,
+					ctx.request.method,
+					ctx.request.headers,
+					ctx.request.body,
+					ctx.user,
+				);
+				return new Response(response.body, {
+					status: response.status,
+					headers: response.headers,
+				});
+			})
+	);
 }

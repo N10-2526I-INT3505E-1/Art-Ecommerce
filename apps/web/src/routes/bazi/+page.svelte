@@ -2,91 +2,309 @@
 <script lang="ts">
 	import {
 		Calendar,
-		Heart,
 		Info,
 		Save,
-		Scale,
-		Shield,
-		ShieldX,
 		Sparkles,
 		User,
-		VenetianMask,
+		Activity,
+		TrendingUp,
+		AlertTriangle,
+		CheckCircle2,
+		XCircle,
+		ArrowRight,
+		Search,
+		Share2,
+		Printer,
+		ChevronDown,
+		ChevronUp,
 	} from 'lucide-svelte';
 	import { enhance } from '$app/forms';
+	import { browser } from '$app/environment';
 	import { toastStore } from '$lib/toastStore';
 
-	let { data, form } = $props();
+	const { data, form } = $props();
 
-	// --- STATE MANAGEMENT ---
+	// ============================================================
+	// TYPE DEFINITIONS
+	// ============================================================
+	interface EnergyModification {
+		reason: string;
+		valueChange: number;
+		factor?: number;
+	}
+
+	interface EnergyNode {
+		id: string;
+		name: string;
+		element: string;
+		source: 'Year' | 'Month' | 'Day' | 'Hour';
+		type: 'Stem' | 'HiddenStem';
+		baseScore: number;
+		currentScore: number;
+		lifeCycleStage: string;
+		isBlocked: boolean;
+		isCombined?: boolean;
+		transformTo?: string;
+		modifications: EnergyModification[];
+	}
+
+	interface LimitScoreProfile {
+		dungThan: string[];
+		hyThan: string[];
+		kyThan: string[];
+		hungThan: string[];
+		scores: Record<string, number>;
+	}
+
+	interface CenterAnalysis {
+		dayMasterScore: number;
+		partyScore: number;
+		enemyScore: number;
+		diffScore: number;
+		isVwang: boolean;
+		isStrongVwang: boolean;
+		isWeakVwang: boolean;
+	}
+
+	interface BaziProfileUI extends Omit<
+		App.BaziProfile,
+		'center_analysis' | 'energy_flow' | 'limit_score'
+	> {
+		center_analysis?: CenterAnalysis;
+		energy_flow?: EnergyNode[];
+		limit_score?: LimitScoreProfile;
+		analysis_reason?: string;
+		year_stem?: string;
+		year_branch?: string;
+		month_stem?: string;
+		month_branch?: string;
+		day_stem?: string;
+		day_branch?: string;
+		hour_stem?: string;
+		hour_branch?: string;
+	}
+
+	type ElementName = 'Mộc' | 'Hỏa' | 'Thổ' | 'Kim' | 'Thủy';
+
+	interface ElementStyle {
+		name: string;
+		color: string;
+		text: string;
+		border: string;
+		bgSoft: string;
+		bgGradient: string;
+	}
+
+	// ============================================================
+	// CONSTANTS
+	// ============================================================
+	const ELEMENT_DETAILS: Record<ElementName, ElementStyle> = {
+		Mộc: {
+			name: 'Mộc',
+			color: 'bg-green-600',
+			text: 'text-green-600',
+			border: 'border-green-200',
+			bgSoft: 'bg-green-50',
+			bgGradient: 'from-green-500/10 to-green-500/5',
+		},
+		Hỏa: {
+			name: 'Hỏa',
+			color: 'bg-red-600',
+			text: 'text-red-600',
+			border: 'border-red-200',
+			bgSoft: 'bg-red-50',
+			bgGradient: 'from-red-500/10 to-red-500/5',
+		},
+		Thổ: {
+			name: 'Thổ',
+			color: 'bg-yellow-600',
+			text: 'text-yellow-600',
+			border: 'border-yellow-200',
+			bgSoft: 'bg-yellow-50',
+			bgGradient: 'from-yellow-500/10 to-yellow-500/5',
+		},
+		Kim: {
+			name: 'Kim',
+			color: 'bg-slate-500',
+			text: 'text-slate-600',
+			border: 'border-slate-200',
+			bgSoft: 'bg-slate-100',
+			bgGradient: 'from-slate-500/10 to-slate-500/5',
+		},
+		Thủy: {
+			name: 'Thủy',
+			color: 'bg-blue-600',
+			text: 'text-blue-600',
+			border: 'border-blue-200',
+			bgSoft: 'bg-blue-50',
+			bgGradient: 'from-blue-500/10 to-blue-500/5',
+		},
+	} as const;
+
+	const DEFAULT_ELEMENT_STYLE: ElementStyle = {
+		name: '',
+		color: 'bg-gray-500',
+		text: 'text-gray-600',
+		border: 'border-gray-200',
+		bgSoft: 'bg-gray-50',
+		bgGradient: 'from-gray-500/10 to-gray-500/5',
+	};
+
+	const SOURCE_MAP: Record<string, string> = {
+		Year: 'Năm',
+		Month: 'Tháng',
+		Day: 'Ngày',
+		Hour: 'Giờ',
+	} as const;
+
+	// ============================================================
+	// UTILITY FUNCTIONS
+	// ============================================================
+	function getElementStyle(el: string): ElementStyle {
+		return ELEMENT_DETAILS[el as ElementName] ?? { ...DEFAULT_ELEMENT_STYLE, name: el };
+	}
+
+	function formatScore(val: number): string {
+		return val.toFixed(2);
+	}
+
+	function formatSign(val: number): string {
+		return val > 0 ? `+${val.toFixed(2)}` : val.toFixed(2);
+	}
+
+	function padZero(num: number | undefined, length = 2): string {
+		return String(num ?? 0).padStart(length, '0');
+	}
+
+	function shouldShowNode(node: EnergyNode): boolean {
+		if (node.source === 'Day' && node.type === 'Stem') return true;
+		return !node.isBlocked || node.currentScore > 0.01 || node.modifications.length > 0;
+	}
+
+	function formatBirthDate(profile: BaziProfileUI): string {
+		const { birth_day, birth_month, birth_year, birth_hour, birth_minute } = profile;
+		if (!birth_day || !birth_month || !birth_year) return '';
+		return `${padZero(birth_day)}/${padZero(birth_month)}/${birth_year} - ${padZero(birth_hour)}:${padZero(birth_minute)}`;
+	}
+
+	function scrollToElement(id: string): void {
+		if (browser) {
+			document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
+		}
+	}
+
+	function focusElement(id: string): void {
+		if (browser) {
+			(document.getElementById(id) as HTMLElement)?.focus();
+		}
+	}
+
+	// ============================================================
+	// STATE
+	// ============================================================
 	let loading = $state(false);
-	let showHelp = $state(false);
-	let baziProfile = $state<App.BaziProfile | null>(data.baziProfile);
+	let baziProfile = $state<BaziProfileUI | null>((data.baziProfile as BaziProfileUI) ?? null);
+	let auditSearchTerm = $state('');
+	let isAuditExpanded = $state(false);
+	let showEnergyTable = $state(true);
 
-	// Constants for display
-	const CAN = ['Giáp', 'Ất', 'Bính', 'Đinh', 'Mậu', 'Kỷ', 'Canh', 'Tân', 'Nhâm', 'Quý'];
-	const CHI = ['Tý', 'Sửu', 'Dần', 'Mão', 'Thìn', 'Tỵ', 'Ngọ', 'Mùi', 'Thân', 'Dậu', 'Tuất', 'Hợi'];
+	// Form state (grouped for cleaner management)
+	let formData = $state({
+		profile_name: `${data.user?.first_name ?? ''} ${data.user?.last_name ?? ''}`.trim(),
+		gender: 'male',
+		birth_date: '',
+		birth_time: '',
+	});
 
-	const ELEMENT_DETAILS = {
-		Mộc: { name: 'Mộc', color: 'bg-green-700', text: 'text-green-700' },
-		Hỏa: { name: 'Hỏa', color: 'bg-red-600', text: 'text-red-600' },
-		Thổ: { name: 'Thổ', color: 'bg-yellow-700', text: 'text-yellow-700' },
-		Kim: { name: 'Kim', color: 'bg-gray-500', text: 'text-gray-500' },
-		Thủy: { name: 'Thủy', color: 'bg-blue-700', text: 'text-blue-700' },
-	} as const;
+	// ============================================================
+	// DERIVED STATE
+	// ============================================================
+	const formattedBirthDate = $derived(baziProfile ? formatBirthDate(baziProfile) : '');
 
-	const TEN_GODS_DETAILS = {
-		TyKiep: { name: 'Tỷ Kiếp', desc: 'Bạn bè, anh em, cái tôi' },
-		KieuAn: { name: 'Kiêu Ấn', desc: 'Học hành, danh tiếng, mẹ' },
-		ThucThuong: { name: 'Thực Thương', desc: 'Sáng tạo, con cái, lời nói' },
-		TaiTinh: { name: 'Tài Tinh', desc: 'Tiền bạc, cha, vợ' },
-		QuanSat: { name: 'Quan Sát', desc: 'Quyền lực, công việc, chồng' },
-	} as const;
+	const auditLogs = $derived(baziProfile?.analysis_reason?.split('\n').filter(Boolean) ?? []);
 
-	// --- FORM STATE ---
-	let birth_date = $state('');
-	let birth_time = $state('');
-	let gender = $state('');
-	let profile_name = $state(`${data.user.first_name} ${data.user.last_name}`);
-
-	// --- DERIVED STATE ---
-	let formattedBirthDate = $derived(
-		baziProfile
-			? `${baziProfile.birth_day}/${baziProfile.birth_month}/${baziProfile.birth_year} - ${String(baziProfile.birth_hour).padStart(2, '0')}:${String(baziProfile.birth_minute ?? 0).padStart(2, '0')}`
-			: '',
+	const filteredAuditLogs = $derived(
+		auditSearchTerm
+			? auditLogs.filter((log) => log.toLowerCase().includes(auditSearchTerm.toLowerCase()))
+			: auditLogs,
 	);
 
-	let dayMasterDisplay = $derived(
-		baziProfile ? `${CAN[baziProfile.day_stem]} ${CHI[baziProfile.day_branch]}` : '',
-	);
+	const isDayMasterStrong = $derived(baziProfile?.center_analysis?.isVwang ?? false);
 
-	let maxElementScore = $derived(
-		baziProfile?.element_scores
-			? Math.max(...Object.values(baziProfile.element_scores as Record<string, number>))
-			: 0,
-	);
+	const todayISO = $derived(new Date().toISOString().split('T')[0]);
 
-	let isDayMasterStrong = $derived(
-		baziProfile?.day_master_status?.includes('Vượng') ||
-			baziProfile?.day_master_status?.includes('Cường'),
-	);
+	const visibleEnergyNodes = $derived(baziProfile?.energy_flow?.filter(shouldShowNode) ?? []);
 
-	// --- EFFECTS ---
+	const balancePercentages = $derived.by(() => {
+		const ca = baziProfile?.center_analysis;
+		if (!ca) return { party: 50, enemy: 50 };
+		const total = ca.partyScore + ca.enemyScore;
+		const party = total ? (ca.partyScore / total) * 100 : 50;
+		return { party, enemy: 100 - party };
+	});
+
+	// ============================================================
+	// ACTIONS
+	// ============================================================
+	async function handleShare(): Promise<void> {
+		if (!browser || !baziProfile) return;
+
+		const shareData = {
+			title: `Lá Số Bát Tự - ${baziProfile.profile_name}`,
+			text: `Thân ${baziProfile.day_master_status} - ${formattedBirthDate}`,
+			url: window.location.href,
+		};
+
+		if (navigator.canShare?.(shareData)) {
+			try {
+				await navigator.share(shareData);
+			} catch (err) {
+				if ((err as Error).name !== 'AbortError') {
+					copyToClipboard();
+				}
+			}
+		} else {
+			copyToClipboard();
+		}
+	}
+
+	function copyToClipboard(): void {
+		if (!browser) return;
+		navigator.clipboard.writeText(window.location.href).then(() => {
+			toastStore.trigger({
+				message: 'Đã sao chép liên kết!',
+				background: 'variant-filled-success',
+			});
+		});
+	}
+
+	function handlePrint(): void {
+		if (browser) window.print();
+	}
+
+	// ============================================================
+	// EFFECTS
+	// ============================================================
+	// Sync form data when profile changes
 	$effect(() => {
 		if (baziProfile) {
-			birth_date = `${baziProfile.birth_year}-${String(baziProfile.birth_month).padStart(2, '0')}-${String(baziProfile.birth_day).padStart(2, '0')}`;
-			birth_time = `${String(baziProfile.birth_hour).padStart(2, '0')}:${String(baziProfile.birth_minute ?? 0).padStart(2, '0')}`;
-			gender = baziProfile.gender || '';
-			profile_name = baziProfile.profile_name || `${data.user.first_name} ${data.user.last_name}`;
+			const { birth_year, birth_month, birth_day, birth_hour, birth_minute } = baziProfile;
+			formData.birth_date = `${birth_year}-${padZero(birth_month)}-${padZero(birth_day)}`;
+			formData.birth_time = `${padZero(birth_hour)}:${padZero(birth_minute)}`;
+			formData.gender = baziProfile.gender ?? 'male';
+			formData.profile_name = baziProfile.profile_name || formData.profile_name;
 		}
 	});
 
+	// Handle form submission response
 	$effect(() => {
-		if (form?.success) {
-			baziProfile = form.baziProfile;
+		if (form?.success && form.baziProfile) {
+			baziProfile = form.baziProfile as BaziProfileUI;
 			toastStore.trigger({
-				message: 'Lưu lá số Bát Tự thành công!',
+				message: 'Phân tích thành công!',
 				background: 'variant-filled-success',
 			});
+			setTimeout(() => scrollToElement('results-top'), 100);
 		} else if (form?.message) {
 			toastStore.trigger({
 				message: form.message,
@@ -94,925 +312,878 @@
 			});
 		}
 	});
+
+	// Keyboard shortcuts
+	$effect(() => {
+		if (!browser) return;
+
+		function handleKeydown(e: KeyboardEvent): void {
+			if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+				e.preventDefault();
+				handlePrint();
+			}
+		}
+
+		document.addEventListener('keydown', handleKeydown);
+		return () => document.removeEventListener('keydown', handleKeydown);
+	});
 </script>
+
+<!-- ============================================================ -->
+<!-- SNIPPETS (Reusable Template Fragments) -->
+<!-- ============================================================ -->
 
 {#snippet pillarCard(
 	title: string,
-	stem: number,
-	branch: number,
+	stem: string | undefined,
+	branch: string | undefined,
 	subtitle: string,
-	isHighlighted = false,
+	isDay = false,
 )}
-	<div
-		class="rounded-lg p-3 text-center backdrop-blur-sm transition-all
-        {isHighlighted
-			? 'bg-accent/30 border-accent hover:shadow-accent/50 order-first border-2 shadow-lg md:order-none'
-			: 'border border-white/20 bg-white/10 hover:bg-white/15'}
-        sm:rounded-xl sm:p-4 md:p-5"
+	<article
+		class="pillar-card group relative overflow-hidden rounded-xl border p-3 text-center transition-all duration-300 sm:p-4
+			{isDay
+			? 'border-primary from-primary/10 to-primary/5 ring-primary/30 bg-gradient-to-br shadow-lg ring-2'
+			: 'border-base-200 bg-base-100/50 hover:border-primary/20 hover:-translate-y-1 hover:shadow-md'}"
+		aria-label="{title}: {stem ?? 'Chưa có'} - {branch ?? 'Chưa có'}"
 	>
-		<p
-			class="mb-1.5 text-[10px] font-semibold tracking-wider uppercase sm:mb-2 sm:text-xs"
-			class:opacity-80={!isHighlighted}
-			class:opacity-90={isHighlighted}
-		>
-			{title}
-			{isHighlighted ? '⭐' : ''}
-		</p>
-		<p
-			class="font-heading text-xl leading-tight font-bold sm:text-2xl md:text-3xl"
-			class:text-accent-content={isHighlighted}
-		>
-			{CAN[stem]}<br />{CHI[branch]}
-		</p>
-		<p
-			class="mt-1.5 text-[9px] sm:mt-2 sm:text-[10px] md:text-xs"
-			class:opacity-70={!isHighlighted}
-			class:opacity-90={isHighlighted}
-			class:font-semibold={isHighlighted}
-		>
-			{subtitle}
-		</p>
-	</div>
+		{#if isDay}
+			<div
+				class="bg-primary/10 absolute -top-6 -right-6 h-16 w-16 animate-pulse rounded-full"
+				aria-hidden="true"
+			></div>
+		{/if}
+
+		<div class="relative">
+			<header
+				class="mb-2 flex items-center justify-center gap-1 text-[10px] font-bold tracking-wider uppercase opacity-60"
+			>
+				{title}
+				{#if isDay}
+					<span
+						class="bg-primary inline-block h-1.5 w-1.5 animate-pulse rounded-full"
+						aria-hidden="true"
+					></span>
+				{/if}
+			</header>
+
+			<div
+				class="font-heading flex flex-col items-center justify-center gap-1 text-2xl font-black transition-all sm:text-3xl"
+			>
+				<span
+					class="transition-transform group-hover:scale-110 {isDay
+						? 'text-primary text-3xl sm:text-4xl'
+						: ''}"
+				>
+					{stem ?? '-'}
+				</span>
+				<span class="text-xl opacity-80 sm:text-2xl">{branch ?? '-'}</span>
+			</div>
+
+			<footer class="mt-3 text-[10px] font-medium tracking-wide uppercase opacity-50">
+				{subtitle}
+			</footer>
+		</div>
+	</article>
 {/snippet}
 
-{#snippet elementBar(elementName: keyof typeof ELEMENT_DETAILS, score: number)}
-	{@const detail = ELEMENT_DETAILS[elementName]}
-	{@const widthPercent = maxElementScore > 0 ? (score / maxElementScore) * 100 : 0}
-	<div class="flex items-center gap-2 sm:gap-3">
-		<span class="w-10 shrink-0 text-xs font-medium sm:w-12 sm:text-sm {detail.text}"
-			>{detail.name}</span
-		>
-		<div class="bg-base-200 w-full rounded-full">
-			<div
-				class="rounded-full {detail.color} p-0.5 text-center text-[9px] font-medium text-white transition-all duration-500 sm:p-1 sm:text-[10px]"
-				style="width: {widthPercent}%; min-width: {score > 0 ? '1.75rem' : '0'}"
-			>
-				{score.toFixed(1)}
-			</div>
+{#snippet elementTag(element: string)}
+	{@const style = getElementStyle(element)}
+	<span
+		class="inline-flex items-center justify-center rounded-md border px-2 py-0.5 text-[10px] font-bold transition-all hover:scale-105 {style.bgSoft} {style.text} {style.border}"
+		role="img"
+		aria-label="Ngũ hành {element}"
+	>
+		{element}
+	</span>
+{/snippet}
+
+{#snippet statCard(
+	title: string,
+	value: number,
+	description: string,
+	variant: 'success' | 'error' | 'warning' | 'neutral' = 'neutral',
+	showSign = false,
+)}
+	{@const colorMap = {
+		success: 'text-success',
+		error: 'text-error',
+		warning: 'text-warning',
+		neutral: 'text-base-content',
+	}}
+	{@const displayValue = showSign ? formatSign(value) : formatScore(value)}
+	<div class="stats border-base-200 border shadow">
+		<div class="stat p-3 sm:p-4">
+			<div class="stat-title text-xs">{title}</div>
+			<div class="stat-value text-xl sm:text-2xl {colorMap[variant]}">{displayValue}</div>
+			<div class="stat-desc text-[9px]">{description}</div>
 		</div>
 	</div>
 {/snippet}
 
+{#snippet loadingSkeleton()}
+	<div class="animate-pulse space-y-6" aria-busy="true" aria-label="Đang tải...">
+		<div class="card border-base-200 bg-base-100 border">
+			<div class="card-body p-5">
+				<div class="bg-base-200 mb-4 h-6 w-48 rounded"></div>
+				<div class="grid grid-cols-4 gap-4">
+					{#each { length: 4 } as _}
+						<div class="bg-base-200 h-32 rounded-xl"></div>
+					{/each}
+				</div>
+			</div>
+		</div>
+		<div class="bg-base-200 h-64 rounded-xl"></div>
+		<div class="bg-base-200 h-96 rounded-xl"></div>
+	</div>
+{/snippet}
+
+{#snippet emptyState()}
+	<div class="flex flex-col items-center justify-center py-16 text-center">
+		<Sparkles class="text-base-300 mb-4 h-20 w-20 animate-pulse" aria-hidden="true" />
+		<h2 class="text-2xl font-bold">Chưa có dữ liệu</h2>
+		<p class="text-base-content/60 mt-2 text-sm">
+			Vui lòng nhập thông tin ngày giờ sinh bên dưới để bắt đầu.
+		</p>
+		<button class="btn btn-primary mt-6 gap-2" onclick={() => focusElement('profile_name')}>
+			<Sparkles class="h-4 w-4" aria-hidden="true" />
+			Bắt đầu ngay
+		</button>
+	</div>
+{/snippet}
+
+<!-- ============================================================ -->
+<!-- HEAD -->
+<!-- ============================================================ -->
 <svelte:head>
-	<title>Lá Số Bát Tự - Art Ecommerce</title>
+	<title>Lá Số Tứ Trụ - {baziProfile?.profile_name || 'Bát Tự Tử Bình'}</title>
+	<meta name="description" content="Phân tích lá số Bát tự Tử Bình và xác định Dụng thần" />
 </svelte:head>
 
-<div class="from-base-200 to-base-100 min-h-screen bg-gradient-to-b">
-	<div class="w-full px-3 py-4 sm:px-4 sm:py-6 md:px-8 md:py-10 lg:px-12">
-		<div class="mx-auto max-w-4xl space-y-4 sm:space-y-6 md:space-y-8">
-			<!-- Header -->
-			<header class="text-center">
-				<div class="mb-2 inline-flex items-center gap-2">
-					<Sparkles class="text-primary h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7" />
-					<h1 class="font-heading text-base-content text-2xl font-bold sm:text-3xl md:text-4xl">
-						Lá Số Bát Tự Của Bạn
-					</h1>
-				</div>
-				<p class="text-base-content/70 mx-auto mt-2 max-w-2xl px-2 text-xs sm:text-sm md:text-base">
-					Nhập thông tin ngày giờ sinh để khám phá Tứ Trụ và Nhật Chủ trong hệ thống Bát Tự.
-				</p>
-			</header>
+<!-- ============================================================ -->
+<!-- MAIN LAYOUT -->
+<!-- ============================================================ -->
+<div class="from-base-200/50 to-base-100 min-h-screen bg-gradient-to-b pb-24">
+	<div class="mx-auto w-full max-w-6xl px-3 py-6 sm:px-6">
+		<!-- ==================== STICKY HEADER ==================== -->
+		<header
+			class="border-base-200 bg-base-100/95 sticky top-0 z-20 mb-6 rounded-lg border shadow-sm backdrop-blur-sm print:hidden"
+		>
+			<div class="px-4 py-4 sm:px-6">
+				<div class="flex items-center justify-between">
+					<div class="flex items-center gap-2">
+						<Sparkles class="text-primary h-6 w-6" aria-hidden="true" />
+						<h1 class="font-heading text-base-content text-xl font-black sm:text-2xl">
+							Bát Tự Định Lượng
+						</h1>
+					</div>
 
-			<!-- Bazi Chart Display -->
-			{#if baziProfile}
-				<div
-					class="card border-primary/20 from-primary/90 to-secondary/90 text-primary-content border bg-gradient-to-br shadow-xl"
-				>
-					<div class="card-body p-4 sm:p-5 md:p-8">
-						<!-- Profile Header -->
-						<div class="mb-4 sm:mb-6">
-							<h2 class="mb-1 text-xl font-bold sm:text-2xl md:text-3xl">
-								{baziProfile.profile_name}
-							</h2>
-							<p
-								class="text-primary-content/80 flex items-center gap-2 text-xs sm:text-sm md:text-base"
+					{#if baziProfile}
+						<nav class="flex gap-2" aria-label="Hành động">
+							<button
+								class="btn btn-ghost btn-sm gap-2"
+								onclick={handleShare}
+								aria-label="Chia sẻ kết quả"
 							>
-								<Calendar class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-								{formattedBirthDate}
-							</p>
-							<p class="text-primary-content/90 mt-2 text-xs font-medium sm:text-sm">
-								Nhật Chủ: <span class="text-sm font-bold sm:text-base md:text-lg">
-									{dayMasterDisplay}
-								</span>
-							</p>
-						</div>
+								<Share2 class="h-4 w-4" aria-hidden="true" />
+								<span class="hidden sm:inline">Chia sẻ</span>
+							</button>
+							<button
+								class="btn btn-ghost btn-sm gap-2"
+								onclick={handlePrint}
+								aria-label="In hoặc lưu PDF (Ctrl+P)"
+							>
+								<Printer class="h-4 w-4" aria-hidden="true" />
+								<span class="hidden sm:inline">In</span>
+							</button>
+							<button
+								class="btn btn-primary btn-sm gap-2"
+								onclick={() => scrollToElement('bazi-form')}
+							>
+								<User class="h-4 w-4" aria-hidden="true" />
+								<span class="hidden sm:inline">Nhập lại</span>
+							</button>
+						</nav>
+					{/if}
+				</div>
 
-						<!-- Four Pillars Grid -->
-						<div class="grid grid-cols-2 gap-2 sm:gap-3 md:grid-cols-4 md:gap-4">
-							{@render pillarCard(
-								'Trụ Giờ',
-								baziProfile.hour_stem,
-								baziProfile.hour_branch,
-								'Tự thân',
-							)}
-							{@render pillarCard(
-								'Trụ Ngày',
-								baziProfile.day_stem,
-								baziProfile.day_branch,
+				{#if !baziProfile}
+					<p class="text-base-content/70 mx-auto mt-2 max-w-2xl px-2 text-xs sm:text-sm">
+						Nhập thông tin ngày giờ sinh để lập lá số Bát tự Tử Bình và xác định Dụng thần.
+					</p>
+				{/if}
+			</div>
+		</header>
+
+		<div id="results-top"></div>
+
+		<!-- ==================== MAIN CONTENT ==================== -->
+		{#if loading}
+			{@render loadingSkeleton()}
+		{:else if baziProfile}
+			<main class="grid grid-cols-1 gap-6 lg:grid-cols-12">
+				<!-- ========== LEFT COLUMN: Main Chart & Analysis ========== -->
+				<div class="space-y-6 lg:col-span-8">
+					<!-- Four Pillars Card -->
+					<section
+						class="card border-base-200 bg-base-100 border shadow-sm transition-all hover:shadow-md"
+						aria-labelledby="pillars-heading"
+					>
+						<div class="card-body p-5">
+							<header class="mb-6 flex flex-wrap items-center justify-between gap-4">
+								<div>
+									<h2 id="pillars-heading" class="flex items-center gap-2 text-xl font-bold">
+										{baziProfile.profile_name}
+										<span class="badge badge-sm">
+											{baziProfile.gender === 'male' ? 'Nam' : 'Nữ'}
+										</span>
+									</h2>
+									<div class="mt-1 flex items-center gap-2 text-xs opacity-60">
+										<Calendar class="h-3 w-3" aria-hidden="true" />
+										<time>{formattedBirthDate}</time>
+									</div>
+								</div>
+								<div class="text-right">
+									<div
+										class="badge badge-lg font-bold {isDayMasterStrong
+											? 'badge-success text-white'
+											: 'badge-warning'}"
+									>
+										Thân {baziProfile.day_master_status}
+									</div>
+									<div class="mt-1 font-mono text-[10px] opacity-60">
+										{baziProfile.structure_name}
+									</div>
+								</div>
+							</header>
+
+							<div class="grid grid-cols-4 gap-2 sm:gap-4" role="list" aria-label="Tứ trụ">
+								{@render pillarCard(
+									'Giờ',
+									baziProfile.hour_stem,
+									baziProfile.hour_branch,
+									'Con cái',
+								)}
+								{@render pillarCard(
+									'Ngày',
+									baziProfile.day_stem,
+									baziProfile.day_branch,
+									'Nhật Chủ',
+									true,
+								)}
+								{@render pillarCard(
+									'Tháng',
+									baziProfile.month_stem,
+									baziProfile.month_branch,
+									'Sự nghiệp',
+								)}
+								{@render pillarCard(
+									'Năm',
+									baziProfile.year_stem,
+									baziProfile.year_branch,
+									'Tổ tiên',
+								)}
+							</div>
+						</div>
+					</section>
+
+					<!-- Quick Stats -->
+					{#if baziProfile.center_analysis}
+						{@const ca = baziProfile.center_analysis}
+						<section class="grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="Thống kê nhanh">
+							{@render statCard(
 								'Nhật Chủ',
+								ca.dayMasterScore,
+								isDayMasterStrong ? 'Vượng' : 'Yếu',
+								isDayMasterStrong ? 'success' : 'warning',
+							)}
+							{@render statCard('Phe Ta', ca.partyScore, 'Ấn + Tỷ', 'success')}
+							{@render statCard('Phe Địch', ca.enemyScore, 'Tài + Quan + Thực', 'error')}
+							{@render statCard(
+								'Hiệu Số',
+								ca.diffScore,
+								'Độ lệch',
+								ca.diffScore >= 0 ? 'success' : 'error',
 								true,
 							)}
-							{@render pillarCard(
-								'Trụ Tháng',
-								baziProfile.month_stem,
-								baziProfile.month_branch,
-								'Gia đạo',
-							)}
-							{@render pillarCard(
-								'Trụ Năm',
-								baziProfile.year_stem,
-								baziProfile.year_branch,
-								'Tổ tiên',
-							)}
-						</div>
+						</section>
+					{/if}
 
-						<!-- Quick Guide Toggle -->
-						<button
-							type="button"
-							onclick={() => (showHelp = !showHelp)}
-							class="btn btn-ghost btn-sm text-primary-content/80 hover:text-primary-content mt-3 gap-1.5 self-start text-xs sm:mt-4 sm:gap-2 sm:text-sm"
+					<!-- Center Analysis Balance -->
+					{#if baziProfile.center_analysis}
+						{@const ca = baziProfile.center_analysis}
+						<section
+							class="card border-base-200 bg-base-100 border shadow-sm"
+							aria-labelledby="balance-heading"
 						>
-							<Info class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-							{showHelp ? 'Ẩn' : 'Xem'} giải thích nhanh
-						</button>
+							<div class="card-body p-5">
+								<h3 id="balance-heading" class="mb-4 flex items-center gap-2 text-base font-bold">
+									<TrendingUp class="text-primary h-4 w-4" aria-hidden="true" />
+									Cân Bằng Vùng Tâm (Nội Bộ)
+								</h3>
 
-						{#if showHelp}
-							<div
-								class="text-primary-content/90 mt-3 space-y-1.5 rounded-lg bg-black/20 p-3 text-xs leading-relaxed sm:space-y-2 sm:p-4 sm:text-sm"
-							>
-								<p><strong>• Trụ Năm:</strong> Đại diện cho tổ tiên, môi trường sớm (0-16 tuổi)</p>
-								<p><strong>• Trụ Tháng:</strong> Gia đạo, cha mẹ, sự nghiệp (17-32 tuổi)</p>
-								<p>
-									<strong>• Trụ Ngày (Nhật Chủ):</strong> Bản thân, vợ/chồng, cốt lõi tính cách
-								</p>
-								<p>
-									<strong>• Trụ Giờ:</strong> Con cái, tuổi già, kết quả cuộc đời (sau 48 tuổi)
+								<div class="flex flex-col gap-4 sm:flex-row sm:items-center">
+									<div class="flex-1 space-y-2">
+										<div
+											class="flex justify-between text-[10px] font-bold tracking-wider uppercase"
+										>
+											<span class="text-success">Phe Ta: {formatScore(ca.partyScore)}</span>
+											<span class="text-error">Phe Địch: {formatScore(ca.enemyScore)}</span>
+										</div>
+
+										<div
+											class="bg-base-200 flex h-5 w-full overflow-hidden rounded-full shadow-inner"
+											role="progressbar"
+											aria-valuenow={balancePercentages.party}
+											aria-valuemin={0}
+											aria-valuemax={100}
+											aria-label="Tỷ lệ Phe Ta so với Phe Địch"
+										>
+											<div
+												class="bg-success h-full transition-all duration-700 ease-out"
+												style="width: {balancePercentages.party}%"
+											></div>
+											<div
+												class="bg-error h-full transition-all duration-700 ease-out"
+												style="width: {balancePercentages.enemy}%"
+											></div>
+										</div>
+
+										<div class="flex justify-between text-[9px] opacity-50">
+											<span>{balancePercentages.party.toFixed(1)}%</span>
+											<span>{balancePercentages.enemy.toFixed(1)}%</span>
+										</div>
+									</div>
+
+									<div
+										class="border-base-200 bg-base-200/50 flex min-w-[90px] flex-col items-center justify-center rounded-lg border p-3"
+									>
+										<span class="text-[9px] font-bold uppercase opacity-50">Hiệu Số</span>
+										<span
+											class="font-mono text-3xl font-black {ca.diffScore >= 0
+												? 'text-success'
+												: 'text-error'}"
+										>
+											{formatSign(ca.diffScore)}
+										</span>
+									</div>
+								</div>
+
+								<p class="mt-3 text-[11px] italic opacity-60">
+									* Hiệu số dương > 5.0 thường là Thân Vượng. Điểm số dựa trên độ vượng tại Lệnh
+									tháng và dòng chảy vào Vùng tâm.
 								</p>
 							</div>
-						{/if}
-					</div>
+						</section>
+					{/if}
+
+					<!-- Energy Flow Table -->
+					{#if baziProfile.energy_flow && visibleEnergyNodes.length > 0}
+						<section
+							class="card border-base-200 bg-base-100 overflow-hidden border shadow-sm"
+							aria-labelledby="energy-heading"
+						>
+							<header
+								class="border-base-200 bg-base-200/80 sticky top-[72px] z-10 flex items-center justify-between border-b px-5 py-3 backdrop-blur-sm"
+							>
+								<h3 id="energy-heading" class="flex items-center gap-2 text-sm font-bold">
+									<Activity class="text-secondary h-4 w-4" aria-hidden="true" />
+									Dòng Chảy & Biến Động Năng Lượng
+								</h3>
+								<div class="flex items-center gap-2">
+									<span class="badge badge-ghost badge-sm">
+										{visibleEnergyNodes.length} nodes
+									</span>
+									<button
+										class="btn btn-ghost btn-xs print:hidden"
+										onclick={() => (showEnergyTable = !showEnergyTable)}
+										aria-expanded={showEnergyTable}
+										aria-controls="energy-table"
+									>
+										{#if showEnergyTable}
+											<ChevronUp class="h-3 w-3" aria-hidden="true" />
+											<span class="sr-only">Thu gọn</span>
+										{:else}
+											<ChevronDown class="h-3 w-3" aria-hidden="true" />
+											<span class="sr-only">Mở rộng</span>
+										{/if}
+									</button>
+								</div>
+							</header>
+
+							{#if showEnergyTable}
+								<div id="energy-table" class="overflow-x-auto">
+									<div class="max-h-[500px] overflow-y-auto">
+										<table class="table-xs table w-full">
+											<thead class="bg-base-200/90 sticky top-0 z-[5] backdrop-blur-sm">
+												<tr class="text-base-content/70">
+													<th class="w-20" scope="col">Nguồn</th>
+													<th class="w-32" scope="col">Thần</th>
+													<th class="w-20" scope="col">Hành</th>
+													<th class="w-24 text-right" scope="col">Điểm Gốc</th>
+													<th class="w-24 text-right" scope="col">Thực Tế</th>
+													<th scope="col">Lý Do Biến Động</th>
+												</tr>
+											</thead>
+											<tbody>
+												{#each visibleEnergyNodes as node (node.id)}
+													{@const scoreDiff = node.currentScore - node.baseScore}
+													<tr class="hover:bg-base-200/50 group transition-colors">
+														<td class="font-medium opacity-60">{SOURCE_MAP[node.source]}</td>
+														<td class="text-base-content font-bold">
+															<div class="flex items-center gap-2">
+																{node.name}
+																{#if node.source === 'Day' && node.type === 'Stem'}
+																	<span class="badge badge-primary badge-xs">Chủ</span>
+																{/if}
+															</div>
+														</td>
+														<td>{@render elementTag(node.element)}</td>
+														<td class="text-right font-mono opacity-40">
+															{formatScore(node.baseScore)}
+														</td>
+														<td class="text-right font-mono font-bold">
+															<span
+																class={node.currentScore < node.baseScore
+																	? 'text-warning'
+																	: 'text-success'}
+															>
+																{formatScore(node.currentScore)}
+															</span>
+															{#if Math.abs(scoreDiff) > 0.01}
+																<span class="ml-1 text-xs opacity-50">
+																	({formatSign(scoreDiff)})
+																</span>
+															{/if}
+														</td>
+														<td class="space-y-1 py-2 text-[10px]">
+															{#if node.transformTo}
+																<div class="flex items-center gap-1 font-bold text-purple-600">
+																	<Sparkles class="h-3 w-3" aria-hidden="true" />
+																	Hóa {node.transformTo}
+																</div>
+															{/if}
+															{#if node.lifeCycleStage}
+																<div class="badge badge-ghost badge-xs">{node.lifeCycleStage}</div>
+															{/if}
+															{#each node.modifications as mod}
+																{#if Math.abs(mod.valueChange) > 0.01}
+																	<div
+																		class="flex items-center gap-1 {mod.valueChange > 0
+																			? 'text-success'
+																			: 'text-error'}"
+																	>
+																		<span class="w-8 text-right font-mono font-bold">
+																			{formatSign(mod.valueChange)}
+																		</span>
+																		<ArrowRight class="h-3 w-3 opacity-50" aria-hidden="true" />
+																		<span>{mod.reason}</span>
+																	</div>
+																{/if}
+															{/each}
+															{#if node.isBlocked}
+																<div class="badge badge-error badge-xs gap-1">
+																	<XCircle class="h-3 w-3" aria-hidden="true" />
+																	Vô Hiệu
+																</div>
+															{/if}
+														</td>
+													</tr>
+												{/each}
+											</tbody>
+										</table>
+									</div>
+								</div>
+							{/if}
+						</section>
+					{/if}
 				</div>
 
-				<!-- ANALYSIS PANEL -->
-				<div class="card border-base-200 bg-base-100 border shadow-md">
-					<div class="card-body gap-4 p-4 sm:gap-6 sm:p-5 md:p-8">
-						<div>
-							<h3
-								class="font-heading text-base-content flex items-center gap-2 text-lg font-semibold sm:text-xl md:text-2xl"
-							>
-								<Scale class="h-4 w-4 sm:h-5 sm:w-5" />
-								Luận Giải Sơ Bộ
-							</h3>
-							<p class="text-base-content/60 mt-1 text-xs sm:text-sm">
-								Phân tích cường nhược của Nhật Chủ và các yếu tố ngũ hành.
-							</p>
-						</div>
+				<!-- ========== RIGHT COLUMN: Sidebar ========== -->
+				<aside class="space-y-6 lg:col-span-4">
+					<!-- Limit Scores -->
+					{#if baziProfile.limit_score}
+						{@const ls = baziProfile.limit_score}
+						<section
+							class="card border-base-200 bg-base-100 border shadow-lg"
+							aria-labelledby="limit-heading"
+						>
+							<div class="card-body p-5">
+								<h3 id="limit-heading" class="mb-4 flex items-center gap-2 text-base font-bold">
+									<AlertTriangle class="text-warning h-4 w-4" aria-hidden="true" />
+									Hệ Thống Điểm Hạn
+								</h3>
 
-						<!-- Status & Gods -->
-						<div class="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
-							<!-- Day Master Status & Strength -->
-							<div class="bg-base-200 flex flex-col justify-between rounded-lg p-3 sm:p-4">
-								<div>
-									<div
-										class="text-base-content/60 text-[10px] font-semibold tracking-wide uppercase sm:text-xs"
-									>
-										Trạng thái Nhật Chủ
-									</div>
-									<div
-										class="mt-1 text-base font-bold sm:text-lg {isDayMasterStrong
-											? 'text-success'
-											: 'text-warning'}"
-									>
-										{baziProfile.day_master_status || 'Chưa xác định'}
-									</div>
-									{#if baziProfile.structure_name}
-										<div class="text-base-content/70 mt-1 text-[10px] sm:text-xs">
-											{baziProfile.structure_name}
-											{baziProfile.structure_type ? `(${baziProfile.structure_type})` : ''}
-										</div>
-									{/if}
-								</div>
-
-								<!-- Power Balance Bar -->
-								{#if baziProfile.party_score != null && baziProfile.enemy_score != null}
-									<div class="mt-3 sm:mt-4">
+								<div class="space-y-4">
+									<!-- Dụng Thần -->
+									<div class="border-success/20 bg-success/10 rounded-lg border p-3">
 										<div
-											class="text-base-content/60 mb-1 flex justify-between text-[9px] font-bold uppercase sm:text-[10px]"
+											class="text-success mb-2 flex items-center gap-1 text-xs font-bold uppercase"
 										>
-											<span>Phe Ta ({(baziProfile.percentage_self ?? 0).toFixed(1)}%)</span>
-											<span
-												>Phe Địch ({(100 - (baziProfile.percentage_self ?? 0)).toFixed(1)}%)</span
-											>
+											<CheckCircle2 class="h-3 w-3" aria-hidden="true" />
+											Dụng Thần (-1.0)
 										</div>
-										<div class="bg-base-300 flex h-2 w-full overflow-hidden rounded-full">
-											<div
-												class="bg-success transition-all duration-500"
-												style="width: {baziProfile.percentage_self}%"
-											></div>
-											<div
-												class="bg-error transition-all duration-500"
-												style="width: {100 - (baziProfile.percentage_self ?? 0)}%"
-											></div>
-										</div>
-										<div class="mt-1 flex justify-between text-[9px] opacity-70 sm:text-[10px]">
-											<span>{baziProfile.party_score.toFixed(1)} điểm</span>
-											<span>{baziProfile.enemy_score.toFixed(1)} điểm</span>
-										</div>
-									</div>
-								{/if}
-							</div>
-
-							<!-- Favorable Gods Summary -->
-							<div class="bg-base-200 rounded-lg p-3 sm:p-4">
-								<div
-									class="text-base-content/60 text-[10px] font-semibold tracking-wide uppercase sm:text-xs"
-								>
-									Tổng Quan Ngũ Hành
-								</div>
-								<div class="mt-2 flex flex-wrap gap-1.5 text-xs sm:gap-2">
-									{#if baziProfile.favorable_elements?.dung_than?.length}
-										<span
-											class="badge badge-success gap-1 p-2 font-bold text-white sm:gap-1.5 sm:p-3"
-										>
-											<Shield class="h-3 w-3" />
-											Dụng: {baziProfile.favorable_elements.dung_than.join(', ')}
-										</span>
-									{/if}
-									{#if baziProfile.favorable_elements?.hy_than?.length}
-										<span class="badge badge-info gap-1 p-2 font-bold text-white sm:gap-1.5 sm:p-3">
-											<Heart class="h-3 w-3" />
-											Hỷ: {baziProfile.favorable_elements.hy_than.join(', ')}
-										</span>
-									{/if}
-									{#if baziProfile.favorable_elements?.ky_than?.length}
-										<span
-											class="badge badge-error gap-1 p-2 font-bold text-white sm:gap-1.5 sm:p-3"
-										>
-											<ShieldX class="h-3 w-3" />
-											Kỵ: {baziProfile.favorable_elements.ky_than.join(', ')}
-										</span>
-									{/if}
-								</div>
-							</div>
-						</div>
-
-						<!-- Element Scores & God Scores -->
-						<div class="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
-							{#if baziProfile.element_scores}
-								<div class="space-y-2 sm:space-y-3">
-									<h4
-										class="text-base-content/60 text-xs font-semibold tracking-wide uppercase sm:text-sm"
-									>
-										Ngũ Hành (Năng Lượng Gốc)
-									</h4>
-									<div class="space-y-1.5 sm:space-y-2">
-										{#each Object.keys(ELEMENT_DETAILS) as elementKey}
-											{@const score = (baziProfile.element_scores as Record)[elementKey] || 0}
-											{@render elementBar(elementKey as keyof typeof ELEMENT_DETAILS, score)}
-										{/each}
-									</div>
-								</div>
-							{/if}
-
-							{#if baziProfile.god_scores}
-								<div class="space-y-2 sm:space-y-3">
-									<h4
-										class="text-base-content/60 text-xs font-semibold tracking-wide uppercase sm:text-sm"
-									>
-										Thập Thần (Năng Lượng Xã Hội)
-									</h4>
-									<div class="space-y-1.5 sm:space-y-2">
-										{#each Object.entries(baziProfile.god_scores) as [godKey, score]}
-											{@const detail = TEN_GODS_DETAILS[godKey as keyof typeof TEN_GODS_DETAILS]}
-											{#if detail}
-												<div class="flex items-center justify-between gap-2 text-xs sm:text-sm">
-													<div class="flex min-w-0 flex-col">
-														<span class="truncate font-medium">{detail.name}</span>
-														<span class="text-[9px] opacity-70 sm:text-[10px]">{detail.desc}</span>
-													</div>
-													<div class="flex shrink-0 items-center gap-1.5 sm:gap-2">
-														<progress
-															class="progress progress-primary w-16 sm:w-24"
-															value={score}
-															max={maxElementScore}
-														></progress>
-														<span class="w-6 text-right font-mono text-[10px] sm:w-8 sm:text-xs"
-															>{score.toFixed(0)}</span
-														>
-													</div>
-												</div>
+										<div class="flex flex-wrap gap-1" role="list">
+											{#each ls.dungThan as el}
+												{@render elementTag(el)}
+											{/each}
+											{#if ls.dungThan.length === 0}
+												<span class="text-[10px] opacity-40">Không có</span>
 											{/if}
-										{/each}
+										</div>
+									</div>
+
+									<!-- Hỷ Thần -->
+									<div class="border-info/20 bg-info/10 rounded-lg border p-3">
+										<div class="text-info mb-2 flex items-center gap-1 text-xs font-bold uppercase">
+											<Info class="h-3 w-3" aria-hidden="true" />
+											Hỷ Thần (-0.5)
+										</div>
+										<div class="flex flex-wrap gap-1" role="list">
+											{#if ls.hyThan.length > 0}
+												{#each ls.hyThan as el}
+													{@render elementTag(el)}
+												{/each}
+											{:else}
+												<span class="text-[10px] opacity-40">Không có</span>
+											{/if}
+										</div>
+									</div>
+
+									<!-- Kỵ / Hung Thần -->
+									<div class="border-error/20 bg-error/10 rounded-lg border p-3">
+										<div
+											class="text-error mb-2 flex items-center gap-1 text-xs font-bold uppercase"
+										>
+											<XCircle class="h-3 w-3" aria-hidden="true" />
+											Kỵ / Hung Thần (+0.5 ~ +1.0)
+										</div>
+										<div class="flex flex-wrap gap-1" role="list">
+											{#each [...ls.kyThan, ...ls.hungThan] as el}
+												{@render elementTag(el)}
+											{/each}
+											{#if ls.kyThan.length === 0 && ls.hungThan.length === 0}
+												<span class="text-[10px] opacity-40">Không có</span>
+											{/if}
+										</div>
 									</div>
 								</div>
-							{/if}
-						</div>
 
-						<!-- Interactions -->
-						{#if baziProfile.interactions && (baziProfile.interactions.tamHoi || baziProfile.interactions.sanHe || baziProfile.interactions.lucXung?.length)}
-							<div class="bg-base-200/50 rounded-lg p-3 sm:p-4">
-								<h4
-									class="text-base-content/60 mb-2 text-xs font-semibold tracking-wide uppercase sm:text-sm"
-								>
-									Cục Diện Địa Chi
-								</h4>
-								<div class="flex flex-wrap gap-1.5 text-xs sm:gap-2 sm:text-sm">
-									{#if baziProfile.interactions.tamHoi}
-										<span
-											class="badge badge-primary badge-outline gap-1 p-2 font-medium sm:gap-1.5 sm:p-3"
-										>
-											<Sparkles class="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-											Tam Hội {baziProfile.interactions.tamHoi}
-										</span>
-									{/if}
-									{#if baziProfile.interactions.sanHe}
-										<span
-											class="badge badge-secondary badge-outline gap-1 p-2 font-medium sm:gap-1.5 sm:p-3"
-										>
-											<Sparkles class="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-											Tam Hợp {baziProfile.interactions.sanHe}
-										</span>
-									{/if}
-									{#if baziProfile.interactions.lucXung?.length}
-										<span
-											class="badge badge-error badge-outline gap-1 p-2 font-medium sm:gap-1.5 sm:p-3"
-										>
-											<ShieldX class="h-3 w-3 sm:h-3.5 sm:w-3.5" />
-											Có Lục Xung
-										</span>
-									{/if}
-								</div>
-							</div>
-						{/if}
+								<div class="divider my-2 text-[10px] opacity-30">Tổng Hợp</div>
 
-						<!-- Shen Sha (Thần Sát) -->
-						{#if baziProfile.shen_sha && baziProfile.shen_sha.length > 0}
-							<div>
-								<h4
-									class="text-base-content/60 mb-2 text-xs font-semibold tracking-wide uppercase sm:mb-3 sm:text-sm"
+								<div
+									class="grid grid-cols-5 gap-1 text-center"
+									role="list"
+									aria-label="Điểm theo ngũ hành"
 								>
-									Thần Sát & Sao
-								</h4>
-								<div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
-									{#each baziProfile.shen_sha as sha}
-										<div
-											class="bg-base-200 text-base-content/80 flex items-center gap-2 rounded-lg px-3 py-2 text-xs sm:gap-3 sm:px-4 sm:py-3 sm:text-sm"
-										>
-											<Sparkles class="text-warning h-3.5 w-3.5 shrink-0 sm:h-4 sm:w-4" />
-											<span>{sha}</span>
+									{#each Object.entries(ls.scores) as [el, sc]}
+										<div class="border-base-200 bg-base-50 rounded border p-1.5">
+											<div class="text-[9px] font-bold opacity-60">{el}</div>
+											<div
+												class="font-mono text-xs font-bold {sc > 0
+													? 'text-error'
+													: sc < 0
+														? 'text-success'
+														: 'opacity-30'}"
+											>
+												{sc > 0 ? '+' : ''}{sc}
+											</div>
 										</div>
 									{/each}
 								</div>
 							</div>
-						{/if}
+						</section>
+					{/if}
 
-						<!-- Analysis Reason -->
-						{#if baziProfile.analysis_reason}
-							<div class="alert alert-info p-3 shadow-sm sm:p-4">
-								<Info class="h-4 w-4 shrink-0 sm:h-5 sm:w-5" />
-								<div class="flex min-w-0 flex-col gap-1">
-									<h4 class="text-sm font-bold sm:text-base">Luận Giải Chi Tiết</h4>
-									<span class="text-xs leading-relaxed sm:text-sm"
-										>{baziProfile.analysis_reason}</span
-									>
-								</div>
-							</div>
-						{/if}
-
-						<!-- Step-by-Step Calculation Details -->
-						<div class="collapse-arrow bg-base-200 border-base-300 collapse border">
-							<input type="checkbox" />
-							<div
-								class="collapse-title text-base-content/80 text-xs font-medium tracking-wide uppercase sm:text-sm"
-							>
-								Xem chi tiết các bước tính toán
-							</div>
-							<div class="collapse-content space-y-4 text-xs sm:space-y-6 sm:text-sm">
-								<!-- Step 1: Pillars -->
-								<div>
-									<h5 class="text-primary mb-2 text-xs font-bold uppercase sm:text-sm">
-										Bước 1: Lập Trụ (An Sao)
-									</h5>
-									<p class="text-xs opacity-80 sm:text-sm">
-										Hệ thống chuyển đổi ngày giờ sinh dương lịch sang hệ Can Chi dựa trên Lịch Tiết
-										Khí (Solar Terms).
-									</p>
-									<div
-										class="bg-base-100 mt-2 grid grid-cols-4 gap-1.5 rounded-lg p-2 text-center text-[10px] sm:gap-2 sm:p-3 sm:text-xs"
-									>
-										<div>
-											<div class="font-bold opacity-70">Năm</div>
-											<div class="font-medium">
-												{CAN[baziProfile.year_stem]}
-												{CHI[baziProfile.year_branch]}
-											</div>
-										</div>
-										<div>
-											<div class="font-bold opacity-70">Tháng</div>
-											<div class="font-medium">
-												{CAN[baziProfile.month_stem]}
-												{CHI[baziProfile.month_branch]}
-											</div>
-										</div>
-										<div>
-											<div class="font-bold opacity-70">Ngày</div>
-											<div class="font-medium">
-												{CAN[baziProfile.day_stem]}
-												{CHI[baziProfile.day_branch]}
-											</div>
-										</div>
-										<div>
-											<div class="font-bold opacity-70">Giờ</div>
-											<div class="font-medium">
-												{CAN[baziProfile.hour_stem]}
-												{CHI[baziProfile.hour_branch]}
-											</div>
-										</div>
-									</div>
-								</div>
-
-								<!-- Step 2: Shen Sha -->
-								<div>
-									<h5 class="text-primary mb-2 text-xs font-bold uppercase sm:text-sm">
-										Bước 2: Tính Thần Sát
-									</h5>
-									<p class="text-xs opacity-80 sm:text-sm">
-										Quét các tổ hợp Can Chi để tìm các "ngôi sao" chiếu mệnh (Thần Sát).
-									</p>
-									<div class="bg-base-100 mt-2 rounded-lg p-2 text-[10px] sm:p-3 sm:text-xs">
-										{#if baziProfile.shen_sha && baziProfile.shen_sha.length > 0}
-											<ul class="grid grid-cols-1 gap-1 sm:grid-cols-2">
-												{#each baziProfile.shen_sha as sha}
-													<li class="flex items-start gap-1.5 sm:gap-2">
-														<span class="text-warning">★</span>
-														<span>{sha}</span>
-													</li>
-												{/each}
-											</ul>
-										{:else}
-											<p class="italic opacity-60">
-												Không tìm thấy thần sát đặc biệt trong lá số này.
-											</p>
-										{/if}
-									</div>
-								</div>
-
-								<!-- Step 3: Branch Interactions -->
-								<div>
-									<h5 class="text-primary mb-2 text-xs font-bold uppercase sm:text-sm">
-										Bước 3: Tương Tác Địa Chi
-									</h5>
-									<p class="text-xs opacity-80 sm:text-sm">
-										Phân tích các mối quan hệ Hợp (hóa cục) và Xung (phá cục) giữa 4 địa chi.
-									</p>
-									<div class="bg-base-100 mt-2 rounded-lg p-2 text-[10px] sm:p-3 sm:text-xs">
-										{#if baziProfile.interactions}
-											<ul class="space-y-1">
-												{#if baziProfile.interactions.tamHoi}
-													<li class="text-success font-medium">
-														• Tam Hội {baziProfile.interactions.tamHoi}: Lực lượng ngũ hành mạnh
-														nhất, tụ khí về phương.
-													</li>
-												{/if}
-												{#if baziProfile.interactions.sanHe}
-													<li class="text-info font-medium">
-														• Tam Hợp {baziProfile.interactions.sanHe}: Sự liên kết bền vững, tạo
-														cục diện mạnh.
-													</li>
-												{/if}
-												{#if baziProfile.interactions.lucXung && baziProfile.interactions.lucXung.length > 0}
-													<li class="text-error font-medium">
-														• Lục Xung: Có sự xung đột năng lượng giữa các trụ (Gây giảm lực, bất
-														ổn).
-													</li>
-												{/if}
-												{#if !baziProfile.interactions.tamHoi && !baziProfile.interactions.sanHe && (!baziProfile.interactions.lucXung || baziProfile.interactions.lucXung.length === 0)}
-													<li class="italic opacity-70">
-														Các địa chi ở trạng thái tĩnh, không có tương tác mạnh (Hợp/Xung).
-													</li>
-												{/if}
-											</ul>
-										{:else}
-											<p class="italic opacity-60">Chưa có dữ liệu tương tác.</p>
-										{/if}
-									</div>
-								</div>
-
-								<!-- Step 4: Quantitative Scoring -->
-								<div>
-									<h5 class="text-primary mb-2 text-xs font-bold uppercase sm:text-sm">
-										Bước 4: Tính Điểm Ngũ Hành (Vùng Tâm)
-									</h5>
-									<p class="text-xs opacity-80 sm:text-sm">
-										Chi tiết điểm số từng thành phần (Can/Chi) sau khi nhân hệ số vị trí và tương
-										tác.
-									</p>
-
-									<!-- Detailed Score Table -->
-									{#if baziProfile.score_details && baziProfile.score_details.length > 0}
-										<div class="bg-base-100 border-base-300 mt-2 overflow-x-auto rounded-lg border">
-											<table class="table-xs sm:table-sm table w-full">
-												<thead>
-													<tr class="bg-base-200">
-														<th class="text-[10px] sm:text-xs">Nguồn</th>
-														<th class="text-[10px] sm:text-xs">Hành</th>
-														<th class="text-right text-[10px] sm:text-xs">Điểm</th>
-														<th class="text-[10px] sm:text-xs">Ghi chú</th>
-													</tr>
-												</thead>
-												<tbody>
-													{#each baziProfile.score_details as detail}
-														<tr class="hover:bg-base-200/50">
-															<td class="text-[10px] font-medium sm:text-xs">{detail.source}</td>
-															<td>
-																<span
-																	class="badge badge-sm badge-outline text-[9px] sm:text-[10px] {ELEMENT_DETAILS[
-																		detail.element as keyof typeof ELEMENT_DETAILS
-																	]?.text}"
-																>
-																	{detail.element}
-																</span>
-															</td>
-															<td class="text-right font-mono text-[10px] sm:text-xs"
-																>{detail.score.toFixed(1)}</td
-															>
-															<td class="text-[9px] opacity-70 sm:text-[10px]">{detail.notes}</td>
-														</tr>
-													{/each}
-												</tbody>
-											</table>
-										</div>
-									{/if}
-
-									<!-- Total Summary -->
-									{#if baziProfile.element_scores}
-										<div class="mt-2 sm:mt-3">
-											<div class="mb-1 text-[10px] font-bold uppercase opacity-70 sm:text-xs">
-												Tổng Điểm:
-											</div>
-											<div class="grid grid-cols-5 gap-1 text-[10px] sm:text-xs">
-												{#each Object.entries(baziProfile.element_scores) as [el, score]}
-													<div
-														class="bg-base-100 border-base-300 flex flex-col items-center justify-center rounded border p-1.5 sm:p-2"
-													>
-														<div class="font-bold">{el}</div>
-														<div class="text-primary font-mono">{Number(score).toFixed(1)}</div>
-													</div>
-												{/each}
-											</div>
-										</div>
-									{/if}
-								</div>
-
-								<!-- Step 5: Structure -->
-								<div>
-									<h5 class="text-primary mb-2 text-xs font-bold uppercase sm:text-sm">
-										Bước 5: Xác định Cách Cục
-									</h5>
-									<p class="text-xs opacity-80 sm:text-sm">
-										Dựa trên điểm số và cấu trúc, lá số được phân loại vào nhóm Chính Cách hoặc
-										Ngoại Cách.
-									</p>
-									<div class="bg-base-100 mt-2 rounded-lg p-2 sm:p-3">
-										<p class="text-primary text-xs font-bold sm:text-sm">
-											{baziProfile.structure_name || 'Chưa xác định'}
-										</p>
-										<p class="text-[10px] opacity-70 sm:text-xs">
-											Loại: {baziProfile.structure_type || 'N/A'}
-										</p>
-									</div>
-								</div>
-
-								<!-- Step 6: Day Master & Favorable Elements -->
-								<div>
-									<h5 class="text-primary mb-2 text-xs font-bold uppercase sm:text-sm">
-										Bước 6: Luận Cường Nhược & Dụng Thần
-									</h5>
-									<p class="text-xs opacity-80 sm:text-sm">
-										Tổng hợp toàn bộ dữ liệu để xác định trạng thái Nhật Chủ và tìm giải pháp cân
-										bằng (Dụng Thần).
-									</p>
-									<div
-										class="bg-base-100 mt-2 space-y-1.5 rounded-lg p-2 text-[10px] sm:space-y-2 sm:p-3 sm:text-xs"
-									>
-										<div>
-											<span class="font-bold opacity-70">Trạng thái Nhật Chủ:</span>
-											<span
-												class="ml-1 font-bold uppercase {isDayMasterStrong
-													? 'text-success'
-													: 'text-warning'}"
-											>
-												{baziProfile.day_master_status}
-											</span>
-										</div>
-										<div class="border-base-300 border-l-2 pl-2 italic opacity-80">
-											"{baziProfile.analysis_reason}"
-										</div>
-										<div class="divider my-1 opacity-50"></div>
-										<div class="grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
-											<div class="bg-success/10 rounded p-2">
-												<div
-													class="text-success text-[9px] font-bold tracking-wider uppercase sm:text-[10px]"
-												>
-													Dụng Thần (Tốt nhất)
-												</div>
-												<div class="text-base font-medium sm:text-lg">
-													{baziProfile.favorable_elements?.dung_than?.join(', ') || '---'}
-												</div>
-												<div class="text-[9px] opacity-70 sm:text-[10px]">
-													Thuốc chữa bệnh của lá số
-												</div>
-											</div>
-											<div class="bg-info/10 rounded p-2">
-												<div
-													class="text-info text-[9px] font-bold tracking-wider uppercase sm:text-[10px]"
-												>
-													Hỷ Thần (Tốt nhì)
-												</div>
-												<div class="text-base font-medium sm:text-lg">
-													{baziProfile.favorable_elements?.hy_than?.join(', ') || '---'}
-												</div>
-												<div class="text-[9px] opacity-70 sm:text-[10px]">
-													Sinh trợ cho Dụng thần
-												</div>
-											</div>
-											<div class="bg-error/10 rounded p-2">
-												<div
-													class="text-error text-[9px] font-bold tracking-wider uppercase sm:text-[10px]"
-												>
-													Kỵ Thần (Xấu nhất)
-												</div>
-												<div class="text-base font-medium sm:text-lg">
-													{baziProfile.favorable_elements?.ky_than?.join(', ') || '---'}
-												</div>
-												<div class="text-[9px] opacity-70 sm:text-[10px]">Khắc phá Dụng thần</div>
-											</div>
-											<div class="bg-warning/10 rounded p-2">
-												<div
-													class="text-warning text-[9px] font-bold tracking-wider uppercase sm:text-[10px]"
-												>
-													Cừu Thần (Xấu nhì)
-												</div>
-												<div class="text-base font-medium sm:text-lg">
-													{baziProfile.favorable_elements?.cuu_than?.join(', ') || '---'}
-												</div>
-												<div class="text-[9px] opacity-70 sm:text-[10px]">
-													Sinh Kỵ thần, khắc Hỷ thần
-												</div>
-											</div>
-											<div class="bg-base-300/30 rounded p-2">
-												<div
-													class="text-base-content/60 text-[9px] font-bold tracking-wider uppercase sm:text-[10px]"
-												>
-													Nhàn Thần (Trung tính)
-												</div>
-												<div class="text-base font-medium sm:text-lg">
-													{baziProfile.favorable_elements?.nhan_than?.join(', ') || '---'}
-												</div>
-												<div class="text-[9px] opacity-70 sm:text-[10px]">Ít ảnh hưởng tốt/xấu</div>
-											</div>
-										</div>
-									</div>
-								</div>
-							</div>
-						</div>
-					</div>
-				</div>
-			{:else}
-				<!-- Empty State -->
-				<div class="card border-base-300 bg-base-100 border-2 border-dashed shadow-sm">
-					<div class="card-body items-center p-6 text-center sm:p-8 md:p-12">
-						<div
-							class="bg-primary/10 mb-3 flex h-14 w-14 items-center justify-center rounded-full sm:mb-4 sm:h-16 sm:w-16 md:h-20 md:w-20"
-						>
-							<Sparkles class="text-primary h-7 w-7 sm:h-8 sm:w-8 md:h-10 md:w-10" />
-						</div>
-						<h3 class="text-base-content mb-2 text-lg font-bold sm:text-xl md:text-2xl">
-							Chưa Có Lá Số Bát Tự
-						</h3>
-						<p class="text-base-content/70 mb-4 max-w-md px-2 text-xs sm:text-sm md:text-base">
-							Điền đầy đủ thông tin ngày giờ sinh bên dưới để hệ thống tự động tính toán và hiển thị
-							lá số Tứ Trụ của bạn.
-						</p>
-						<button
-							type="button"
-							onclick={() => document.getElementById('profile_name')?.focus()}
-							class="btn btn-primary btn-sm gap-1.5 text-xs sm:gap-2 sm:text-sm"
-						>
-							<Calendar class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-							Bắt đầu nhập thông tin
-						</button>
-					</div>
-				</div>
-			{/if}
-
-			<!-- Input Form -->
-			<div class="card border-base-200 bg-base-100 border shadow-md">
-				<div class="card-body gap-4 p-4 sm:gap-6 sm:p-5 md:p-8">
-					<div>
-						<h3 class="font-heading text-base-content text-lg font-semibold sm:text-xl md:text-2xl">
-							{baziProfile ? 'Cập Nhật Thông Tin Sinh' : 'Nhập Thông Tin Sinh Của Bạn'}
-						</h3>
-						<p class="text-base-content/60 mt-1 text-xs sm:text-sm">
-							Thông tin này sẽ được dùng để tính toán Tứ Trụ và Nhật Chủ.
-						</p>
-					</div>
-
-					<form
-						method="POST"
-						action="?/saveBazi"
-						use:enhance={() => {
-							loading = true;
-							return async ({ update }) => {
-								await update({ reset: false });
-								loading = false;
-							};
-						}}
-						class="space-y-4 sm:space-y-6"
+					<!-- Audit Log -->
+					<section
+						class="card border-base-200 bg-base-100 flex flex-col border shadow-sm"
+						aria-labelledby="audit-heading"
 					>
-						<!-- Section: Basic Info -->
-						<div class="space-y-3 sm:space-y-4">
-							<h4
-								class="text-base-content/80 flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase sm:gap-2 sm:text-sm"
-							>
-								<User class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-								Thông Tin Cơ Bản
-							</h4>
-
-							<div class="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
-								<div class="form-control w-full">
-									<label class="label pb-1" for="profile_name">
-										<span class="label-text text-xs font-medium sm:text-sm">Tên hồ sơ</span>
-									</label>
-									<input
-										id="profile_name"
-										name="profile_name"
-										type="text"
-										class="input input-bordered focus:input-primary w-full text-sm sm:text-base"
-										placeholder="Nhập tên của bạn"
-										bind:value={profile_name}
-										required
-									/>
-									<label class="label pt-1">
-										<span class="label-text-alt text-base-content/60 text-[10px] sm:text-xs"
-											>Tên để nhận diện lá số này</span
-										>
-									</label>
-								</div>
-
-								<div class="form-control w-full">
-									<label class="label pb-1" for="gender">
-										<span class="label-text text-xs font-medium sm:text-sm">Giới tính</span>
-									</label>
-									<div class="join w-full">
-										<input
-											class="btn join-item flex-1 text-xs sm:text-sm"
-											class:btn-primary={gender === 'male'}
-											class:btn-outline={gender !== 'male'}
-											type="radio"
-											name="gender"
-											value="male"
-											aria-label="Nam"
-											bind:group={gender}
-											required
-										/>
-										<input
-											class="btn join-item flex-1 text-xs sm:text-sm"
-											class:btn-primary={gender === 'female'}
-											class:btn-outline={gender !== 'female'}
-											type="radio"
-											name="gender"
-											value="female"
-											aria-label="Nữ"
-											bind:group={gender}
-											required
-										/>
-									</div>
-									<label class="label pt-1">
-										<span class="label-text-alt text-base-content/60 text-[10px] sm:text-xs"
-											>Cần thiết cho phân tích Vận</span
-										>
-									</label>
-								</div>
-							</div>
-						</div>
-
-						<div class="divider my-1 sm:my-2"></div>
-
-						<!-- Section: Date & Time -->
-						<div class="space-y-3 sm:space-y-4">
-							<h4
-								class="text-base-content/80 flex items-center gap-1.5 text-xs font-semibold tracking-wide uppercase sm:gap-2 sm:text-sm"
-							>
-								<Calendar class="h-3.5 w-3.5 sm:h-4 sm:w-4" />
-								Ngày Giờ Sinh (Dương Lịch)
-							</h4>
-
-							<div class="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-2">
-								<div class="form-control w-full">
-									<label class="label pb-1" for="birth_date">
-										<span class="label-text text-xs font-medium sm:text-sm">Ngày sinh</span>
-										<span class="label-text-alt text-error text-xs">*</span>
-									</label>
-									<input
-										id="birth_date"
-										name="birth_date"
-										type="date"
-										max={new Date().toISOString().split('T')[0]}
-										class="input input-bordered focus:input-primary w-full text-sm sm:text-base"
-										bind:value={birth_date}
-										required
-									/>
-									<label class="label pt-1">
-										<span class="label-text-alt text-base-content/60 text-[10px] sm:text-xs"
-											>Chọn ngày tháng năm sinh</span
-										>
-									</label>
-								</div>
-
-								<div class="form-control w-full">
-									<label class="label pb-1" for="birth_time">
-										<span class="label-text text-xs font-medium sm:text-sm">Giờ sinh</span>
-										<span class="label-text-alt text-error text-xs">*</span>
-									</label>
-									<input
-										id="birth_time"
-										name="birth_time"
-										type="time"
-										class="input input-bordered focus:input-primary w-full text-sm sm:text-base"
-										bind:value={birth_time}
-										required
-									/>
-									<label class="label pt-1">
-										<span class="label-text-alt text-base-content/60 text-[10px] sm:text-xs"
-											>Giờ địa phương khi sinh</span
-										>
-									</label>
-								</div>
-							</div>
-
-							<div class="alert alert-info p-3 shadow-sm">
-								<Info class="h-4 w-4 shrink-0 sm:h-5 sm:w-5" />
-								<span class="text-xs leading-relaxed sm:text-sm">
-									<strong>Lưu ý:</strong> Sử dụng ngày giờ theo dương lịch (lịch Gregorian). Giờ sinh
-									rất quan trọng cho độ chính xác của Trụ Giờ.
-								</span>
-							</div>
-						</div>
-
-						<div class="divider my-1 sm:my-2"></div>
-
-						<!-- Actions -->
-						<div
-							class="flex flex-col items-stretch justify-between gap-3 pt-2 sm:flex-row sm:items-center sm:gap-4"
+						<header
+							class="border-base-200 bg-base-200/50 flex items-center justify-between border-b px-4 py-2"
 						>
-							{#if loading}
-								<div class="text-base-content/70 flex items-center gap-2 sm:gap-3">
-									<span class="loading loading-spinner loading-sm"></span>
-									<span class="text-xs sm:text-sm">Đang vẽ lá số Bát Tự cho bạn...</span>
-								</div>
-							{:else}
-								<div class="hidden sm:block"></div>
-							{/if}
-
+							<span id="audit-heading" class="text-xs font-bold uppercase opacity-60">
+								Nhật ký phân tích
+							</span>
 							<button
-								type="submit"
-								class="btn btn-primary min-h-[2.5rem] min-w-full gap-1.5 text-xs shadow-lg sm:min-h-[3rem] sm:min-w-[160px] sm:gap-2 sm:text-sm"
-								class:btn-disabled={loading}
-								disabled={loading}
+								class="btn btn-ghost btn-xs print:hidden"
+								onclick={() => (isAuditExpanded = !isAuditExpanded)}
+								aria-expanded={isAuditExpanded}
+								aria-controls="audit-content"
 							>
-								{#if loading}
-									<span class="loading loading-spinner loading-sm"></span>
-									Đang tính...
-								{:else}
-									<Save class="h-4 w-4 sm:h-5 sm:w-5" />
-									{baziProfile ? 'Cập nhật lá số' : 'Tạo lá số'}
-								{/if}
+								{isAuditExpanded ? 'Thu gọn' : 'Mở rộng'}
+							</button>
+						</header>
+
+						{#if isAuditExpanded}
+							<div class="border-base-200 border-b p-3">
+								<label class="relative block">
+									<span class="sr-only">Tìm kiếm trong log</span>
+									<Search
+										class="absolute top-1/2 left-3 h-3 w-3 -translate-y-1/2 opacity-50"
+										aria-hidden="true"
+									/>
+									<input
+										type="search"
+										placeholder="Tìm kiếm trong log..."
+										class="input input-bordered input-sm w-full pl-9"
+										bind:value={auditSearchTerm}
+									/>
+								</label>
+							</div>
+						{/if}
+
+						<div
+							id="audit-content"
+							class="flex-1 space-y-1.5 overflow-y-auto p-4 font-mono text-[10px] {isAuditExpanded
+								? 'max-h-[600px]'
+								: 'max-h-[300px]'}"
+							role="log"
+							aria-live="polite"
+						>
+							{#each filteredAuditLogs as log, i (i)}
+								{@const isConclusion = log.includes('KẾT LUẬN')}
+								{@const isHeader = log.includes('>>')}
+								{@const isHighlighted =
+									auditSearchTerm && log.toLowerCase().includes(auditSearchTerm.toLowerCase())}
+								<div
+									class="transition-opacity
+										{isConclusion
+										? 'border-primary bg-primary/10 text-primary rounded-lg border-l-4 p-2 font-bold'
+										: ''}
+										{isHeader ? 'text-secondary mt-2 font-semibold' : 'opacity-70 hover:opacity-100'}
+										{isHighlighted ? 'bg-warning/20' : ''}"
+								>
+									{log}
+								</div>
+							{/each}
+							{#if filteredAuditLogs.length === 0}
+								<div class="py-8 text-center opacity-50">
+									{auditSearchTerm ? 'Không tìm thấy kết quả' : 'Không có log'}
+								</div>
+							{/if}
+						</div>
+					</section>
+
+					<!-- Action Buttons -->
+					<div class="flex flex-col gap-2 print:hidden">
+						<button
+							class="btn btn-outline w-full gap-2"
+							onclick={() => scrollToElement('bazi-form')}
+						>
+							<User class="h-4 w-4" aria-hidden="true" />
+							Nhập lại thông tin
+						</button>
+						<div class="flex gap-2">
+							<button class="btn btn-outline flex-1 gap-2" onclick={handlePrint}>
+								<Printer class="h-4 w-4" aria-hidden="true" />
+								In/Xuất
+							</button>
+							<button class="btn btn-outline flex-1 gap-2" onclick={handleShare}>
+								<Share2 class="h-4 w-4" aria-hidden="true" />
+								Chia sẻ
 							</button>
 						</div>
-					</form>
-				</div>
-			</div>
+					</div>
+				</aside>
+			</main>
+		{:else}
+			{@render emptyState()}
+		{/if}
 
-			<!-- Footer Note -->
-			<div
-				class="text-base-content/50 px-2 pb-6 text-center text-[10px] leading-relaxed sm:text-xs"
-			>
-				<p class="mb-1">
-					Kết quả chỉ mang tính chất tham khảo, không phải là luận đoán chuyên môn.
-				</p>
-				<p>
-					Hệ thống tính toán tham khảo phương pháp của sách Trích Thiên tuỷ bình chú, Dự đoán theo
-					tứ trụ (Triệu Vĩ Hoa), đặc biêt là <a
-						href="https://lyso.vn/tu-tru/vulong-tu-tru-cho-tat-ca-moi-nguoi-t38496/"
-						class="hover:text-base-content underline"
-						target="_blank"
-						rel="noopener noreferrer"
-					>
-						các bài viết của tác giả VuLong</a
-					>
-				</p>
+		<!-- ==================== INPUT FORM ==================== -->
+		<section
+			id="bazi-form"
+			class="card border-base-200 bg-base-100 mx-auto mt-12 max-w-2xl border shadow-xl"
+			aria-labelledby="form-heading"
+		>
+			<div class="card-body">
+				<h3 id="form-heading" class="card-title border-base-200 mb-4 border-b pb-3 text-lg">
+					<Calendar class="text-primary h-5 w-5" aria-hidden="true" />
+					Nhập Thông Tin (Dương Lịch)
+				</h3>
+
+				<form
+					method="POST"
+					action="?/saveBazi"
+					use:enhance={() => {
+						loading = true;
+						return async ({ update }) => {
+							await update({ reset: false });
+							loading = false;
+						};
+					}}
+					class="space-y-4"
+				>
+					<div class="grid grid-cols-1 gap-4 md:grid-cols-2">
+						<!-- Name -->
+						<div class="form-control">
+							<label class="label text-xs font-bold" for="profile_name">
+								<span class="label-text">
+									Họ và tên <span class="text-error" aria-hidden="true">*</span>
+								</span>
+							</label>
+							<input
+								id="profile_name"
+								name="profile_name"
+								type="text"
+								class="input input-bordered"
+								bind:value={formData.profile_name}
+								required
+								minlength={2}
+								maxlength={100}
+								placeholder="Nhập họ tên..."
+								autocomplete="name"
+							/>
+						</div>
+
+						<!-- Gender -->
+						<fieldset class="form-control">
+							<legend class="label text-xs font-bold">
+								<span class="label-text">
+									Giới tính <span class="text-error" aria-hidden="true">*</span>
+								</span>
+							</legend>
+							<div class="join w-full">
+								<input
+									class="btn join-item flex-1"
+									type="radio"
+									name="gender"
+									value="male"
+									aria-label="Nam"
+									bind:group={formData.gender}
+								/>
+								<input
+									class="btn join-item flex-1"
+									type="radio"
+									name="gender"
+									value="female"
+									aria-label="Nữ"
+									bind:group={formData.gender}
+								/>
+							</div>
+						</fieldset>
+
+						<!-- Birth Date -->
+						<div class="form-control">
+							<label class="label text-xs font-bold" for="birth_date">
+								<span class="label-text">
+									Ngày sinh <span class="text-error" aria-hidden="true">*</span>
+								</span>
+							</label>
+							<input
+								id="birth_date"
+								name="birth_date"
+								type="date"
+								max={todayISO}
+								min="1900-01-01"
+								class="input input-bordered"
+								bind:value={formData.birth_date}
+								required
+							/>
+						</div>
+
+						<!-- Birth Time -->
+						<div class="form-control">
+							<label class="label text-xs font-bold" for="birth_time">
+								<span class="label-text">
+									Giờ sinh <span class="text-error" aria-hidden="true">*</span>
+								</span>
+							</label>
+							<input
+								id="birth_time"
+								name="birth_time"
+								type="time"
+								class="input input-bordered"
+								bind:value={formData.birth_time}
+								required
+							/>
+						</div>
+					</div>
+
+					<div class="flex justify-end pt-4">
+						<button
+							type="submit"
+							class="btn btn-primary w-full gap-2 md:w-auto"
+							disabled={loading}
+							aria-busy={loading}
+						>
+							{#if loading}
+								<span class="loading loading-spinner" aria-hidden="true"></span>
+								Đang tính toán...
+							{:else}
+								<Save class="h-4 w-4" aria-hidden="true" />
+								Phân Tích & Lưu
+							{/if}
+						</button>
+					</div>
+				</form>
 			</div>
-		</div>
+		</section>
+
+		<!-- ==================== FOOTER ==================== -->
+		<footer
+			class="text-base-content/50 mt-8 px-2 pb-6 text-center text-[10px] leading-relaxed sm:text-xs"
+		>
+			<p class="mb-2">Kết quả chỉ mang tính chất tham khảo, không phải là luận đoán chuyên môn.</p>
+			<p>
+				Hệ thống tính toán tham khảo phương pháp của sách Trích Thiên tuỷ bình chú, Dự đoán theo tứ
+				trụ (Triệu Vĩ Hoa), đặc biệt là
+				<a
+					href="https://lyso.vn/tu-tru/vulong-tu-tru-cho-tat-ca-moi-nguoi-t38496/"
+					class="hover:text-base-content underline transition-colors"
+					target="_blank"
+					rel="noopener noreferrer"
+				>
+					các bài viết của tác giả VuLong
+				</a>
+			</p>
+		</footer>
 	</div>
 </div>
+
+<!-- ============================================================ -->
+<!-- STYLES -->
+<!-- ============================================================ -->
+<style>
+	/* Pillar card transition */
+	.pillar-card {
+		transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	}
+
+	/* Screen reader only utility */
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	/* Print styles */
+	@media print {
+		:global(header),
+		:global(.print\:hidden) {
+			display: none !important;
+		}
+
+		:global(.card) {
+			page-break-inside: avoid;
+			box-shadow: none !important;
+			border: 1px solid #e5e7eb !important;
+		}
+
+		:global(body) {
+			font-size: 12px;
+		}
+
+		:global(.badge) {
+			border: 1px solid currentColor;
+		}
+	}
+</style>

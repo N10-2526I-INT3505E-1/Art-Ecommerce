@@ -10,7 +10,7 @@
 </script>
 
 {#if mounted && $toastStore}
-	<div class="toast toast-center toast-top z-50 p-3">
+	<div class="toast toast-center toast-top z-9999 p-3">
 		<div
 			class="alert text-base"
 			class:alert-success={$toastStore.type === 'success'}

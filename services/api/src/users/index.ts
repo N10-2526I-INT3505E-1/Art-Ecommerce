@@ -210,11 +210,11 @@ export const usersPlugin = (dependencies: { userService: UserService }) =>
 									// Lấy thông tin chi tiết từ DB dựa trên ID từ Header
 									const currentUser = await userService.getUserById(user.id);
 									const { password, ...safeUser } = currentUser;
-									return safeUser;
+									return { user: safeUser };
 								},
 								{
 									response: {
-										200: t.Omit(UserResponseSchema, ['password']),
+										200: t.Object({ user: SafeUserResponseSchema }),
 										401: ErrorSchema,
 										404: ErrorSchema,
 									},
@@ -445,12 +445,12 @@ export const usersPlugin = (dependencies: { userService: UserService }) =>
 								'/profile/bazi',
 								async ({ body, user, userService }) => {
 									const profile = await userService.createOrUpdateBaziProfile(user.id, body);
-									return profile;
+									return { profile };
 								},
 								{
 									body: t.Omit(CreateBaziProfileSchema, ['id', 'user_id']),
 									response: {
-										200: BaziProfileResponseSchema,
+										200: t.Object({ profile: BaziProfileResponseSchema }),
 									},
 									detail: {
 										tags: ['Bazi'],

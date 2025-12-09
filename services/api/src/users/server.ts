@@ -9,6 +9,7 @@ import { usersPlugin } from './index';
 import { UserService } from './user.service';
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
+const HOSTNAME = process.env.HOSTNAME || 'localhost';
 const baziService = new BaziService();
 const userService = new UserService(db, baziService);
 
@@ -38,7 +39,7 @@ const app = new Elysia()
 	})
 	.listen({
 		port: PORT,
-		hostname: '0.0.0.0',
+		hostname: HOSTNAME.replace(/^https?:\/\//, ''),
 	});
 
 console.log(`👤 Users Service running at http://${app.server?.hostname}:${app.server?.port}`);

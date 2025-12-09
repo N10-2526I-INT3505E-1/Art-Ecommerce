@@ -1,4 +1,4 @@
-// src/bazi/bazi.model.ts
+// src/users/bazi.model.ts
 
 import { usersTable } from '@user/user.model';
 import { sql } from 'drizzle-orm';
@@ -6,6 +6,7 @@ import { int, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-co
 import { createInsertSchema, createSelectSchema } from 'drizzle-typebox';
 import type { Static } from 'elysia';
 import { t } from 'elysia';
+import type { CenterZoneAnalysis, LimitScoreProfile, EnergyNode, Interaction } from './bazi.types'; // Import các type để định nghĩa cho cột JSON
 
 export const baziProfilesTable = sqliteTable(
 	'bazi_profiles',
@@ -28,32 +29,50 @@ export const baziProfilesTable = sqliteTable(
 		longitude: real('longitude'),
 		timezone_offset: real('timezone_offset'),
 
-		// --- CALCULATED BAZI DATA (CACHED) ---
-		year_stem: int('year_stem'),
-		year_branch: int('year_branch'),
-		month_stem: int('month_stem'),
-		month_branch: int('month_branch'),
-		day_stem: int('day_stem'),
-		day_branch: int('day_branch'),
-		hour_stem: int('hour_stem'),
-		hour_branch: int('hour_branch'),
+		// --- CALCULATED BAZI DATA ---
+		// Đổi sang TEXT để lưu chữ 'Giáp', 'Tý'... cho dễ debug
+		year_stem: text('year_stem'),
+		year_branch: text('year_branch'),
+		month_stem: text('month_stem'),
+		month_branch: text('month_branch'),
+		day_stem: text('day_stem'),
+		day_branch: text('day_branch'),
+		hour_stem: text('hour_stem'),
+		hour_branch: text('hour_branch'),
 
-		// ANALYSIS RESULTS
-		day_master_status: text('day_master_status'),
-		structure_type: text('structure_type'),
-		structure_name: text('structure_name'),
-		analysis_reason: text('analysis_reason'),
+		// --- ANALYSIS RESULTS (VULONG METHOD) ---
 
-		favorable_elements: text('favorable_elements', { mode: 'json' }),
-		element_scores: text('element_scores', { mode: 'json' }),
-		god_scores: text('god_scores', { mode: 'json' }),
-		interactions: text('interactions', { mode: 'json' }),
-		score_details: text('score_details', { mode: 'json' }),
-		shen_sha: text('shen_sha', { mode: 'json' }),
+		// Thông tin cơ bản
+		day_master_status: text('day_master_status'), // "Vượng" / "Nhược"
+		structure_type: text('structure_type'), // "Nội Cách" / "Ngoại Cách"
+		structure_name: text('structure_name'), // "Chính Quan Cách"...
+		analysis_reason: text('analysis_reason'), // Log giải thích
+
+		// Dữ liệu JSON phức tạp (Frontend sẽ dùng để vẽ biểu đồ)
+		// 1. Phân tích vùng tâm (Hiệu số, điểm phe ta/địch)
+		center_analysis: text('center_analysis', { mode: 'json' }).$type<CenterZoneAnalysis>(),
+
+		// 2. Sơ đồ dòng chảy năng lượng (Nodes, biến động điểm) - QUAN TRỌNG NHẤT
+		energy_flow: text('energy_flow', { mode: 'json' }).$type<EnergyNode[]>(),
+
+		// 3. Hồ sơ điểm hạn (Dụng/Hỷ/Kỵ và điểm số)
+		limit_score: text('limit_score', { mode: 'json' }).$type<LimitScoreProfile>(),
+
+		// 4. Các tương tác đã xảy ra (Hợp, Xung...)
+		interactions: text('interactions', { mode: 'json' }).$type<Interaction[]>(),
+
+		// Các trường Legacy (Giữ lại nếu cần query đơn giản, hoặc map từ dữ liệu trên)
+		favorable_elements: text('favorable_elements', { mode: 'json' }).$type<string[]>(), // Lưu mảng Dụng thần
 		party_score: real('party_score'),
 		enemy_score: real('enemy_score'),
+
+		// Các trường chưa dùng tới ngay (có thể để null)
 		percentage_self: real('percentage_self'),
 		luck_start_age: int('luck_start_age'),
+		score_details: text('score_details', { mode: 'json' }),
+		element_scores: text('element_scores', { mode: 'json' }),
+		god_scores: text('god_scores', { mode: 'json' }),
+		shen_sha: text('shen_sha', { mode: 'json' }),
 
 		created_at: text('created_at')
 			.notNull()
@@ -68,6 +87,7 @@ export const baziProfilesTable = sqliteTable(
 	}),
 );
 
+// Schema Validation
 export const CreateBaziProfileSchema = createInsertSchema(baziProfilesTable, {
 	profile_name: t.String({ minLength: 1, maxLength: 100 }),
 	gender: t.Enum({ male: 'male', female: 'female' }),
@@ -81,5 +101,4 @@ export const CreateBaziProfileSchema = createInsertSchema(baziProfilesTable, {
 });
 
 export const BaziProfileResponseSchema = createSelectSchema(baziProfilesTable);
-
 export type BaziInput = Static<typeof CreateBaziProfileSchema>;

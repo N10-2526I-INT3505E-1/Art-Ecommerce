@@ -65,6 +65,8 @@ async function fetchUser(
 			return true;
 		}
 
+		console.log('Invalid API response structure:', responseData);
+
 		throw new Error('Invalid API response structure');
 	} catch (error) {
 		if (error instanceof HTTPError && error.response.status === 401) {

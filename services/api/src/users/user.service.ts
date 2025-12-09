@@ -397,15 +397,57 @@ export class UserService {
 			.select({ id: usersTable.id })
 			.from(usersTable)
 			.where(eq(usersTable.id, userId));
+
 		if (!user) {
 			throw new NotFoundError('User not found.');
 		}
 
-		const fullProfileData = await this.baziService.calculateBazi(baziInput);
+		// 1. Gọi BaziService để tính toán
+		const calculatedData = await this.baziService.calculateBazi(baziInput);
 
+		// 2. Chuẩn bị dữ liệu để lưu vào DB
+		// Lưu ý: Các trường JSON (center_analysis, energy_flow...) sẽ được Drizzle tự động stringify
 		const dataToUpsert = {
-			...fullProfileData,
 			user_id: userId,
+			// Input data
+			profile_name: baziInput.profile_name,
+			gender: baziInput.gender,
+			birth_day: baziInput.birth_day,
+			birth_month: baziInput.birth_month,
+			birth_year: baziInput.birth_year,
+			birth_hour: baziInput.birth_hour,
+			birth_minute: baziInput.birth_minute,
+			longitude: baziInput.longitude,
+			timezone_offset: baziInput.timezone_offset,
+
+			// Pillars (Text)
+			year_stem: calculatedData.year_stem,
+			year_branch: calculatedData.year_branch,
+			month_stem: calculatedData.month_stem,
+			month_branch: calculatedData.month_branch,
+			day_stem: calculatedData.day_stem,
+			day_branch: calculatedData.day_branch,
+			hour_stem: calculatedData.hour_stem,
+			hour_branch: calculatedData.hour_branch,
+
+			// Analysis Info
+			day_master_status: calculatedData.day_master_status,
+			structure_type: calculatedData.structure_type,
+			structure_name: calculatedData.structure_name,
+			analysis_reason: calculatedData.analysis_reason,
+
+			// Complex JSON Data
+			center_analysis: calculatedData.center_analysis,
+			energy_flow: calculatedData.energy_flow,
+			limit_score: calculatedData.limit_score,
+			interactions: calculatedData.interactions,
+
+			// Legacy/Extra fields (Map từ kết quả mới sang)
+			favorable_elements: calculatedData.favorable_elements,
+			party_score: calculatedData.party_score,
+			enemy_score: calculatedData.enemy_score,
+
+			updated_at: new Date().toISOString(),
 		};
 
 		try {
@@ -414,40 +456,7 @@ export class UserService {
 				.values(dataToUpsert)
 				.onConflictDoUpdate({
 					target: baziProfilesTable.user_id,
-					set: {
-						profile_name: dataToUpsert.profile_name,
-						gender: dataToUpsert.gender,
-						birth_day: dataToUpsert.birth_day,
-						birth_month: dataToUpsert.birth_month,
-						birth_year: dataToUpsert.birth_year,
-						birth_hour: dataToUpsert.birth_hour,
-						birth_minute: dataToUpsert.birth_minute,
-						longitude: dataToUpsert.longitude,
-						timezone_offset: dataToUpsert.timezone_offset,
-						year_stem: dataToUpsert.year_stem,
-						year_branch: dataToUpsert.year_branch,
-						month_stem: dataToUpsert.month_stem,
-						month_branch: dataToUpsert.month_branch,
-						day_stem: dataToUpsert.day_stem,
-						day_branch: dataToUpsert.day_branch,
-						hour_stem: dataToUpsert.hour_stem,
-						hour_branch: dataToUpsert.hour_branch,
-						day_master_status: dataToUpsert.day_master_status,
-						structure_type: dataToUpsert.structure_type,
-						structure_name: dataToUpsert.structure_name,
-						analysis_reason: dataToUpsert.analysis_reason,
-						favorable_elements: dataToUpsert.favorable_elements,
-						element_scores: dataToUpsert.element_scores,
-						god_scores: dataToUpsert.god_scores,
-						interactions: dataToUpsert.interactions,
-						score_details: dataToUpsert.score_details,
-						shen_sha: dataToUpsert.shen_sha,
-						party_score: dataToUpsert.party_score,
-						enemy_score: dataToUpsert.enemy_score,
-						percentage_self: dataToUpsert.percentage_self,
-						luck_start_age: dataToUpsert.luck_start_age,
-						updated_at: new Date().toISOString(),
-					},
+					set: dataToUpsert, // Update toàn bộ field nếu đã tồn tại
 				})
 				.returning();
 

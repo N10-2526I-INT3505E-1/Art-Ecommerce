@@ -1,83 +1,96 @@
-import { type LunarDate, SolarDate } from '@nghiavuive/lunar_date_vi';
+/**
+ * src/users/bazi.service.ts
+ *
+ * BAZI QUANTITATIVE ENGINE (VULONG METHOD & TRICH THIEN TUY)
+ * FULL VERSION - DO NOT SIMPLIFY
+ */
+
+import { SolarDate } from '@nghiavuive/lunar_date_vi';
 import type { BaziInput } from './bazi.model';
-import {
-	type AnalysisResult,
-	type BaziChart,
-	BRANCH_ELEMENTS,
-	BRANCH_INTERACTIONS,
-	CONTROLLING_CYCLE,
-	EARTHLY_BRANCHES,
-	type EarthlyBranch,
-	type FiveElement,
-	HEAVENLY_STEM_COMBINATIONS,
-	HEAVENLY_STEMS,
-	type HeavenlyStem,
-	HIDDEN_STEMS_SCORES,
-	KHONG_VONG_RULES,
-	type Pillar,
-	PRODUCING_CYCLE,
-	SHEN_SHA,
-	SHEN_SHA_RULES,
-	SOLAR_TERM_TO_BRANCH_INDEX,
-	STEM_ELEMENTS,
-	TEN_GODS_MAPPING,
-	type TenGod,
+import type {
+	BaziResult,
+	BaziChart,
+	Pillar,
+	EnergyNode,
+	HeavenlyStem,
+	EarthlyBranch,
+	LifeCycleStage,
+	FiveElement,
+	TenGod,
+	CenterZoneAnalysis,
+	LimitScoreProfile,
+	Interaction,
+	PillarPosition,
 } from './bazi.types';
+
+import {
+	HIDDEN_STEMS,
+	ELEMENT_RELATIONS,
+	STEM_COMBINATIONS,
+	BRANCH_SIX_COMBINATIONS,
+	BRANCH_TRI_COMBINATIONS,
+	BRANCH_SEASONAL_COMBINATIONS,
+	BRANCH_CLASHES,
+	LIFE_CYCLE_TABLE,
+	TEN_GODS_MAPPING,
+	HEAVENLY_STEMS,
+	EARTHLY_BRANCHES,
+	SOLAR_TERM_TO_BRANCH_INDEX,
+	STEM_POLARITY,
+	MONTH_COMMANDER_RULES,
+} from './bazi.constants';
+
+// =============================================================================
+// 1. CẤU HÌNH HỆ SỐ VẬT LÝ (PHYSICS CONFIGURATION) - THEO VULONG
+// =============================================================================
+
+// Điểm số thực nghiệm từ sách Giải Mã Tứ Trụ (Ảnh 21)
+export const LIFE_CYCLE_SCORES: Record<LifeCycleStage, number> = {
+	DeVuong: 10.0,
+	LamQuan: 9.0,
+	QuanDoi: 8.0,
+	MocDuc: 7.0, // VuLong: 7đv
+	TruongSinh: 6.0, // VuLong: 6đv
+	Suy: 5.1, // VuLong: Max 5.1đv
+	Benh: 4.8, // VuLong: Max 4.83đv
+	Tu: 3.0, // VuLong: 3đv
+	Mo: 3.0, // VuLong: 3đv
+	Tuyet: 3.1, // VuLong: 3.1đv
+	Thai: 4.1, // VuLong: 4.1đv
+	Duong: 4.2, // VuLong: 4.2đv
+};
+
+const DECAY = {
+	// Tương tác
+	TRANSFORM_BONUS: 1.5, // Hóa cục thành công
+	COMBINE_BINDING: 0.2, // Hợp trói (không hóa)
+	CLASH_WINNER: 0.7, // Thắng xung
+	CLASH_LOSER: 0.2, // Thua xung
+	CLASH_DRAW: 0.4, // Xung hòa
+
+	// Dòng chảy & Vị trí (VuLong Physics - Chương 9)
+	ENTER_CENTER_FACTOR: 0.6, // Đi vào vùng tâm bị giảm 2/5 (còn lại 0.6)
+	INTRA_CENTER_FACTOR: 1.0, // Trong vùng tâm giữ nguyên
+
+	// Hao hụt khi khắc/sinh giữa các trụ
+	FLOW_GENERATE_LOSS: 0.3, // Sinh cho người khác mất 30% lực
+	FLOW_OVERCOME_LOSS: 0.2, // Khắc người khác mất 20% lực
+};
+
+const LIMIT_SCORES = {
+	DUNG_THAN: -1.0,
+	HY_THAN: -0.5,
+	KY_THAN: 0.5,
+	HUNG_THAN: 1.0,
+	NHAN_THAN: 0.1,
+};
 
 export class BaziService {
 	/**
-	 * Phương thức chính để tính toán và phân tích lá số Bát Tự.
-	 * Quy trình:
-	 * 1. Chuyển đổi Dương lịch -> Âm lịch & Can Chi (Lập Trụ).
-	 * 2. Phân tích Thần Sát, Tương tác Địa chi, Điểm Ngũ hành.
-	 * 3. Xác định Cách cục (Chính cách/Ngoại cách).
-	 * 4. Xác định Dụng - Hỷ - Kỵ - Cừu - Nhàn thần.
+	 * API PUBLIC: Tính toán Bát Tự
 	 */
 	public async calculateBazi(input: Omit<BaziInput, 'user_id' | 'id'>) {
-		// 1. Lập Trụ (An Sao)
-		const chart = this.calculatePillars(input);
-
-		// 2. Phân tích chuyên sâu
-		const analysis = this.analyze(chart);
-
-		// 3. Trả về kết quả đầy đủ
-		return {
-			...input,
-			year_stem: chart.year.canIndex,
-			year_branch: chart.year.chiIndex,
-			month_stem: chart.month.canIndex,
-			month_branch: chart.month.chiIndex,
-			day_stem: chart.day.canIndex,
-			day_branch: chart.day.chiIndex,
-			hour_stem: chart.hour.canIndex,
-			hour_branch: chart.hour.chiIndex,
-
-			day_master_status: analysis.day_master_status,
-			structure_type: analysis.structure_type,
-			structure_name: analysis.structure_name,
-			analysis_reason: analysis.analysis_reason,
-			favorable_elements: analysis.favorable_elements,
-			element_scores: analysis.element_scores,
-			god_scores: analysis.god_scores,
-			shen_sha: analysis.shen_sha,
-			interactions: analysis.interactions,
-			score_details: analysis.score_details,
-			party_score: analysis.party_score,
-			enemy_score: analysis.enemy_score,
-			percentage_self: analysis.percentage_self,
-			luck_start_age: null, // Cần module tính Đại vận riêng nếu muốn hiển thị
-		};
-	}
-
-	// ====================================================================
-	// 1. LOGIC LẬP TRỤ (ASTRONOMY CALCULATION)
-	// ====================================================================
-
-	/**
-	 * Tính toán 4 trụ (Năm, Tháng, Ngày, Giờ) dựa trên thời gian sinh.
-	 * Xử lý các trường hợp đặc biệt: Giờ Tý đêm, Tiết khí Lập Xuân để xác định năm/tháng.
-	 */
-	private calculatePillars(input: Omit<BaziInput, 'user_id' | 'id'>): BaziChart {
+		// 0. Tạo đối tượng Date chuẩn từ input
 		const birthDate = new Date(
 			input.birth_year,
 			input.birth_month - 1,
@@ -86,880 +99,992 @@ export class BaziService {
 			input.birth_minute,
 		);
 
+		// 1. Lập Trụ (Thiên văn)
+		const chart = this.calculatePillars(birthDate);
+
+		// 2. Phân tích Năng lượng (Truyền birthDate vào để tính Lệnh tháng chính xác)
+		const analysis = this.analyzeChart(chart, birthDate);
+
+		// 3. Mapping dữ liệu trả về
+		return {
+			...input,
+			year_stem: chart.year.stem,
+			year_branch: chart.year.branch,
+			month_stem: chart.month.stem,
+			month_branch: chart.month.branch,
+			day_stem: chart.day.stem,
+			day_branch: chart.day.branch,
+			hour_stem: chart.hour.stem,
+			hour_branch: chart.hour.branch,
+
+			structure_name: analysis.structure,
+			structure_type: analysis.structureType,
+			day_master_status: analysis.centerZone.isVwang ? 'Vượng' : 'Nhược',
+
+			analysis_reason: analysis.auditLogs.join('\n'),
+
+			// Dữ liệu chi tiết cho Frontend vẽ biểu đồ
+			center_analysis: analysis.centerZone,
+			energy_flow: analysis.energyFlow,
+			limit_score: analysis.limitScore,
+
+			favorable_elements: analysis.limitScore.dungThan,
+			party_score: analysis.centerZone.partyScore,
+			enemy_score: analysis.centerZone.enemyScore,
+
+			// Các trường phụ
+			percentage_self: 0,
+			luck_start_age: 0,
+			element_scores: {},
+			god_scores: {},
+			interactions: analysis.interactions,
+			score_details: [],
+			shen_sha: [],
+		};
+	}
+
+	/**
+	 * CORE PIPELINE: Thực hiện 5 bước phân tích VuLong
+	 */
+	private analyzeChart(chart: BaziChart, inputDate: Date): BaziResult {
+		const auditLogs: string[] = [];
+		auditLogs.push(`--- BẮT ĐẦU PHÂN TÍCH ---`);
+		auditLogs.push(
+			`Nhật chủ: ${chart.day.stem} (${this.getStemElement(chart.day.stem)}) sinh tháng ${chart.month.branch}.`,
+		);
+
+		// BƯỚC 1: KHỞI TẠO (Tính điểm gốc theo Lệnh tháng & Tư lệnh)
+		let nodes = this.initializeEnergyGraph(chart, inputDate, auditLogs);
+
+		// BƯỚC 2: XỬ LÝ TƯƠNG TÁC (Hợp/Xung/Hóa)
+		const interactionResult = this.processInteractions(nodes, chart.month.branch, auditLogs);
+		nodes = interactionResult.nodes;
+
+		// BƯỚC 3: DÒNG CHẢY & VÙNG TÂM (Updated Logic VuLong)
+		nodes = this.calculateFlowAndCenter(nodes, chart, auditLogs);
+
+		// BƯỚC 4: CƯỜNG NHƯỢC
+		const analysis = this.determineStructureAndStrength(nodes, chart.day.stem, auditLogs);
+
+		// BƯỚC 5: ĐIỂM HẠN
+		const limitProfile = this.calculateLimitScoreProfile(
+			analysis.centerZone,
+			analysis.godScores,
+			analysis.dmElement,
+			analysis.structureType,
+			auditLogs,
+		);
+
+		auditLogs.push(
+			`=== KẾT LUẬN: ${analysis.structure} (${analysis.centerZone.isVwang ? 'Thân Vượng' : 'Thân Nhược'}) ===`,
+		);
+
+		return {
+			pillars: chart,
+			energyFlow: nodes,
+			interactions: interactionResult.interactions,
+			centerZone: analysis.centerZone,
+			structure: analysis.structure,
+			limitScore: limitProfile,
+			auditLogs: auditLogs,
+		};
+	}
+
+	// ====================================================================
+	// 1. LẬP TRỤ (ASTRONOMY)
+	// ====================================================================
+
+	private calculatePillars(birthDate: Date): BaziChart {
 		// Xử lý Dạ Tý (23h-0h): Tính sang Can Chi ngày hôm sau
 		let dateForDayPillar = new Date(birthDate);
 		if (birthDate.getHours() >= 23) {
 			dateForDayPillar.setDate(dateForDayPillar.getDate() + 1);
 		}
 
-		// Khởi tạo đối tượng lịch
 		const solarObj = new SolarDate(birthDate);
 		const lunarObj = solarObj.toLunarDate();
 		lunarObj.init();
+
 		const solarObjForDay = new SolarDate(dateForDayPillar);
 		const lunarObjForDay = solarObjForDay.toLunarDate();
 		lunarObjForDay.init();
+
 		const currentSolarTerm = lunarObj.getSolarTerm();
 
-		// A. Trụ Ngày
-		const dayPillar = this.createPillarFromLunarName(lunarObjForDay.getDayName());
-
-		// B. Trụ Giờ (Ngũ Thử Độn)
+		const dayPillar = this.createPillarFromLunarName(lunarObjForDay.getDayName(), 'Day');
 		const hourPillar = this.getHourPillar(birthDate.getHours(), dayPillar.canIndex);
-
-		// C. Trụ Năm (Dựa vào tiết Lập Xuân để chuyển năm)
 		const yearPillar = this.getYearPillar(lunarObj, currentSolarTerm);
-
-		// D. Trụ Tháng (Ngũ Hổ Độn + Tiết Khí)
 		const monthPillar = this.getMonthPillar(yearPillar.canIndex, currentSolarTerm);
 
 		return { year: yearPillar, month: monthPillar, day: dayPillar, hour: hourPillar };
 	}
 
-	private createPillarFromIndex(canIdx: number, chiIdx: number): Pillar {
+	// ====================================================================
+	// 2. KHỞI TẠO NĂNG LƯỢNG (Fix: InputDate & Commander Logic)
+	// ====================================================================
+
+	private initializeEnergyGraph(chart: BaziChart, inputDate: Date, logs: string[]): EnergyNode[] {
+		const nodes: EnergyNode[] = [];
+		const pillars: Pillar[] = [chart.year, chart.month, chart.day, chart.hour];
+		const monthBranch = chart.month.branch;
+
+		// 1. Tính số ngày từ Tiết khí gần nhất -> Xác định Nhân Nguyên Tư Lệnh
+		const daysSinceTerm = this.calculateDaysSinceSolarTerm(inputDate);
+		const commanderStem = this.getCommanderStem(monthBranch, daysSinceTerm);
+
+		logs.push(
+			`>> Lệnh tháng ${monthBranch}, sinh sau tiết ${daysSinceTerm} ngày. Tư lệnh: ${commanderStem}.`,
+		);
+
+		pillars.forEach((pillar) => {
+			// A. Thiên Can
+			const stemInfo = this.calculateStemPower(pillar.stem, monthBranch);
+			let stemScore = stemInfo.score;
+
+			// Bonus: Nếu Can lộ trùng với Can Tư Lệnh (Đắc Lệnh)
+			if (pillar.stem === commanderStem) {
+				stemScore *= 1.2;
+				logs.push(`> Can ${pillar.stem} đắc lệnh (Tư lệnh).`);
+			}
+
+			nodes.push({
+				id: `${pillar.position}_Stem`,
+				source: pillar.position,
+				type: 'Stem',
+				name: pillar.stem,
+				element: pillar.stemElement,
+				lifeCycleStage: stemInfo.stage,
+				baseScore: stemScore,
+				currentScore: stemScore,
+				isBlocked: false,
+				isCombined: false,
+				modifications: [],
+			});
+
+			// B. Địa Chi (Logic Tư Lệnh cho Tháng, Tĩnh cho các trụ khác)
+			if (pillar.position === 'Month') {
+				this.createMonthBranchNodes(nodes, pillar, commanderStem, monthBranch);
+			} else {
+				this.createStaticBranchNodes(nodes, pillar, monthBranch);
+			}
+		});
+
+		return nodes;
+	}
+
+	/**
+	 * Tính số ngày từ Tiết khí (Jie Qi) đến ngày sinh.
+	 * Logic: Quét ngược tối đa 35 ngày để tìm ngày bắt đầu Tiết.
+	 */
+	private calculateDaysSinceSolarTerm(inputDate: Date): number {
+		// Danh sách 12 Tiết lệnh tháng (Jie) - Không tính Trung Khí (Qi)
+		const MONTH_STARTERS = [
+			'Lập xuân',
+			'Kinh trập',
+			'Thanh minh',
+			'Lập hạ',
+			'Mang chủng',
+			'Tiểu thử',
+			'Lập thu',
+			'Bạch lộ',
+			'Hàn lộ',
+			'Lập đông',
+			'Đại tuyết',
+			'Tiểu hàn',
+		];
+
+		let checkDate = new Date(inputDate);
+		checkDate.setHours(12, 0, 0, 0); // Tránh lỗi giờ
+
+		// Lùi lại tối đa 35 ngày
+		for (let daysBack = 0; daysBack < 35; daysBack++) {
+			const sDate = new SolarDate(checkDate);
+			const lDate = sDate.toLunarDate();
+			lDate.init();
+
+			const currentTerm = lDate.getSolarTerm();
+
+			// Lấy ngày hôm trước để check thời điểm chuyển tiết
+			const prevDate = new Date(checkDate);
+			prevDate.setDate(prevDate.getDate() - 1);
+			const sPrev = new SolarDate(prevDate);
+			const lPrev = sPrev.toLunarDate();
+			lPrev.init();
+			const prevTerm = lPrev.getSolarTerm();
+
+			// Nếu hôm nay có Tiết và hôm qua chưa có (hoặc khác) -> Đây là ngày bắt đầu Tiết
+			if (MONTH_STARTERS.includes(currentTerm) && currentTerm !== prevTerm) {
+				return daysBack;
+			}
+
+			checkDate.setDate(checkDate.getDate() - 1);
+		}
+
+		return 15; // Fallback an toàn (giữa tháng)
+	}
+
+	// ====================================================================
+	// 3. XỬ LÝ TƯƠNG TÁC (INTERACTION PHYSICS)
+	// ====================================================================
+
+	private processInteractions(
+		nodes: EnergyNode[],
+		monthBranch: EarthlyBranch,
+		logs: string[],
+	): { nodes: EnergyNode[]; interactions: Interaction[] } {
+		let currentNodes = [...nodes];
+		const interactions: Interaction[] = [];
+
+		// 1. Tam Hội (Seasonal) - Lực mạnh nhất
+		const seasonalRes = this.processBranchGroup(currentNodes, 'TamHoi', monthBranch, logs);
+		currentNodes = seasonalRes.nodes;
+
+		// 2. Tam Hợp (Triple) - Lực mạnh nhì
+		const tripleRes = this.processBranchGroup(currentNodes, 'TamHop', monthBranch, logs);
+		currentNodes = tripleRes.nodes;
+
+		// 3. Lục Hợp
+		const sixRes = this.processAdjacency(currentNodes, 'LucHop', monthBranch, logs);
+		currentNodes = sixRes.nodes;
+
+		// 4. Lục Xung
+		const clashRes = this.processAdjacency(currentNodes, 'LucXung', monthBranch, logs);
+		currentNodes = clashRes.nodes;
+
+		// 5. Ngũ Hợp Can
+		const stemRes = this.processStemCombinations(currentNodes, monthBranch, logs);
+		currentNodes = stemRes.nodes;
+
+		return { nodes: currentNodes, interactions };
+	}
+
+	// ====================================================================
+	// 4. DÒNG CHẢY & VÙNG TÂM (Core Logic VuLong)
+	// ====================================================================
+
+	private calculateFlowAndCenter(
+		nodes: EnergyNode[],
+		chart: BaziChart,
+		logs: string[],
+	): EnergyNode[] {
+		// Dòng chảy giữa các trụ (Năm -> Tháng, Giờ -> Ngày)
+		this.processPillarToPillarFlow(nodes, 'Year', 'Month', logs);
+		this.processPillarToPillarFlow(nodes, 'Hour', 'Day', logs);
+
+		// Tính điểm Nhật Chủ tại Vùng Tâm
+		this.calculateCenterAccumulation(nodes, chart.day.stem, logs);
+
+		return nodes;
+	}
+
+	/**
+	 * TÍNH ĐIỂM NHẬT CHỦ THEO VÙNG TÂM (V-SHAPE)
+	 * Logic: Can Tháng, Can Giờ, Chi Ngày thuộc Vùng Tâm (hệ số 1.0).
+	 * Các vị trí khác thuộc Vùng Ngoài (hệ số 0.6 - giảm 2/5).
+	 */
+	private calculateCenterAccumulation(
+		nodes: EnergyNode[],
+		dmStemOriginal: HeavenlyStem,
+		logs: string[],
+	) {
+		const dmNode = nodes.find((n) => n.source === 'Day' && n.type === 'Stem');
+		if (!dmNode) return;
+
+		const dmElement = dmNode.transformTo || dmNode.element;
+
+		logs.push(`\n--- TỤ KHÍ VÙNG TÂM (NHẬT CHỦ: ${dmElement}) ---`);
+		logs.push(`Điểm gốc (theo Lệnh tháng): ${dmNode.baseScore.toFixed(2)}`);
+
+		// Định nghĩa Vùng Tâm: Can Tháng, Can Giờ, Chi Ngày
+		const isCenterZone = (n: EnergyNode): boolean => {
+			if (n.source === 'Month' && n.type === 'Stem') return true;
+			if (n.source === 'Hour' && n.type === 'Stem') return true;
+			if (n.source === 'Day' && n.type === 'HiddenStem') return true;
+			return false;
+		};
+
+		let totalSupport = 0;
+		let totalDrain = 0;
+
+		nodes.forEach((node) => {
+			if (node === dmNode || node.isBlocked || node.currentScore <= 0.1) return;
+
+			const nodeElement = node.transformTo || node.element;
+
+			// Hệ số vị trí: Vùng Tâm giữ nguyên, Vùng Ngoài giảm 2/5
+			const positionFactor = isCenterZone(node)
+				? DECAY.INTRA_CENTER_FACTOR
+				: DECAY.ENTER_CENTER_FACTOR;
+			const zoneName = isCenterZone(node) ? 'Vùng Tâm' : 'Vùng Ngoài';
+
+			// Tính lực thực tế sau khi đi vào vùng tâm
+			const effectiveScore = node.currentScore * positionFactor;
+
+			const relation = this.getRelation(nodeElement, dmElement);
+
+			switch (relation) {
+				case 'Hoa': // Tỷ Kiếp (Cùng hành)
+					totalSupport += effectiveScore;
+					logs.push(`> [+] ${node.name} (${zoneName}): +${effectiveScore.toFixed(2)} (Tỷ hòa)`);
+					break;
+				case 'Sinh': // Ấn Kiêu (Sinh ta)
+					totalSupport += effectiveScore;
+					logs.push(`> [+] ${node.name} (${zoneName}): +${effectiveScore.toFixed(2)} (Sinh nhập)`);
+					break;
+				case 'Khac': // Quan Sát (Khắc ta)
+					totalDrain += effectiveScore;
+					logs.push(`> [-] ${node.name} (${zoneName}): -${effectiveScore.toFixed(2)} (Khắc thân)`);
+					break;
+				case 'DuocSinh': // Thực Thương (Ta sinh) - Hao khí
+					totalDrain += effectiveScore;
+					logs.push(`> [-] ${node.name} (${zoneName}): -${effectiveScore.toFixed(2)} (Sinh xuất)`);
+					break;
+				case 'BiKhac': // Tài Tinh (Ta khắc) - Hao lực
+					// Khắc xuất cũng tốn sức, nhưng ít hơn bị khắc
+					const wealthDrain = effectiveScore * DECAY.FLOW_OVERCOME_LOSS;
+					totalDrain += wealthDrain;
+					logs.push(`> [-] ${node.name} (${zoneName}): -${wealthDrain.toFixed(2)} (Khắc xuất/Tài)`);
+					break;
+			}
+		});
+
+		let finalScore = dmNode.baseScore + totalSupport - totalDrain;
+		if (finalScore < 0) finalScore = 0;
+		dmNode.currentScore = finalScore;
+
+		logs.push(`\n=== TỔNG KẾT NHẬT CHỦ ===`);
+		logs.push(`   (+) Gốc: ${dmNode.baseScore.toFixed(2)}`);
+		logs.push(`   (+) Được Sinh/Trợ: ${totalSupport.toFixed(2)}`);
+		logs.push(`   (-) Bị Khắc/Tiết: ${totalDrain.toFixed(2)}`);
+		logs.push(`   (=) ĐIỂM VƯỢNG CUỐI CÙNG: ${finalScore.toFixed(2)}`);
+	}
+
+	// ====================================================================
+	// CÁC HÀM HELPER CHI TIẾT (KHÔNG RÚT GỌN)
+	// ====================================================================
+
+	/**
+	 * Tạo Nodes cho Chi Tháng (Logic Tư Lệnh)
+	 */
+	private createMonthBranchNodes(
+		nodes: EnergyNode[],
+		pillar: Pillar,
+		commander: HeavenlyStem,
+		monthCmd: EarthlyBranch,
+	) {
+		const hiddens = HIDDEN_STEMS[pillar.branch];
+		hiddens.forEach((h, idx) => {
+			let ratio = h.ratio;
+			let note = '';
+			// Logic VuLong: Can tư lệnh được ưu tiên
+			if (h.stem === commander) {
+				if (h.isMain) {
+					ratio = 1.0;
+					note = ' (Bản khí nắm lệnh)';
+				} else {
+					ratio = 0.5; // Tăng lực cho Tạp khí nắm lệnh
+					note = ' (Tạp khí nắm lệnh)';
+				}
+			} else {
+				if (!h.isMain) ratio = 0.1; // Tạp khí thất lệnh rất yếu
+			}
+
+			const info = this.calculateStemPower(h.stem, monthCmd);
+			const score = info.score * ratio;
+
+			nodes.push({
+				id: `${pillar.position}_Branch_${idx}`,
+				source: pillar.position,
+				type: 'HiddenStem',
+				name: h.stem,
+				element: this.getStemElement(h.stem),
+				branchOwner: pillar.branch,
+				lifeCycleStage: info.stage,
+				baseScore: score,
+				currentScore: score,
+				isBlocked: false,
+				isCombined: false,
+				modifications: [{ reason: `Lệnh tháng${note}`, valueChange: 0, factor: ratio }],
+			});
+		});
+	}
+
+	/**
+	 * Tạo Nodes cho Chi Tĩnh (Năm/Ngày/Giờ)
+	 */
+	private createStaticBranchNodes(nodes: EnergyNode[], pillar: Pillar, monthCmd: EarthlyBranch) {
+		const hiddens = HIDDEN_STEMS[pillar.branch];
+		hiddens.forEach((h, idx) => {
+			const info = this.calculateStemPower(h.stem, monthCmd);
+			const score = info.score * h.ratio; // Dùng tỷ lệ tĩnh chuẩn
+			nodes.push({
+				id: `${pillar.position}_Branch_${idx}`,
+				source: pillar.position,
+				type: 'HiddenStem',
+				name: h.stem,
+				element: this.getStemElement(h.stem),
+				branchOwner: pillar.branch,
+				lifeCycleStage: info.stage,
+				baseScore: score,
+				currentScore: score,
+				isBlocked: false,
+				isCombined: false,
+				modifications: [{ reason: `Tàng can tĩnh`, valueChange: 0, factor: h.ratio }],
+			});
+		});
+	}
+
+	private processBranchGroup(
+		nodes: EnergyNode[],
+		type: 'TamHoi' | 'TamHop',
+		monthBranch: EarthlyBranch,
+		logs: string[],
+	) {
+		const dictionary = type === 'TamHoi' ? BRANCH_SEASONAL_COMBINATIONS : BRANCH_TRI_COMBINATIONS;
+		const activeNodes = nodes.filter(
+			(n) => n.type === 'HiddenStem' && n.id.endsWith('_0') && !n.isBlocked,
+		);
+		const checkedGroups = new Set<string>();
+
+		Object.values(dictionary).forEach((config) => {
+			const groupKey = config.group.sort().join('-');
+			if (checkedGroups.has(groupKey)) return;
+			checkedGroups.add(groupKey);
+
+			// Tìm các node khớp với nhóm
+			const matchedNodesMap = new Map<EarthlyBranch, EnergyNode[]>();
+			activeNodes.forEach((node) => {
+				if (config.group.includes(node.branchOwner!)) {
+					if (!matchedNodesMap.has(node.branchOwner!)) matchedNodesMap.set(node.branchOwner!, []);
+					matchedNodesMap.get(node.branchOwner!)!.push(node);
+				}
+			});
+
+			if (matchedNodesMap.size === 3) {
+				const resultEl = config.result;
+				// Điều kiện hóa: Có Thần dẫn (Can lộ) hoặc Lệnh tháng ủng hộ
+				const hasLead = nodes.some(
+					(n) => n.type === 'Stem' && !n.isBlocked && n.element === resultEl,
+				);
+				const monthEl = this.getBranchMainElement(monthBranch);
+				const isSupport = monthEl === resultEl || ELEMENT_RELATIONS[monthEl].generate === resultEl;
+
+				if (hasLead || isSupport) {
+					logs.push(`>> ${type}: ${config.group.join('-')} HÓA THÀNH CÔNG khí ${resultEl}.`);
+
+					// Gom điểm
+					const participants = [
+						matchedNodesMap.get(config.group[0])![0],
+						matchedNodesMap.get(config.group[1])![0],
+						matchedNodesMap.get(config.group[2])![0],
+					];
+					const totalScore = participants.reduce((sum, n) => sum + n.currentScore, 0);
+
+					nodes.push({
+						id: `${type}_${resultEl}_${Date.now()}`,
+						source: 'Month',
+						type: 'HiddenStem',
+						name: `${type} ${resultEl} Cục`,
+						element: resultEl,
+						lifeCycleStage: 'DeVuong',
+						baseScore: totalScore,
+						currentScore: totalScore * DECAY.TRANSFORM_BONUS,
+						isBlocked: false,
+						isCombined: true,
+						modifications: [{ reason: 'Hóa cục', valueChange: 0, factor: DECAY.TRANSFORM_BONUS }],
+					});
+
+					// Block nodes cũ
+					participants.forEach((p) => {
+						this.blockPillarBranch(nodes, p.source, `Tham gia ${type}`);
+					});
+				}
+			}
+		});
+		return { nodes, interactions: [] };
+	}
+
+	private processAdjacency(
+		nodes: EnergyNode[],
+		type: 'LucHop' | 'LucXung',
+		monthBranch: EarthlyBranch,
+		logs: string[],
+	) {
+		const getMain = (pos: string) =>
+			nodes.find(
+				(n) => n.source === pos && n.type === 'HiddenStem' && n.id.endsWith('_0') && !n.isBlocked,
+			);
+		const pairs = [
+			{ p1: 'Year', p2: 'Month' },
+			{ p1: 'Month', p2: 'Day' },
+			{ p1: 'Day', p2: 'Hour' },
+		];
+
+		pairs.forEach((pair) => {
+			const n1 = getMain(pair.p1);
+			const n2 = getMain(pair.p2);
+			if (!n1 || !n2 || !n1.branchOwner || !n2.branchOwner) return;
+
+			if (type === 'LucXung' && BRANCH_CLASHES[n1.branchOwner] === n2.branchOwner) {
+				const s1 = n1.currentScore;
+				const s2 = n2.currentScore;
+				// Logic Xung: Mạnh thắng Yếu (Gấp 1.5 lần thì thắng)
+				if (s1 > s2 * 1.5) {
+					this.applyDecay(n1, DECAY.CLASH_WINNER, `Thắng xung ${n2.branchOwner}`);
+					this.applyDecay(n2, DECAY.CLASH_LOSER, `Thua xung ${n1.branchOwner}`);
+				} else if (s2 > s1 * 1.5) {
+					this.applyDecay(n1, DECAY.CLASH_LOSER, `Thua xung ${n2.branchOwner}`);
+					this.applyDecay(n2, DECAY.CLASH_WINNER, `Thắng xung ${n1.branchOwner}`);
+				} else {
+					this.applyDecay(n1, DECAY.CLASH_DRAW, `Xung hòa ${n2.branchOwner}`);
+					this.applyDecay(n2, DECAY.CLASH_DRAW, `Xung hòa ${n1.branchOwner}`);
+				}
+				logs.push(`>> Lục Xung: ${n1.branchOwner} <> ${n2.branchOwner}`);
+			} else if (type === 'LucHop') {
+				const combo = BRANCH_SIX_COMBINATIONS[n1.branchOwner];
+				if (combo && combo.target === n2.branchOwner) {
+					const resEl = combo.result;
+					const monthEl = this.getBranchMainElement(monthBranch);
+					const hasLead = nodes.some(
+						(n) => n.type === 'Stem' && !n.isBlocked && n.element === resEl,
+					);
+
+					// Hóa hay Trói?
+					if (hasLead || monthEl === resEl) {
+						logs.push(`>> Lục Hợp: ${n1.branchOwner}-${n2.branchOwner} HÓA ${resEl}`);
+						n1.element = resEl;
+						n1.name = `${n1.branchOwner}-${n2.branchOwner} Hóa ${resEl}`;
+						n1.currentScore = (n1.currentScore + n2.currentScore) * DECAY.TRANSFORM_BONUS;
+						n2.isBlocked = true;
+						n2.currentScore = 0;
+					} else {
+						logs.push(`>> Lục Hợp: ${n1.branchOwner}-${n2.branchOwner} TRÓI (Không hóa)`);
+						this.applyDecay(n1, DECAY.COMBINE_BINDING, 'Hợp trói');
+						this.applyDecay(n2, DECAY.COMBINE_BINDING, 'Hợp trói');
+					}
+				}
+			}
+		});
+		return { nodes, interactions: [] };
+	}
+
+	private processStemCombinations(nodes: EnergyNode[], monthBranch: EarthlyBranch, logs: string[]) {
+		const getStem = (pos: string) =>
+			nodes.find((n) => n.source === pos && n.type === 'Stem' && !n.isBlocked);
+		const pairs = [
+			{ p1: 'Year', p2: 'Month' },
+			{ p1: 'Month', p2: 'Day' },
+			{ p1: 'Day', p2: 'Hour' },
+		];
+
+		pairs.forEach((pair) => {
+			const s1 = getStem(pair.p1);
+			const s2 = getStem(pair.p2);
+			if (s1 && s2) {
+				const combo = STEM_COMBINATIONS[s1.name as HeavenlyStem];
+				if (combo && combo.target === s2.name) {
+					const resEl = combo.result;
+					// Check Lệnh tháng (bao gồm cả Hóa cục ở chi tháng nếu có)
+					const monthEl = this.getBranchMainElement(monthBranch);
+					const monthTamNode = nodes.find((n) => n.source === 'Month' && n.isCombined);
+					const realMonthEl = monthTamNode ? monthTamNode.element : monthEl;
+
+					if (realMonthEl === resEl) {
+						logs.push(`>> Can Hợp: ${s1.name}-${s2.name} HÓA ${resEl}`);
+						s1.transformTo = resEl;
+						s1.currentScore *= DECAY.TRANSFORM_BONUS;
+						s2.transformTo = resEl;
+						s2.currentScore *= DECAY.TRANSFORM_BONUS;
+					} else {
+						logs.push(`>> Can Hợp: ${s1.name}-${s2.name} TRÓI`);
+						this.applyDecay(s1, DECAY.COMBINE_BINDING, `Trói ${s2.name}`);
+						this.applyDecay(s2, DECAY.COMBINE_BINDING, `Trói ${s1.name}`);
+					}
+				}
+			}
+		});
+		return { nodes, interactions: [] };
+	}
+
+	private processPillarToPillarFlow(
+		nodes: EnergyNode[],
+		src: PillarPosition,
+		target: PillarPosition,
+		logs: string[],
+	) {
+		const sNodes = nodes.filter((n) => n.source === src && !n.isBlocked);
+		const tNodes = nodes.filter((n) => n.source === target && !n.isBlocked);
+		if (!sNodes.length || !tNodes.length) return;
+
+		const sEl = this.getPillarDominantElement(sNodes);
+		const tEl = this.getPillarDominantElement(tNodes);
+		const sScore = this.getPillarTotalScore(sNodes);
+		const rel = this.getRelation(sEl, tEl);
+
+		// Mapping tên tiếng Việt cho Log
+		const posName: Record<string, string> = {
+			Year: 'Năm',
+			Month: 'Tháng',
+			Day: 'Ngày',
+			Hour: 'Giờ',
+		};
+
+		if (rel === 'Sinh') {
+			// Nguồn sinh Đích -> Nguồn mất lực, Đích được lợi
+			this.decayPillarScore(sNodes, DECAY.FLOW_GENERATE_LOSS, `Sinh xuất cho ${posName[target]}`);
+			const gain = sScore * 0.3; // Hiệu suất sinh
+			this.boostPillarScore(tNodes, gain, tEl, `Được ${posName[src]} sinh nhập`);
+			logs.push(
+				`Dòng chảy ${posName[src]} -> ${posName[target]}: Tương sinh (+${gain.toFixed(2)}đ)`,
+			);
+		} else if (rel === 'Khac') {
+			// Nguồn khắc Đích -> Nguồn hao lực, Đích bị thương
+			this.decayPillarScore(sNodes, DECAY.FLOW_OVERCOME_LOSS, `Khắc xuất ${posName[target]}`);
+			this.decayPillarScore(tNodes, 0.4, `Bị ${posName[src]} khắc nhập`);
+			logs.push(`Dòng chảy ${posName[src]} -> ${posName[target]}: Tương khắc (Tổn hao)`);
+		} else if (rel === 'Hoa') {
+			const boost = sScore * 0.1;
+			this.boostPillarScore(tNodes, boost, tEl, `Tỷ hòa với ${posName[src]}`);
+			logs.push(`Dòng chảy ${posName[src]} -> ${posName[target]}: Tỷ hòa (+${boost.toFixed(2)}đ)`);
+		}
+	}
+
+	private determineStructureAndStrength(nodes: EnergyNode[], dmStem: HeavenlyStem, logs: string[]) {
+		const dmNode = nodes.find((n) => n.source === 'Day' && n.type === 'Stem');
+		const dmEl = dmNode?.transformTo || dmNode?.element || this.getStemElement(dmStem);
+		const dmScore = dmNode?.currentScore || 0;
+
+		const elScores = this.aggregateScores(nodes);
+		const godScores = this.calculateGodScores(nodes, dmEl, dmStem);
+
+		const party = godScores.TyKien + godScores.KiepTai + godScores.ChinhAn + godScores.ThienAn;
+		const total = Object.values(elScores).reduce((a, b) => a + b, 0);
+		const enemy = total - party;
+
+		// Logic VuLong: So sánh điểm Nhật chủ với Địch mạnh nhất
+		// Nếu Nhật chủ > Địch + 1 -> Vượng
+		const isVwang = dmScore >= 5.0; // Đây là ngưỡng ước lượng, có thể cần tinh chỉnh thêm theo thực tế
+
+		logs.push(`\n>> Phân tích Cường Nhược:`);
+		logs.push(`   Phe Ta (Ấn+Tỷ): ${party.toFixed(1)}`);
+		logs.push(`   Phe Địch (Tài+Quan+Thực): ${enemy.toFixed(1)}`);
+		logs.push(`   => Kết luận: ${isVwang ? 'Thân Vượng' : 'Thân Nhược'}`);
+
 		return {
-			canIndex: canIdx,
-			chiIndex: chiIdx,
-			can: HEAVENLY_STEMS[canIdx],
-			chi: EARTHLY_BRANCHES[chiIdx],
+			centerZone: {
+				dayMasterScore: dmScore,
+				partyScore: party,
+				enemyScore: enemy,
+				diffScore: party - enemy,
+				isVwang,
+				isStrongVwang: false,
+				isWeakVwang: false,
+			},
+			structure: isVwang ? 'Thân Vượng' : 'Thân Nhược',
+			structureType: 'Nội Cách',
+			godScores,
+			dmElement: dmEl,
 		};
 	}
 
-	private createPillarFromLunarName(name: string): Pillar {
-		const parts = name.trim().split(' ');
-		const can = parts[0] as HeavenlyStem;
-		const chi = parts[1] as EarthlyBranch;
-		const canIdx = HEAVENLY_STEMS.indexOf(can);
-		const chiIdx = EARTHLY_BRANCHES.indexOf(chi);
-		if (canIdx === -1 || chiIdx === -1) throw new Error(`Lỗi parse Can Chi: ${name}`);
-		return { can, chi, canIndex: canIdx, chiIndex: chiIdx };
-	}
+	private calculateLimitScoreProfile(
+		center: CenterZoneAnalysis,
+		godScores: Record<TenGod, number>,
+		dmEl: FiveElement,
+		structType: string,
+		logs: string[],
+	): LimitScoreProfile {
+		let dung: FiveElement[] = [],
+			hy: FiveElement[] = [],
+			ky: FiveElement[] = [],
+			hung: FiveElement[] = [];
+		const map = TEN_GODS_MAPPING[dmEl];
+		const getEl = (g: string) => (map as any)[g] as FiveElement;
 
-	private getHourPillar(hour: number, dayCanIndex: number): Pillar {
-		// Giờ Tý (23-1) -> Index 0, Sửu (1-3) -> Index 1...
-		const chiIndex = Math.floor((hour + 1) / 2) % 12;
-		// Ngũ Thử Độn: (CanNgày % 5) * 2 + ChiGiờ
-		const startHourCan = (dayCanIndex % 5) * 2;
-		const canIndex = (startHourCan + chiIndex) % 10;
-		return this.createPillarFromIndex(canIndex, chiIndex);
-	}
+		// Tính điểm phe Ta
+		const scoreIndource = godScores.ChinhAn + godScores.ThienAn; // Ấn
+		const scoreSelf = godScores.TyKien + godScores.KiepTai; // Tỷ
 
-	private getYearPillar(lunarDate: LunarDate, solarTerm: string): Pillar {
-		let { canIndex, chiIndex } = this.createPillarFromLunarName(lunarDate.getYearName());
+		if (structType.includes('Ngoại')) {
+			// Logic Ngoại cách (Tòng/Hóa) - Giữ nguyên như cũ hoặc tinh chỉnh sau
+			if (center.isWeakVwang) {
+				// Tòng
+				dung.push(
+					getEl('ChinhTai'),
+					getEl('ThienTai'),
+					getEl('ChinhQuan'),
+					getEl('ThatSat'),
+					getEl('ThucThan'),
+					getEl('ThuongQuan'),
+				);
+				ky.push(getEl('ChinhAn'), getEl('ThienAn'), getEl('TyKien'), getEl('KiepTai'));
+			} else {
+				// Độc vượng
+				dung.push(getEl('TyKien'), getEl('KiepTai'), getEl('ChinhAn'), getEl('ThienAn'));
+				ky.push(getEl('ChinhTai'), getEl('ThienTai'), getEl('ChinhQuan'), getEl('ThatSat'));
+			}
+		} else {
+			// NỘI CÁCH (CHÍNH CÁCH)
+			if (center.isVwang) {
+				// --- THÂN VƯỢNG ---
+				logs.push('>> Thân Vượng: Cần Khắc/Tiết/Hao.');
+				// Nếu Vượng do Ấn nhiều -> Dụng Tài phá Ấn (Ưu tiên 1), Hỷ Thực Thương.
+				if (scoreIndource > scoreSelf) {
+					dung.push(getEl('ChinhTai'), getEl('ThienTai'));
+					hy.push(getEl('ThucThan'), getEl('ThuongQuan'), getEl('ChinhQuan'), getEl('ThatSat'));
+				} else {
+					// Vượng do Tỷ Kiếp -> Dụng Quan Sát (Ưu tiên 1), Hỷ Tài/Thực.
+					dung.push(getEl('ChinhQuan'), getEl('ThatSat'));
+					hy.push(getEl('ThucThan'), getEl('ThuongQuan'), getEl('ChinhTai'), getEl('ThienTai'));
+				}
 
-		// Tiết khí thuộc năm cũ
-		const endOfYearTerms = ['Tiểu hàn', 'Đại hàn', 'Đông chí'];
-		// Tiết khí thuộc năm mới
-		const startOfYearTerms = ['Lập xuân', 'Vũ thủy'];
+				ky.push(getEl('ChinhAn'), getEl('ThienAn'), getEl('TyKien'), getEl('KiepTai'));
 
-		// Tháng 1 âm nhưng chưa Lập Xuân -> Vẫn tính là năm cũ
-		if (lunarDate.month === 1 && endOfYearTerms.includes(solarTerm)) {
-			canIndex = (canIndex - 1 + 10) % 10;
-			chiIndex = (chiIndex - 1 + 12) % 12;
+				// Hung thần (Khắc dụng thần)
+				if (dung.includes(getEl('ChinhTai'))) hung.push(getEl('KiepTai')); // Kiếp tài
+				if (dung.includes(getEl('ChinhQuan'))) hung.push(getEl('ThuongQuan')); // Thương quan
+			} else {
+				// --- THÂN NHƯỢC ---
+				logs.push('>> Thân Nhược: Cần Sinh/Trợ.');
+
+				// Logic VuLong: Chọn hành cứu giải mạnh nhất làm Dụng, hành hỗ trợ làm Hỷ.
+				// Thường lấy Ấn làm Dụng thần đầu tiên cho thân nhược.
+				dung.push(getEl('ChinhAn'), getEl('ThienAn'));
+				hy.push(getEl('TyKien'), getEl('KiepTai'));
+
+				ky.push(
+					getEl('ChinhQuan'),
+					getEl('ThatSat'),
+					getEl('ThucThan'),
+					getEl('ThuongQuan'),
+					getEl('ChinhTai'),
+					getEl('ThienTai'),
+				);
+
+				// Hung thần nguy hiểm nhất cho thân nhược là Tài (vì Tài phá Ấn - Phá dụng thần)
+				hung.push(getEl('ChinhTai'), getEl('ThienTai'));
+			}
 		}
-		// Tháng 12 âm nhưng đã Lập Xuân -> Tính sang năm mới
-		else if (lunarDate.month === 12 && startOfYearTerms.includes(solarTerm)) {
+
+		// --- LỌC TRÙNG LẶP (FIX LỖI UI) ---
+		const unique = (arr: FiveElement[]) => [...new Set(arr)];
+		dung = unique(dung);
+		hy = unique(hy);
+		ky = unique(ky);
+		hung = unique(hung);
+
+		// Loại bỏ Hỷ thần nếu nó trùng với Dụng thần (để Dụng thần ưu tiên hiển thị)
+		hy = hy.filter((el) => !dung.includes(el));
+		// Loại bỏ Kỵ thần nếu trùng Hung thần
+		ky = ky.filter((el) => !hung.includes(el));
+
+		// Mapping điểm số
+		const scores: Record<string, number> = { Kim: 0, Mộc: 0, Thủy: 0, Hỏa: 0, Thổ: 0 };
+
+		// Gán điểm theo thứ tự ưu tiên: Hung > Dụng > Kỵ > Hỷ
+		// (Lưu ý: Logic đè điểm để đảm bảo một hành chỉ có 1 điểm số duy nhất)
+		const allElements: FiveElement[] = ['Kim', 'Mộc', 'Thủy', 'Hỏa', 'Thổ'];
+		allElements.forEach((el) => {
+			if (hung.includes(el)) scores[el] = LIMIT_SCORES.HUNG_THAN;
+			else if (dung.includes(el)) scores[el] = LIMIT_SCORES.DUNG_THAN;
+			else if (ky.includes(el)) scores[el] = LIMIT_SCORES.KY_THAN;
+			else if (hy.includes(el)) scores[el] = LIMIT_SCORES.HY_THAN;
+			else scores[el] = LIMIT_SCORES.NHAN_THAN;
+		});
+
+		return { dungThan: dung, hyThan: hy, kyThan: ky, hungThan: hung, scores };
+	}
+
+	// ---------------------------------------------------------------------
+	// UTILITIES & DATA ACCESS
+	// ---------------------------------------------------------------------
+
+	private createPillarFromLunarName(name: string, pos: PillarPosition): any {
+		const parts = name.trim().split(' ');
+		return this.createPillarFromIndex(
+			HEAVENLY_STEMS.indexOf(parts[0] as any),
+			EARTHLY_BRANCHES.indexOf(parts[1] as any),
+			pos,
+		);
+	}
+	private createPillarFromIndex(c: number, b: number, pos: PillarPosition): any {
+		const stem = HEAVENLY_STEMS[c];
+		const branch = EARTHLY_BRANCHES[b];
+		return {
+			position: pos,
+			canIndex: c,
+			chiIndex: b,
+			stem,
+			branch,
+			stemElement: this.getStemElement(stem),
+			branchElement: this.getBranchMainElement(branch),
+		};
+	}
+	private getHourPillar(h: number, dIdx: number) {
+		const chi = Math.floor((h + 1) / 2) % 12;
+		const can = ((dIdx % 5) * 2 + chi) % 10;
+		return this.createPillarFromIndex(can, chi, 'Hour');
+	}
+	private getYearPillar(lunar: any, term: string) {
+		let { canIndex, chiIndex } = this.createPillarFromLunarName(lunar.getYearName(), 'Year');
+		// Logic chuyển năm theo Lập Xuân (Tháng 12 chưa lập xuân thì vẫn năm cũ, tháng 1 chưa lập xuân thì lùi năm)
+		const month = lunar.get().month;
+		if (month === 12 && ['Lập xuân', 'Vũ thủy'].includes(term)) {
 			canIndex = (canIndex + 1) % 10;
 			chiIndex = (chiIndex + 1) % 12;
 		}
-		return this.createPillarFromIndex(canIndex, chiIndex);
+		return this.createPillarFromIndex(canIndex, chiIndex, 'Year');
 	}
-
-	private getMonthPillar(yearCanIndex: number, solarTerm: string): Pillar {
-		const chiIndex = SOLAR_TERM_TO_BRANCH_INDEX[solarTerm];
-		if (chiIndex === undefined) throw new Error(`Không tìm thấy tiết khí: ${solarTerm}`);
-
-		// Lập Xuân là tháng Dần (Index 2)
-		let monthOffset = chiIndex - 2;
-		if (monthOffset < 0) monthOffset += 12;
-
-		// Ngũ Hổ Độn: (CanNam % 5) * 2 + 2 = Can tháng Dần
-		const startMonthCan = (yearCanIndex % 5) * 2 + 2;
-		const canIndex = (startMonthCan + monthOffset) % 10;
-		return this.createPillarFromIndex(canIndex, chiIndex);
+	private getMonthPillar(yIdx: number, term: string) {
+		const chi = SOLAR_TERM_TO_BRANCH_INDEX[term] || 2;
+		let mOff = chi - 2;
+		if (mOff < 0) mOff += 12;
+		const can = ((yIdx % 5) * 2 + 2 + mOff) % 10;
+		return this.createPillarFromIndex(can, chi, 'Month');
 	}
-
-	// ====================================================================
-	// 2. LOGIC PHÂN TÍCH CỐT LÕI (CORE ANALYSIS)
-	// ====================================================================
-
-	/**
-	 * Phân tích toàn diện lá số:
-	 * - Tính Thần sát.
-	 * - Đánh giá hợp xung địa chi.
-	 * - Tính điểm định lượng ngũ hành theo phương pháp VuLong (Vùng tâm).
-	 * - Xác định Cách cục (Nội cách/Ngoại cách).
-	 * - Chọn Dụng thần, Hỷ thần, Kỵ thần, Cừu thần, Nhàn thần.
-	 */
-	private analyze(chart: BaziChart): AnalysisResult & {
-		god_scores: Record<TenGod, number>;
-		interactions: any;
-		score_details: any[];
-		party_score: number;
-		enemy_score: number;
-		percentage_self: number;
-	} {
-		// A. Thần Sát
-		const shenSha = this.calculateShenSha(chart);
-
-		// B. Tương tác Địa Chi (Hợp, Xung, Hình, Hại)
-		const interactions = this.evaluateBranchInteractions(chart);
-
-		// C. Tính Điểm Ngũ Hành (Quantitative Scoring)
-		// Áp dụng trọng số Vùng Tâm và Tương tác
-		const { scores, details: scoreDetails } = this.calculateAdvancedScores(chart, interactions);
-		const totalScore = Object.values(scores).reduce((a, b) => a + b, 0);
-
-		// D. Nhật Chủ & Thập Thần
-		const dmCan = HEAVENLY_STEMS[chart.day.canIndex];
-		const dmElement = STEM_ELEMENTS[dmCan];
-		const godsMap = TEN_GODS_MAPPING[dmElement];
-		const godScores: Record<TenGod, number> = {
-			TyKiep: scores[godsMap.TyKiep],
-			KieuAn: scores[godsMap.KieuAn],
-			ThucThuong: scores[godsMap.ThucThuong],
-			TaiTinh: scores[godsMap.TaiTinh],
-			QuanSat: scores[godsMap.QuanSat],
-		};
-
-		// E. Kiểm tra Ngoại Cách (Biến Cách)
-		const specialStructure = this.checkSpecialStructures(
-			chart,
-			dmElement,
-			scores,
-			godScores,
-			totalScore,
-			interactions,
-		);
-
-		if (specialStructure) {
-			return {
-				...specialStructure,
-				element_scores: scores,
-				shen_sha: shenSha,
-				god_scores: godScores,
-				interactions,
-				score_details: scoreDetails,
-			};
+	private getCommanderStem(chi: EarthlyBranch, days: number): HeavenlyStem {
+		const rules = MONTH_COMMANDER_RULES[chi];
+		let sum = 0;
+		for (const r of rules) {
+			sum += r.days;
+			if (days <= sum) return r.stem;
 		}
-
-		// F. Chính Cách (Nội Cách): Định Thân Vượng/Nhược
-		const partyScore = godScores.TyKiep + godScores.KieuAn; // Phe Ta (Thân + Ấn)
-		const enemyScore = totalScore - partyScore; // Phe Địch (Tài + Quan + Thực)
-		const percentageSelf = totalScore > 0 ? (partyScore / totalScore) * 100 : 0;
-
-		const monthChi = EARTHLY_BRANCHES[chart.month.chiIndex];
-
-		// Xác định Hành của Lệnh Tháng (xét cả trường hợp Hóa cục)
-		let monthElement = BRANCH_ELEMENTS[monthChi];
-		if (interactions.isMonthChanged && interactions.monthNewElement) {
-			monthElement = interactions.monthNewElement;
-		}
-
-		// Kiểm tra Đắc Lệnh: Sinh tháng cùng hành hoặc tháng Ấn
-		const isDacLenh = monthElement === dmElement || monthElement === godsMap.KieuAn;
-		let status = 'Nhược';
-		let reason = '';
-
-		// Ngưỡng vượng/nhược tùy thuộc vào Đắc Lệnh hay Thất Lệnh
-		if (isDacLenh) {
-			if (partyScore >= totalScore * 0.4) {
-				status = 'Vượng';
-				reason = `Đắc lệnh tháng ${monthChi}, khí thế hữu căn, phe ta chiếm ưu thế.`;
-			} else {
-				status = 'Nhược';
-				reason = `Đắc lệnh tháng ${monthChi} nhưng bị khắc tiết quá nhiều (Thực/Tài/Quan vượng).`;
-			}
-		} else {
-			if (partyScore >= totalScore * 0.55) {
-				// Thất lệnh cần điểm cao hơn để Vượng
-				status = 'Vượng';
-				reason = `Thất lệnh nhưng đắc đảng (Tỷ/Ấn nhiều), thế lực vượng.`;
-			} else {
-				status = 'Nhược';
-				reason = `Thất lệnh, không đủ sinh phù từ Ấn và Tỷ Kiếp.`;
-			}
-		}
-
-		// G. Chọn Dụng Thần cho Chính Cách (Phù Ức)
-		let favorable = this.findGodsForNormalStructure(status, godScores, godsMap, chart);
-
-		// H. Điều Hầu (Cân bằng khí hậu - Rất quan trọng)
-		// Nếu sinh tháng Hợi/Tý/Sửu (Đông) hoặc Tỵ/Ngọ/Mùi (Hạ), cần xét Điều hầu
-		const climateGods = this.checkClimate(monthChi, dmElement, favorable.dung_than);
-
-		if (climateGods.length > 0) {
-			// Thêm thần Điều hầu vào danh sách Hỷ thần (hoặc Dụng thần thứ cấp)
-			climateGods.forEach((g) => {
-				if (!favorable.dung_than.includes(g)) {
-					favorable.hy_than.push(g);
-				}
-			});
-
-			// TÍNH LẠI toàn bộ hệ thống Thần (Kỵ/Cừu/Nhàn) sau khi cập nhật Hỷ thần
-			// để đảm bảo tính nhất quán sinh khắc
-			favorable = this.categorizeAllGods(favorable.dung_than, favorable.hy_than);
-		}
-
-		return {
-			day_master_status: status,
-			structure_type: 'Chính Cách',
-			structure_name: 'Chính Cách (Phù Ức)',
-			analysis_reason: reason,
-			favorable_elements: favorable,
-			element_scores: scores,
-			shen_sha: shenSha,
-			god_scores: godScores,
-			interactions,
-			score_details: scoreDetails,
-			party_score: partyScore,
-			enemy_score: enemyScore,
-			percentage_self: percentageSelf,
-		};
+		return rules[rules.length - 1].stem;
 	}
-
-	// ====================================================================
-	// 3. CÁC HÀM TÍNH TOÁN CHI TIẾT (HELPER FUNCTIONS)
-	// ====================================================================
-
-	/**
-	 * Phân loại toàn bộ 5 loại thần dựa trên Dụng thần và Hỷ thần đã chọn.
-	 * Quy tắc:
-	 * - Dụng Thần: Đã xác định.
-	 * - Hỷ Thần: Đã xác định (hoặc sinh Dụng).
-	 * - Kỵ Thần: Khắc Dụng Thần.
-	 * - Cừu Thần: Sinh Kỵ Thần (hoặc Khắc Hỷ Thần).
-	 * - Nhàn Thần: Các hành còn lại.
-	 */
-	private categorizeAllGods(
-		dungThanList: FiveElement[],
-		hyThanList: FiveElement[],
-	): AnalysisResult['favorable_elements'] {
-		const allElements: FiveElement[] = ['Kim', 'Mộc', 'Thủy', 'Hỏa', 'Thổ'];
-
-		// Chuẩn hóa danh sách
-		const dung = Array.from(new Set(dungThanList));
-		const hy = Array.from(new Set(hyThanList)).filter((e) => !dung.includes(e));
-
-		// Kỵ Thần: Hành KHẮC Dụng thần
-		const ky: FiveElement[] = [];
-		dung.forEach((dt) => {
-			const enemy = Object.keys(CONTROLLING_CYCLE).find(
-				(k) => CONTROLLING_CYCLE[k as FiveElement] === dt,
-			) as FiveElement;
-			if (enemy && !dung.includes(enemy) && !hy.includes(enemy)) {
-				ky.push(enemy);
-			}
+	private getStemElement(s: HeavenlyStem): FiveElement {
+		if (['Giáp', 'Ất'].includes(s)) return 'Mộc';
+		if (['Bính', 'Đinh'].includes(s)) return 'Hỏa';
+		if (['Mậu', 'Kỷ'].includes(s)) return 'Thổ';
+		if (['Canh', 'Tân'].includes(s)) return 'Kim';
+		return 'Thủy';
+	}
+	private getBranchMainElement(b: EarthlyBranch): FiveElement {
+		return this.getStemElement(HIDDEN_STEMS[b].find((h) => h.isMain)!.stem);
+	}
+	private calculateStemPower(stem: HeavenlyStem, branch: EarthlyBranch) {
+		const stage = LIFE_CYCLE_TABLE[stem][branch];
+		return { stage, score: LIFE_CYCLE_SCORES[stage] };
+	}
+	private getRelation(e1: FiveElement, e2: FiveElement) {
+		if (e1 === e2) return 'Hoa';
+		if (ELEMENT_RELATIONS[e1].generate === e2) return 'Sinh';
+		if (ELEMENT_RELATIONS[e2].generate === e1) return 'DuocSinh';
+		if (ELEMENT_RELATIONS[e1].overcome === e2) return 'Khac';
+		return 'BiKhac';
+	}
+	private aggregateScores(nodes: EnergyNode[]) {
+		const s = { Kim: 0, Mộc: 0, Thủy: 0, Hỏa: 0, Thổ: 0 };
+		nodes.forEach((n) => {
+			if (!n.isBlocked) s[n.element] += n.currentScore;
 		});
-
-		// Cừu Thần: Hành SINH Kỵ thần (Nguồn gốc của cái xấu)
-		const cuu: FiveElement[] = [];
-		ky.forEach((kt) => {
-			const parent = Object.keys(PRODUCING_CYCLE).find(
-				(k) => PRODUCING_CYCLE[k as FiveElement] === kt,
-			) as FiveElement;
-			if (parent && !dung.includes(parent) && !hy.includes(parent) && !ky.includes(parent)) {
-				cuu.push(parent);
-			}
-		});
-
-		// Nhàn Thần: Các hành còn lại
-		const used = new Set([...dung, ...hy, ...ky, ...cuu]);
-		const nhan = allElements.filter((e) => !used.has(e));
-
-		return {
-			dung_than: dung,
-			hy_than: hy,
-			ky_than: Array.from(new Set(ky)),
-			cuu_than: Array.from(new Set(cuu)),
-			nhan_than: nhan,
-		};
+		return s;
+	}
+	private getPillarDominantElement(nodes: EnergyNode[]) {
+		return nodes.reduce((a, b) => (a.currentScore > b.currentScore ? a : b)).element;
+	}
+	private getPillarTotalScore(nodes: EnergyNode[]) {
+		return nodes.reduce((a, b) => a + b.currentScore, 0);
 	}
 
-	/**
-	 * Tính Thần Sát (Shen Sha) dựa trên Can/Chi của các trụ.
-	 */
-	private calculateShenSha(chart: BaziChart): string[] {
-		const result: string[] = [];
-		const dayCan = chart.day.can;
-		const yearCan = chart.year.can;
-		const dayChi = chart.day.chi;
-		const yearChi = chart.year.chi;
-		const monthChi = chart.month.chi;
-		const pillars = [chart.year, chart.month, chart.day, chart.hour];
-		const pillarNames = ['Năm', 'Tháng', 'Ngày', 'Giờ'];
-
-		pillars.forEach((p, idx) => {
-			const chi = p.chi;
-			const can = p.can;
-
-			// 1. Thiên Ất (Quý nhân giải hạn tốt nhất)
-			if (
-				SHEN_SHA_RULES.THIEN_AT[dayCan]?.includes(chi) ||
-				SHEN_SHA_RULES.THIEN_AT[yearCan]?.includes(chi)
-			)
-				result.push(`${SHEN_SHA.THIEN_AT} tại trụ ${pillarNames[idx]}`);
-
-			// 2. Văn Xương
-			if (SHEN_SHA_RULES.VAN_XUONG[dayCan] === chi || SHEN_SHA_RULES.VAN_XUONG[yearCan] === chi)
-				result.push(`${SHEN_SHA.VAN_XUONG} tại trụ ${pillarNames[idx]}`);
-
-			// 3. Lộc Thần
-			if (SHEN_SHA_RULES.LOC_THAN[dayCan] === chi)
-				result.push(`${SHEN_SHA.LOC_THAN} tại trụ ${pillarNames[idx]}`);
-
-			// 4. Kình Dương
-			if (SHEN_SHA_RULES.KINH_DUONG[dayCan] === chi)
-				result.push(`${SHEN_SHA.KINH_DUONG} tại trụ ${pillarNames[idx]}`);
-
-			// 5. Dịch Mã
-			if (SHEN_SHA_RULES.DICH_MA[dayChi] === chi || SHEN_SHA_RULES.DICH_MA[yearChi] === chi)
-				result.push(`${SHEN_SHA.DICH_MA} tại trụ ${pillarNames[idx]}`);
-
-			// 6. Đào Hoa
-			if (SHEN_SHA_RULES.DAO_HOA[dayChi] === chi || SHEN_SHA_RULES.DAO_HOA[yearChi] === chi)
-				result.push(`${SHEN_SHA.DAO_HOA} tại trụ ${pillarNames[idx]}`);
-
-			// 7. Hoa Cái
-			if (SHEN_SHA_RULES.HOA_CAI[dayChi] === chi || SHEN_SHA_RULES.HOA_CAI[yearChi] === chi)
-				result.push(`${SHEN_SHA.HOA_CAI} tại trụ ${pillarNames[idx]}`);
-
-			// 8. Thiên Đức (Theo Chi Tháng)
-			const thienDucVal = (SHEN_SHA_RULES as any).THIEN_DUC[monthChi];
-			if (thienDucVal && (can === thienDucVal || chi === thienDucVal))
-				result.push(`${SHEN_SHA.THIEN_DUC} tại trụ ${pillarNames[idx]}`);
-
-			// 9. Nguyệt Đức (Theo Chi Tháng)
-			const nguyetDucCan = (SHEN_SHA_RULES as any).NGUYET_DUC[monthChi];
-			if (can === nguyetDucCan) result.push(`${SHEN_SHA.NGUYET_DUC} tại trụ ${pillarNames[idx]}`);
-		});
-
-		// 10. Khôi Canh (Chỉ xét Trụ Ngày)
-		const dayPair = `${dayCan} ${dayChi}`;
-		if (['Canh Thìn', 'Canh Tuất', 'Nhâm Thìn', 'Mậu Tuất'].includes(dayPair)) {
-			result.push(SHEN_SHA.KHOI_CANH);
+	private applyDecay(n: EnergyNode, f: number, r: string) {
+		const loss = n.currentScore * (1 - f);
+		n.currentScore *= f;
+		n.modifications.push({ reason: r, valueChange: -loss, factor: f });
+		if (n.currentScore < 0.5) {
+			n.isBlocked = true;
+			n.currentScore = 0;
 		}
-
-		// 11. Không Vong
-		const kvBranches = KHONG_VONG_RULES[dayPair] || [];
-		pillars.forEach((p, idx) => {
-			// Không Vong không tính tại trụ Ngày (vì trụ Ngày là gốc tính ra KV)
-			if (idx !== 2 && kvBranches.includes(p.chi)) {
-				result.push(`${SHEN_SHA.KHONG_VONG} tại trụ ${pillarNames[idx]}`);
-			}
-		});
-
-		// 12. Thiên La - Địa Võng
-		const allBranches = pillars.map((p) => p.chi);
-
-		if (allBranches.includes('Tuất') && allBranches.includes('Hợi')) {
-			result.push(SHEN_SHA.THIEN_LA);
-		}
-		if (allBranches.includes('Thìn') && allBranches.includes('Tỵ')) {
-			result.push(SHEN_SHA.DIA_VONG);
-		}
-
-		return result;
 	}
-
-	/**
-	 * Đánh giá tương tác giữa các Địa chi: Tam Hội, Tam Hợp, Lục Xung.
-	 * Xác định xem có Hóa cục thành công hay không để thay đổi hành của Lệnh tháng.
-	 */
-	private evaluateBranchInteractions(chart: BaziChart) {
-		const branches = [chart.year.chi, chart.month.chi, chart.day.chi, chart.hour.chi];
-		const stems = [chart.year.can, chart.month.can, chart.day.can, chart.hour.can];
-		const counts = branches.reduce(
-			(acc, b) => {
-				acc[b] = (acc[b] || 0) + 1;
-				return acc;
-			},
-			{} as Record<string, number>,
-		);
-
-		const interactions = {
-			tamHoi: null as FiveElement | null,
-			sanHe: null as FiveElement | null,
-			lucXung: [] as number[],
-			isMonthChanged: false,
-			monthNewElement: null as FiveElement | null,
-		};
-
-		// Kiểm tra Thần Dẫn: Thiên can phải có hành hóa thần thấu lộ
-		const hasThanDan = (element: FiveElement): boolean => {
-			return stems.some((s) => STEM_ELEMENTS[s] === element);
-		};
-
-		// 1. Tam Hội (Mạnh nhất)
-		for (const [el, group] of Object.entries(BRANCH_INTERACTIONS.SEASONAL_COMBINATION)) {
-			if (group.every((b) => counts[b])) {
-				// Tam hội thường tự hóa không cần thần dẫn quá khắt khe, nhưng có thì tốt hơn
-				interactions.tamHoi = el as FiveElement;
-				if (group.includes(chart.month.chi)) {
-					interactions.isMonthChanged = true;
-					interactions.monthNewElement = el as FiveElement;
-				}
-				break;
-			}
-		}
-
-		// 2. Tam Hợp (Mạnh nhì)
-		if (!interactions.tamHoi) {
-			for (const [el, group] of Object.entries(BRANCH_INTERACTIONS.TRIPLE_HARMONY)) {
-				const element = el as FiveElement;
-				if (group.every((b) => counts[b])) {
-					// Điều kiện hóa Tam Hợp: Có Thần dẫn HOẶC Đắc lệnh tháng
-					const isMonthCommand = BRANCH_ELEMENTS[chart.month.chi] === element;
-					if (hasThanDan(element) || isMonthCommand) {
-						interactions.sanHe = element;
-						if (group.includes(chart.month.chi)) {
-							interactions.isMonthChanged = true;
-							interactions.monthNewElement = element;
-						}
-					}
-					break;
-				}
-			}
-		}
-
-		// 3. Lục Xung
-		// Kiểm tra xung giữa các trụ liền kề và xung trụ ngày-năm
-		for (let i = 0; i < 3; i++) {
-			const b1 = branches[i];
-			const b2 = branches[i + 1];
-			// @ts-expect-error
-			if (BRANCH_INTERACTIONS.CLASH[b1] === b2) {
-				interactions.lucXung.push(i, i + 1);
-			}
-		}
-		// Xung trụ Năm - Ngày (Cách vị xung)
-		// @ts-expect-error
-		if (BRANCH_INTERACTIONS.CLASH[branches[0]] === branches[2]) interactions.lucXung.push(0, 2);
-
-		return interactions;
-	}
-
-	/**
-	 * Tính điểm Ngũ hành định lượng (Quantitative Scoring).
-	 * Áp dụng lý thuyết Vùng Tâm (Center Zone) của VuLong.
-	 */
-	private calculateAdvancedScores(
-		chart: BaziChart,
-		interactions: any,
-	): { scores: Record<FiveElement, number>; details: any[] } {
-		const scores: Record<FiveElement, number> = { Kim: 0, Mộc: 0, Thủy: 0, Hỏa: 0, Thổ: 0 };
-		const details: any[] = [];
-		const pillars = [chart.year, chart.month, chart.day, chart.hour];
-		const pillarNames = ['Năm', 'Tháng', 'Ngày', 'Giờ'];
-		const BASE = 5; // Điểm cơ sở cho Thiên can
-
-		pillars.forEach((p, index) => {
-			// === 1. TÍNH ĐIỂM THIÊN CAN ===
-			let canScore = BASE;
-			const canEl = STEM_ELEMENTS[p.can];
-			const chiEl = BRANCH_ELEMENTS[p.chi];
-			const canNotes: string[] = [];
-
-			// -- TRỌNG SỐ VÙNG TÂM (Theo VuLong) --
-			// Vùng tâm: Can Tháng (1), Can Giờ (3), Chi Ngày (2 - xử lý ở dưới)
-			// Nhật chủ (Can Ngày - 2) là trung tâm nhận lực, không tính điểm đóng góp vào cục diện chung
-			// nhưng vẫn tính vào tổng lực ngũ hành.
-			if (index === 2) {
-				canScore *= 1.2; // Nhật chủ
-			} else if (index === 1 || index === 3) {
-				canScore *= 1.2; // Can Tháng, Can Giờ (Sát cạnh Nhật chủ -> Lực mạnh)
-				canNotes.push('Vùng Tâm (Sát Nhật chủ)');
-			} else if (index === 0) {
-				canScore *= 0.6; // Can Năm (Xa Nhật chủ -> Lực yếu)
-				canNotes.push('Trụ Năm (Xa)');
-			}
-
-			// -- SINH KHẮC CÙNG TRỤ (Can-Chi) --
-			if (CONTROLLING_CYCLE[chiEl] === canEl) {
-				canScore *= 0.6; // Chi khắc Can (Tiệt cước) -> Giảm lực
-				canNotes.push('Tiệt cước');
-			} else if (CONTROLLING_CYCLE[canEl] === chiEl) {
-				canScore *= 0.8; // Can khắc Chi (Cái đầu) -> Giảm lực
-				canNotes.push('Cái đầu');
-			} else if (PRODUCING_CYCLE[chiEl] === canEl) {
-				canScore *= 1.3; // Chi sinh Can -> Tăng lực
-				canNotes.push('Được chi sinh');
-			}
-
-			scores[canEl] += canScore;
-			details.push({
-				source: `Can ${pillarNames[index]} (${p.can})`,
-				element: canEl,
-				score: canScore,
-				notes: canNotes.join(', '),
-			});
-
-			// === 2. TÍNH ĐIỂM ĐỊA CHI (Tàng Can) ===
-			const hiddens = HIDDEN_STEMS_SCORES[p.chi];
-			let multiplier = 1.0;
-			const chiNotes: string[] = [];
-
-			// -- TRỌNG SỐ ĐỊA CHI --
-			if (index === 1) {
-				multiplier = 3.0; // Chi Tháng (Lệnh tháng): Quan trọng nhất
-				chiNotes.push('Lệnh Tháng (x3.0)');
-			} else if (index === 2) {
-				multiplier = 1.5; // Chi Ngày (Tọa): Vùng tâm -> Quan trọng nhì
-				chiNotes.push('Chi Ngày (x1.5)');
-			} else if (index === 3) {
-				multiplier = 0.8; // Chi Giờ
-				chiNotes.push('Chi Giờ (x0.8)');
-			} else if (index === 0) {
-				multiplier = 0.5; // Chi Năm
-				chiNotes.push('Chi Năm (x0.5)');
-			}
-
-			// -- XỬ LÝ XUNG --
-			if (interactions.lucXung.includes(index)) {
-				multiplier *= 0.5; // Bị xung -> Lực giảm một nửa
-				chiNotes.push('Bị Lục Xung');
-			}
-
-			// -- XỬ LÝ HÓA CỤC --
-			let isTransformed = false;
-
-			// Kiểm tra Tam Hội
-			if (
-				interactions.tamHoi &&
-				(BRANCH_INTERACTIONS.SEASONAL_COMBINATION as any)[interactions.tamHoi].includes(p.chi)
-			) {
-				const hoiEl = interactions.tamHoi as FiveElement;
-				const score = 12 * multiplier; // Điểm hóa cục rất cao
-				scores[hoiEl] += score;
-				isTransformed = true;
-				details.push({
-					source: `Chi ${pillarNames[index]} (${p.chi})`,
-					element: hoiEl,
-					score: score,
-					notes: `Hóa Tam Hội ${hoiEl}. ${chiNotes.join(', ')}`,
-				});
-			}
-			// Kiểm tra Tam Hợp
-			else if (
-				interactions.sanHe &&
-				(BRANCH_INTERACTIONS.TRIPLE_HARMONY as any)[interactions.sanHe].includes(p.chi)
-			) {
-				const heEl = interactions.sanHe as FiveElement;
-				const score = 10 * multiplier;
-				scores[heEl] += score;
-				isTransformed = true;
-				details.push({
-					source: `Chi ${pillarNames[index]} (${p.chi})`,
-					element: heEl,
-					score: score,
-					notes: `Hóa Tam Hợp ${heEl}. ${chiNotes.join(', ')}`,
-				});
-			}
-
-			// Nếu không hóa cục -> Tính điểm Tàng Can bản khí
-			if (!isTransformed) {
-				hiddens.forEach((h) => {
-					const el = STEM_ELEMENTS[h.can];
-					const score = h.score * multiplier;
-					scores[el] += score;
-					details.push({
-						source: `Chi ${pillarNames[index]} (${p.chi}) tàng ${h.can}`,
-						element: el,
-						score: score,
-						notes: `Điểm gốc: ${h.score}. ${chiNotes.join(', ')}`,
-					});
-				});
-			}
+	private decayPillarScore(nodes: EnergyNode[], rate: number, r: string) {
+		nodes.forEach((n) => {
+			const loss = n.currentScore * rate;
+			n.currentScore -= loss;
+			n.modifications.push({ reason: r, valueChange: -loss, factor: 1 - rate });
 		});
-
-		return { scores, details };
 	}
-
-	/**
-	 * Kiểm tra các Cách cục đặc biệt (Ngoại cách).
-	 * Bao gồm: Độc Vượng (Tòng Cường), Hóa Khí, Tòng Cách (Cực Nhược).
-	 */
-	private checkSpecialStructures(
-		chart: BaziChart,
+	private boostPillarScore(nodes: EnergyNode[], amt: number, el: FiveElement, r: string) {
+		const targets = nodes.filter((n) => n.element === el);
+		if (targets.length) targets.forEach((n) => (n.currentScore += amt / targets.length));
+		else if (nodes[0]) nodes[0].currentScore += amt;
+	}
+	private isValidStem(s: string): boolean {
+		return HEAVENLY_STEMS.includes(s as any);
+	}
+	private calculateGodScores(
+		nodes: EnergyNode[],
 		dmElement: FiveElement,
-		scores: Record<FiveElement, number>,
-		godScores: Record<TenGod, number>,
-		totalScore: number,
-		interactions: any,
-	): Omit<
-		AnalysisResult,
-		'element_scores' | 'shen_sha' | 'god_scores' | 'interactions' | 'score_details'
-	> | null {
-		const pctSelf = ((godScores.TyKiep + godScores.KieuAn) / totalScore) * 100;
-
-		// --- LOGIC KIỂM TRA GỐC (ROOT) ---
-		// Nhật chủ có gốc khi địa chi tàng can cùng hành.
-		// Nguyên tắc: "Dương can tòng khí bất tòng thế". Có gốc thì khó tòng.
-		const branches = [chart.year.chi, chart.month.chi, chart.day.chi, chart.hour.chi];
-		let hasRoot = false;
-
-		branches.forEach((chi) => {
-			let currentChiElement = BRANCH_ELEMENTS[chi];
-
-			// Nếu chi hóa cục -> Hành chi thay đổi
-			if (
-				interactions.tamHoi &&
-				(BRANCH_INTERACTIONS.SEASONAL_COMBINATION as any)[interactions.tamHoi].includes(chi)
-			) {
-				currentChiElement = interactions.tamHoi;
-			} else if (
-				interactions.sanHe &&
-				(BRANCH_INTERACTIONS.TRIPLE_HARMONY as any)[interactions.sanHe].includes(chi)
-			) {
-				currentChiElement = interactions.sanHe;
-			}
-
-			// Nếu hành chi (hoặc hóa cục) cùng hành Nhật chủ -> Có gốc
-			// Kiểm tra kỹ hơn trong tàng can
-			const hiddens = HIDDEN_STEMS_SCORES[chi];
-			const hasSameElementInHidden = hiddens.some((h) => STEM_ELEMENTS[h.can] === dmElement);
-
-			if (hasSameElementInHidden || currentChiElement === dmElement) {
-				hasRoot = true;
-			}
-		});
-
-		// 1. Độc Vượng (Tòng Cường / Tòng Vượng)
-		// Điều kiện: Phe Ta cực mạnh (>80%), Tài Quan suy kiệt.
-		let countSelf = 0;
-		const allStems = [chart.year.can, chart.month.can, chart.day.can, chart.hour.can];
-		allStems.forEach((s) => {
-			const el = STEM_ELEMENTS[s];
-			if (el === dmElement || PRODUCING_CYCLE[el] === dmElement) countSelf++;
-		});
-
-		if (pctSelf > 80 && countSelf >= 3 && godScores.TaiTinh < 5 && godScores.QuanSat < 5) {
-			let name = '';
-			const outputEl = TEN_GODS_MAPPING[dmElement].ThucThuong;
-			const resourceEl = TEN_GODS_MAPPING[dmElement].KieuAn;
-			const wealthEl = TEN_GODS_MAPPING[dmElement].TaiTinh;
-			const officerEl = TEN_GODS_MAPPING[dmElement].QuanSat;
-
-			const gods = this.categorizeAllGods([dmElement, resourceEl], [outputEl]);
-
-			switch (dmElement) {
-				case 'Mộc':
-					name = 'Khúc Trực Cách';
-					break;
-				case 'Hỏa':
-					name = 'Viêm Thượng Cách';
-					break;
-				case 'Thổ': {
-					const earthBranches = branches.filter((b) => ['Thìn', 'Tuất', 'Sửu', 'Mùi'].includes(b));
-					name = earthBranches.length >= 3 ? 'Gia Sắc Cách' : 'Tòng Cường Cách';
-					break;
-				}
-				case 'Kim':
-					name = 'Tòng Cách';
-					break;
-				case 'Thủy':
-					name = 'Nhuận Hạ Cách';
-					break;
-			}
-
-			return {
-				day_master_status: 'Cực Vượng',
-				structure_type: 'Ngoại Cách',
-				structure_name: name,
-				analysis_reason: `Thân Ấn chiếm ưu thế tuyệt đối (${pctSelf.toFixed(1)}%). Thuộc cách Độc Vượng.`,
-				favorable_elements: gods,
-			};
-		}
-
-		// 2. Cách Hóa Khí (Transformation)
-		const dayCan = chart.day.can;
-		// @ts-ignore
-		const combo = HEAVENLY_STEM_COMBINATIONS[dayCan];
-
-		// Kiểm tra hợp Can Tháng hoặc Can Giờ
-		const targetCans = [chart.month.can, chart.hour.can];
-		let transformEl: FiveElement | null = null;
-
-		if (combo && targetCans.includes(combo.partner)) {
-			const transformed = combo.output as FiveElement;
-			// Điều kiện hóa: Phải sinh tháng lệnh của hành hóa (hoặc tháng hóa cục)
-			const monthBranchEl = interactions.monthNewElement || BRANCH_ELEMENTS[chart.month.chi];
-
-			if (monthBranchEl === transformed || PRODUCING_CYCLE[monthBranchEl] === transformed) {
-				transformEl = transformed;
-			}
-		}
-
-		if (transformEl) {
-			// Kiểm tra xem có Quan Sát khắc hành hóa không (nếu có thì phá cách)
-			const officerOfTransform = Object.keys(CONTROLLING_CYCLE).find(
-				(k) => CONTROLLING_CYCLE[k as FiveElement] === transformEl,
-			) as FiveElement;
-
-			if (scores[officerOfTransform] < 15) {
-				const outputEl = PRODUCING_CYCLE[transformEl]; // Thực thương của hành hóa
-				const resourceEl = Object.keys(PRODUCING_CYCLE).find(
-					(k) => PRODUCING_CYCLE[k as FiveElement] === transformEl,
-				) as FiveElement; // Ấn của hành hóa
-
-				const gods = this.categorizeAllGods([transformEl], [resourceEl, outputEl]);
-
-				return {
-					day_master_status: 'Hóa Khí',
-					structure_type: 'Ngoại Cách',
-					structure_name: 'Hóa Khí Cách',
-					analysis_reason: `Nhật can ${dayCan} hợp hóa thành ${transformEl} đắc lệnh.`,
-					favorable_elements: gods,
-				};
-			}
-		}
-
-		// 3. Tòng Cách (Cực Nhược)
-		// Điều kiện: Thân cực nhược (<15%) VÀ Không có gốc (hasRoot = false)
-		if (pctSelf < 15 && !hasRoot) {
-			let maxScore = 0;
-			let strongestGod: TenGod | null = null;
-
-			(['ThucThuong', 'TaiTinh', 'QuanSat'] as TenGod[]).forEach((god) => {
-				if (godScores[god] > maxScore) {
-					maxScore = godScores[god];
-					strongestGod = god;
-				}
-			});
-
-			// Phe địch phải chiếm ưu thế (>50%)
-			if (strongestGod && maxScore / totalScore > 0.5) {
-				const strongestEl = TEN_GODS_MAPPING[dmElement][strongestGod];
-				let dung = [strongestEl];
-				let hy = [] as FiveElement[];
-
-				let name = '';
-				if (strongestGod === 'TaiTinh') {
-					name = 'Tòng Tài Cách';
-					hy.push(TEN_GODS_MAPPING[dmElement].ThucThuong); // Hỷ Thực sinh Tài
-				} else if (strongestGod === 'QuanSat') {
-					name = 'Tòng Sát Cách';
-					hy.push(TEN_GODS_MAPPING[dmElement].TaiTinh); // Hỷ Tài sinh Sát
-				} else if (strongestGod === 'ThucThuong') {
-					name = 'Tòng Nhi Cách';
-					hy.push(TEN_GODS_MAPPING[dmElement].TaiTinh); // Tòng Nhi hỉ Tài
-					// Lưu ý: Tòng Nhi kỵ Quan Sát, đã được xử lý trong hàm categorizeAllGods
-				}
-
-				const gods = this.categorizeAllGods(dung, hy);
-
-				return {
-					day_master_status: 'Cực Nhược',
-					structure_type: 'Ngoại Cách',
-					structure_name: name,
-					analysis_reason: `Thân quá nhược (${pctSelf.toFixed(1)}%), không gốc, tòng theo thế lực ${strongestGod}.`,
-					favorable_elements: gods,
-				};
-			}
-		}
-
-		return null;
-	}
-
-	/**
-	 * Xác định Dụng/Hỷ thần cho Chính Cách (Phù Ức).
-	 * Sau đó gọi hàm phân loại để tự động tính Kỵ/Cừu/Nhàn.
-	 */
-	private findGodsForNormalStructure(
-		status: string, // 'Vượng' | 'Nhược'
-		godScores: Record<TenGod, number>,
-		godsMap: Record<TenGod, FiveElement>,
-		chart: BaziChart,
+		dmStemOriginal: HeavenlyStem,
 	) {
-		let dung: FiveElement[] = [];
-		let hy: FiveElement[] = [];
-
-		if (status === 'Vượng') {
-			// === THÂN VƯỢNG ===
-			// Cần: Khắc (Quan), Xì (Thực), Hao (Tài)
-
-			// Trường hợp 1: Vượng do Ấn nhiều (Mẫu từ diệt tử) -> Dụng Tài (phá Ấn), Hỷ Thực (sinh Tài)
-			if (godScores.KieuAn > 30) {
-				dung.push(godsMap.TaiTinh);
-				hy.push(godsMap.ThucThuong);
-			}
-			// Trường hợp 2: Vượng do Tỷ Kiếp nhiều -> Dụng Quan (chế Kiếp), Hỷ Tài (sinh Quan)
-			else if (godScores.TyKiep > 30) {
-				dung.push(godsMap.QuanSat);
-				hy.push(godsMap.TaiTinh);
-			}
-			// Trường hợp 3: Vượng đều -> Dụng Thực Thương (Xì hơi cho thanh tú), Hỷ Tài
+		const godScores: Record<TenGod, number> = {
+			TyKien: 0,
+			KiepTai: 0,
+			ThucThan: 0,
+			ThuongQuan: 0,
+			ChinhTai: 0,
+			ThienTai: 0,
+			ChinhQuan: 0,
+			ThatSat: 0,
+			ChinhAn: 0,
+			ThienAn: 0,
+		};
+		const dmPolarity = STEM_POLARITY[dmStemOriginal];
+		nodes.forEach((node) => {
+			if (node.isBlocked || node.currentScore <= 0) return;
+			let nodePolarity: 'Yang' | 'Yin';
+			if (this.isValidStem(node.name)) nodePolarity = STEM_POLARITY[node.name as HeavenlyStem];
 			else {
-				dung.push(godsMap.ThucThuong);
-				hy.push(godsMap.TaiTinh);
+				// Fallback cho tàng can hoặc hóa khí không rõ can
+				godScores[this.determineTenGod(dmElement, dmPolarity, node.element, 'Yang')] +=
+					node.currentScore / 2;
+				godScores[this.determineTenGod(dmElement, dmPolarity, node.element, 'Yin')] +=
+					node.currentScore / 2;
+				return;
 			}
-		} else {
-			// === THÂN NHƯỢC ===
-			// Cần: Sinh (Ấn), Trợ (Tỷ)
-
-			// Trường hợp 1: Nhược do Quan Sát nhiều (Sát trọng thân khinh)
-			// -> Dụng Ấn (Hóa sát sinh thân), Hỷ Tỷ
-			if (godScores.QuanSat > godScores.ThucThuong && godScores.QuanSat > godScores.TaiTinh) {
-				dung.push(godsMap.KieuAn);
-				hy.push(godsMap.TyKiep);
-			}
-			// Trường hợp 2: Nhược do Tài nhiều (Tài đa thân nhược)
-			// -> Dụng Tỷ Kiếp (Chế Tài, gánh Tài), Hỷ Ấn
-			else if (godScores.TaiTinh > 30) {
-				dung.push(godsMap.TyKiep);
-				hy.push(godsMap.KieuAn);
-			}
-			// Trường hợp 3: Nhược do Thực Thương nhiều (Tiết khí quá độ)
-			// -> Dụng Ấn (Chế Thực, sinh Thân), Hỷ Tỷ
-			else {
-				dung.push(godsMap.KieuAn);
-				hy.push(godsMap.TyKiep);
-			}
-		}
-
-		// Thông quan: Nếu Tỷ Kiếp và Tài Tinh ngang sức (tranh chiến) -> Dùng Thực Thương hòa giải
-		if (
-			Math.abs(godScores.TyKiep - godScores.TaiTinh) < 15 &&
-			godScores.TyKiep > 25 &&
-			godScores.TaiTinh > 25
-		) {
-			if (!dung.includes(godsMap.ThucThuong)) {
-				// Thêm Thực Thương vào Hỷ thần để thông quan
-				hy.push(godsMap.ThucThuong);
-			}
-		}
-
-		// Tính toán đủ bộ 5 thần
-		return this.categorizeAllGods(dung, hy);
+			const god = this.determineTenGod(dmElement, dmPolarity, node.element, nodePolarity);
+			godScores[god] += node.currentScore;
+		});
+		return godScores;
 	}
-
-	/**
-	 * Kiểm tra Điều Hầu (Khí hậu).
-	 * - Sinh mùa Đông (Hợi Tý Sửu): Cần Hỏa (Sưởi ấm).
-	 * - Sinh mùa Hạ (Tỵ Ngọ Mùi): Cần Thủy (Làm mát).
-	 */
-	private checkClimate(
-		monthChi: EarthlyBranch,
+	private determineTenGod(
 		dmEl: FiveElement,
-		currentDungThan: FiveElement[],
-	): FiveElement[] {
-		const climateGods: FiveElement[] = [];
-
-		// Mùa Đông lạnh giá
-		if (['Hợi', 'Tý', 'Sửu'].includes(monthChi)) {
-			// Cần Hỏa để sưởi ấm, giải đông
-			if (!currentDungThan.includes('Hỏa')) climateGods.push('Hỏa');
-			// Thủy lạnh cần Mộc để xì hơi (nếu Thân là Thủy) hoặc sinh Hỏa
-			if (dmEl === 'Thủy') climateGods.push('Mộc');
+		dmPol: 'Yang' | 'Yin',
+		nodeEl: FiveElement,
+		nodePol: 'Yang' | 'Yin',
+	): TenGod {
+		const same = dmPol === nodePol;
+		const rel = this.getRelation(dmEl, nodeEl);
+		switch (rel) {
+			case 'Hoa':
+				return same ? 'TyKien' : 'KiepTai';
+			case 'Sinh':
+				return same ? 'ThucThan' : 'ThuongQuan';
+			case 'Khac':
+				return same ? 'ThienTai' : 'ChinhTai';
+			case 'BiKhac':
+				return same ? 'ThatSat' : 'ChinhQuan';
+			case 'DuocSinh':
+				return same ? 'ThienAn' : 'ChinhAn';
 		}
-		// Mùa Hạ nóng bức
-		else if (['Tỵ', 'Ngọ', 'Mùi'].includes(monthChi)) {
-			// Cần Thủy để làm mát, nhuận thổ
-			if (!currentDungThan.includes('Thủy')) climateGods.push('Thủy');
-			// Thổ khô/Kim giòn cần Thủy dưỡng
-			if (dmEl === 'Thổ' || dmEl === 'Kim') climateGods.push('Thủy');
+		return 'TyKien';
+	}
+	private blockPillarBranch(nodes: EnergyNode[], position: string, reason: string) {
+		nodes.forEach((n) => {
+			if (n.source === position && n.type === 'HiddenStem') {
+				n.isBlocked = true;
+				n.currentScore = 0;
+				n.modifications.push({ reason, valueChange: 0, factor: 0 });
+			}
+		});
+	}
+	private getMaxGod(scores: Record<TenGod, number>, exclude: string[] = []): string | null {
+		let max = -1,
+			key = null;
+		for (const [k, v] of Object.entries(scores)) {
+			if (!exclude.includes(k) && v > max) {
+				max = v;
+				key = k;
+			}
 		}
-
-		return climateGods;
+		return key;
 	}
 }

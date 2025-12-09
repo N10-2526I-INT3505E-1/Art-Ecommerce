@@ -35,7 +35,7 @@ const app = new Elysia()
 	.get('/', () => ({ status: 'ok', service: 'payments' }), {
 		detail: { summary: 'Health check - Payments Service' },
 	})
-	.listen(4003);
+	.listen(3002);
 
 console.log(`💳 Payments Service running at http://${app.server?.hostname}:${app.server?.port}`);
 

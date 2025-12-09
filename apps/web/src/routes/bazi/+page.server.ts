@@ -71,7 +71,7 @@ export const actions: Actions = {
 		try {
 			const client = api({ fetch, request });
 			const response = await client
-				.put(`api/users/profile/bazi`, {
+				.post(`api/users/profile/bazi`, {
 					json: {
 						profile_name,
 						gender,
@@ -91,7 +91,6 @@ export const actions: Actions = {
 		} catch (error: any) {
 			console.error('Bazi update error:', error);
 
-			// Parse error message from API if available
 			const errorMessage =
 				error?.response?.data?.message ||
 				error?.message ||

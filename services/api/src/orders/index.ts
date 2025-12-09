@@ -12,7 +12,7 @@ import {
 } from './order_item.model';
 import { rabbitPlugin, QUEUES } from './rabbitmq';
 import type { Channel } from 'amqplib';
-import { group } from 'node:console';
+import { ForbiddenError, UnauthorizedError } from '@common/errors/httpErrors';
 
 const orderService = new OrderService(db);
 
@@ -102,24 +102,43 @@ export const ordersPlugin = async (dependencies: { orderService: OrderService })
         },
       )
 
-		// 2. Get Orders (All or Filter by User ID)
+		// 2. Get All Orders
 		.get(
 			'/',
-			async ({ query }) => {
-				// Truyền user_id vào hàm getOrders (nếu có)
-				const orders = await orderService.getOrders(query.user_id);
-				return { orders };
+			async ({ headers }) => {
+				// Get all orders
+        const userId = headers['x-user-id'] as string | undefined;
+        const userRoles = headers['x-user-roles'] as string | undefined;
+        if ( userId && userRoles?.includes('admin')) {
+          // If admin role is present, return all orders
+          const orders = await orderService.getOrders();
+          return { orders };
+        } else if (!userId) {
+          throw new UnauthorizedError("Authentication required to access orders.");
+        } else {
+          throw new ForbiddenError("Access denied. Regular users can only access their own orders.");
+        }
+				
 			},
 			{
-				// Khai báo Query param user_id là optional string
-				query: t.Object({
-					user_id: t.Optional(t.String()),
-				}),
 				response: { 200: t.Object({ orders: t.Array(OrderResponseSchema) }) },
 				detail: { tags: ['Orders'], summary: 'Get orders list (filter by user_id)' },
 			},
 		)
-
+    
+		// 2.5. Get Orders by User ID
+		.get(
+			'/user/:userId',
+			async ({ params }) => {
+				const orders = await orderService.getOrders(params.userId);
+				return { orders };
+			},
+			{
+				params: t.Object({ userId: t.String() }),
+				response: { 200: t.Object({ orders: t.Array(OrderResponseSchema) }) },
+				detail: { tags: ['Orders'], summary: 'Get all orders for a specific user by user ID' },
+			},
+		)
 		// 3. Get Order By ID
 		.get(
 			'/:id',

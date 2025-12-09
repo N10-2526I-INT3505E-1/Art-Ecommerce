@@ -128,7 +128,7 @@ export const vnpayIpnHandler = (dependencies: { paymentIPN: PaymentIPN }) =>
                 orderId: orderId, // VNPay Transaction Reference
                 status: 'PAID',
                 amount: query.vnp_Amount,
-                transactionId: query.vnp_TxnRef
+                id: query.vnp_TxnRef
             });
 			if (!isSendToQueue) {
 				console.error('Failed to send payment result to RabbitMQ, Order Service might not be notified'), {
@@ -136,7 +136,7 @@ export const vnpayIpnHandler = (dependencies: { paymentIPN: PaymentIPN }) =>
                 	orderId: query.vnp_TxnRef, // VNPay Transaction Reference
                 	status: 'PAID',
                 	amount: query.vnp_Amount,
-                	transactionId: query.vnp_TxnRef
+                	id: query.vnp_TxnRef
 				}
 			}
 			return {

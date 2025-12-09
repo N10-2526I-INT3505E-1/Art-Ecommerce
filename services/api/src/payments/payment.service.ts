@@ -30,11 +30,11 @@ export class PaymentService {
             if (exitsPayment) {
                 throw new Error(` Payment for order_id ${order_id} already exists.`);
             }
-            const transactionId = randomUUIDv7();
+            const id = randomUUIDv7();
             const [newPayment] = await this.db.transaction(async (tx: any) => {
                 const result = await tx.insert(this.paymentsTable)
                     .values({
-                        id: transactionId,
+                        id: id,
                         order_id: order_id,
                         amount: amount,
                         payment_gateway: payment_gateway,
@@ -139,15 +139,15 @@ export class PaymentIPN {
             const hmac = crypto.createHmac('sha512', secretKey);
             const signed = hmac.update(signData).digest('hex');
 
-            // if (secureHash !== signed) {
-            //     return {
-            //         RspCode: '97',
-            //         Message: 'Fail checksum'
-            //     }
-            // };
+            if (secureHash !== signed) {
+                return {
+                    RspCode: '97',
+                    Message: 'Fail checksum'
+                }
+            };
 
-            const transactionId = vnp_Params['vnp_TxnRef'] as string;
-            if (!transactionId) {
+            const id = vnp_Params['vnp_TxnRef'] as string;
+            if (!id) {
                 return {
                     RspCode: '01',
                     Message: 'Missing transaction reference'
@@ -156,9 +156,8 @@ export class PaymentIPN {
             const rspCode = vnp_Params['vnp_ResponseCode'] as string;
             const amount = vnp_Params['vnp_Amount'] as string;
 
-            //console.log(`Processing IPN for transaction ID: ${transactionId}, amount: ${amount}, response code: ${rspCode}`);
             const foundPayment = await this.db.query.paymentsTable.findFirst({
-                where: eq(this.paymentsTable.id, transactionId)
+                where: eq(this.paymentsTable.id, id)
             });
 
             if (!foundPayment) {
@@ -176,7 +175,7 @@ export class PaymentIPN {
                 };
             }
 
-            if (foundPayment.status === 'paid') {
+            if (foundPayment.status === 'completed') {
                 return {
                     RspCode: '02',
                     Message: 'Order already confirmed'

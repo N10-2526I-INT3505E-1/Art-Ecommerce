@@ -147,15 +147,15 @@ export class ProductService {
 
             const conditions = [isNull(products.deletedAt)];
 
+            if (query.search) {
+                const searchTerms = query.search.trim().split(/\s+/);
+                const searchConditions = searchTerms.map(term => like(products.name, `%${term}%`));
+                conditions.push(and(...searchConditions));
+            }
+
             if (query.categoryId) conditions.push(eq(products.categoryId, query.categoryId));
             if (query.minPrice) conditions.push(gte(products.price, Number(query.minPrice)));
             if (query.maxPrice) conditions.push(lte(products.price, Number(query.maxPrice)));
-
-            if (query.search) {
-                const searchTerms = query.search.trim().split(/\s+/);
-                const searchConditions = searchTerms.map(term => like(products.name, `%{term}%`));
-                conditions.push(and(...searchConditions));
-            }
 
             const rawData = await this.db.query.products.findMany({
                 where: and(...conditions),
@@ -177,7 +177,11 @@ export class ProductService {
                 return {...product, tags: flatTags, productTags: undefined};
             });
 
-            const allItems = await this.db.select({count: sql<number>`count(*)`}).from(products).where(and(...conditions));
+            const allItems = await this.db
+                .select({count: sql<number>`count(*)`})
+                .from(products)
+                .where(and(...conditions));
+    
             return {
                 data, 
                 pagination: {

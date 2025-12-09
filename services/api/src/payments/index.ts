@@ -22,12 +22,24 @@ export const paymentsPlugin = (dependencies: { paymentService: PaymentService })
 							.derive(({ headers }) => {
 								const userId = headers['x-user-id'];
 								const userRole = headers['x-user-role'];
-
+								const internalSecret = headers['x-internal-secret'];
+								if (internalSecret && internalSecret == process.env.INTERNAL_HEADER_SECRET) {
+									return {
+										user: {
+											id: 'internal-service',
+											email: '',
+											role: 'operator',
+										},
+									}
+								}
 								// Nếu không có header -> Ai đó đang gọi thẳng vào Service bỏ qua Gateway -> Chặn
-								if (!userId) {
+								if (userId == null || internalSecret == null) {
 									throw new UnauthorizedError('Missing Gateway Headers (x-user-id)');
 								}
+								// Nếu secret đúng thì bỏ qua, đây là call nội bộ giữa các service
+								
 
+								// Trả về thông tin User để gắn vào context
 								return {
 									user: {
 										id: userId as string,
@@ -36,7 +48,7 @@ export const paymentsPlugin = (dependencies: { paymentService: PaymentService })
 									},
 								};
 							})
-		.post('/', async ({ body, set, user, paymentService }) => {
+		.post('/', async ({ body, set, paymentService }) => {
 			//try {
 				// A transaction ensures the insert is an all-or-nothing operation.
 
@@ -72,7 +84,7 @@ export const paymentsPlugin = (dependencies: { paymentService: PaymentService })
 		.patch(
 			'/:id',
 			async ({ params, body, user, set, paymentService }) => {
-				if (user.role !== 'admin') {
+				if (user.role !== 'manager' && user.role !== 'operator') {
 					throw new ForbiddenError("You do not have permission to update payment status.");
 				}
 				const apiResponse = await paymentService.updatePaymentStatus(
@@ -106,7 +118,7 @@ export const paymentsPlugin = (dependencies: { paymentService: PaymentService })
 		.get(
 			'/:id',
 			async ({ params, user, set, paymentService }) => {
-				if (user.role !== 'admin') {
+				if (user.role !== 'manager' && user.role !== 'operator') {
 					throw new ForbiddenError("You do not have permission to access payment information.");
 				}
 				const apiResponse = await paymentService.getPaymentById(String(params.id));

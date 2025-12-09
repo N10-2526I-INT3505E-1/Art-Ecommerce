@@ -156,12 +156,10 @@ export class OrderService {
 		}
 
 		try {
-			console.log(`Calling Payment Service at: ${PAYMENT_SERVICE_URL}/payments`);
-
 			const response = await fetch(`${PAYMENT_SERVICE_URL}/payments`, {
 				method: 'POST',
 				headers: { 
-					'Content-Type': 'application/json',	'x-user-id': order.user_id, 'x-user-role': 'user' },
+					'Content-Type': 'application/json',	'x-internal-secret': process.env.INTERNAL_HEADER_SECRET || '' },
 				body: JSON.stringify({
 					order_id: order.id,
 					amount: Number(order.total_amount),

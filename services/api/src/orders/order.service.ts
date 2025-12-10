@@ -54,16 +54,16 @@ export class OrderService {
 		try {
 			const orderData = { ...data };
 			const shipping_address = data.shipping_address;
-
+			
 			// Validate address (works for both string and object)
 			const addressErrors = validateAddress(shipping_address);
 			if (Object.keys(addressErrors).length > 0) {
 				throw new BadRequestError(String(JSON.stringify(addressErrors)));
 			}
-
+			
 			// Convert to storage format (string)
 			orderData.shipping_address = this.serializeShippingAddress(shipping_address);
-
+			
 			orderData.id = randomUUIDv7();
 			const [newOrder] = await this.database.insert(ordersTable).values(orderData).returning();
 			if (!newOrder) {

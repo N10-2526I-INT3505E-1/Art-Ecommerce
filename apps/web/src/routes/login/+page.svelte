@@ -40,7 +40,7 @@
 
 	async function handleGoogleLogin(response: google.accounts.id.CredentialResponse) {
 		try {
-			const res = await fetch('/api/sessions/google', {
+			const res = await fetch('/sessions/google', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ token: response.credential }),

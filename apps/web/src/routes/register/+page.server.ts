@@ -30,7 +30,7 @@ export const actions: Actions = {
 		const client = api(event);
 		try {
 			const response = await client
-				.post('api/users', { json: payload })
+				.post('users', { json: payload })
 				.json<{ accessToken: string; refreshToken: string }>();
 
 			event.cookies.set('auth', response.accessToken, {

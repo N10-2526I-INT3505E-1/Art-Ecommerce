@@ -15,7 +15,7 @@ export async function load({ locals, fetch, request }) {
 
 		// Gọi API để lấy danh sách địa chỉ
 		const addressesResponse = await client
-			.get(`api/users/${locals.user.id}/addresses`)
+			.get(`users/${locals.user.id}/addresses`)
 			.json<{ addresses: UserAddress[] }>();
 
 		// Trả về cả thông tin user và danh sách địa chỉ
@@ -47,7 +47,7 @@ export const actions = {
 		try {
 			const client = api({ fetch, request });
 			const response = await client
-				.patch(`api/users/${locals.user.id}`, {
+				.patch(`users/${locals.user.id}`, {
 					json: { first_name, last_name, username },
 				})
 				.json<{ user: App.User }>();
@@ -75,7 +75,7 @@ export const actions = {
 
 		try {
 			const client = api({ fetch, request });
-			await client.post(`api/users/profile/addresses`, {
+			await client.post(`users/profile/addresses`, {
 				json: addressData,
 			});
 			return { success: true, type: 'address', message: 'Thêm địa chỉ thành công!' };
@@ -103,7 +103,7 @@ export const actions = {
 
 		try {
 			const client = api({ fetch, request });
-			await client.patch(`api/users/profile/addresses/${addressId}`, {
+			await client.patch(`users/profile/addresses/${addressId}`, {
 				json: addressData,
 			});
 			return { success: true, type: 'address', message: 'Cập nhật địa chỉ thành công!' };
@@ -122,7 +122,7 @@ export const actions = {
 
 		try {
 			const client = api({ fetch, request });
-			await client.delete(`api/users/profile/addresses/${addressId}`);
+			await client.delete(`users/profile/addresses/${addressId}`);
 			return { success: true, type: 'address', message: 'Xóa địa chỉ thành công!' };
 		} catch (error) {
 			console.error('Delete address error:', error);

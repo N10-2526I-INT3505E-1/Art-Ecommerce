@@ -1,12 +1,20 @@
 import type { RequestEvent } from '@sveltejs/kit';
 import ky, { type KyInstance, type Options } from 'ky';
+import { env } from '$env/dynamic/private';
 
 export function api(
 	{ fetch, request }: Pick<RequestEvent, 'fetch' | 'request'>,
 	options: Options = {},
 ): KyInstance {
+	const DEFAULT_PROD_API = 'https://api.novus.io.vn/';
+	const ensureTrailingSlash = (u: string) => (u.endsWith('/') ? u : `${u}/`);
+	const defaultPrefix = ensureTrailingSlash(
+		(env.PRIVATE_API_URL as string | undefined) ??
+			(import.meta.env.DEV ? 'http://localhost:3000' : DEFAULT_PROD_API),
+	);
+
 	const defaultOptions: Options = {
-		prefixUrl: 'http://localhost:3000/',
+		prefixUrl: defaultPrefix,
 		credentials: 'include',
 
 		fetch: fetch as typeof globalThis.fetch,

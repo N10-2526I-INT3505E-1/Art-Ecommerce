@@ -12,7 +12,7 @@ export const load: PageServerLoad = async ({ locals, fetch, request }) => {
 	let baziProfile = null;
 	try {
 		const client = api({ fetch, request });
-		const response = await client.get(`api/users/profile/bazi`).json();
+		const response = await client.get(`users/profile/bazi`).json();
 		baziProfile = response.profile;
 	} catch (error) {
 		// Profile doesn't exist yet - this is expected for new users
@@ -71,7 +71,7 @@ export const actions: Actions = {
 		try {
 			const client = api({ fetch, request });
 			const response = await client
-				.post(`api/users/profile/bazi`, {
+				.post(`users/profile/bazi`, {
 					json: {
 						profile_name,
 						gender,

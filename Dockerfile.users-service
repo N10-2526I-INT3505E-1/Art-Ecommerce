@@ -36,6 +36,7 @@ COPY services ./services
 ENV NODE_ENV=production
 EXPOSE 8080
 
+
 USER bun
 
 ENTRYPOINT ["bun", "run", "./services/api/src/users/server.ts"]

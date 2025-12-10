@@ -38,7 +38,7 @@ const app = new Elysia()
 		detail: { summary: 'Health check - Users Service' },
 	})
 	.listen({
-		port: PORT,
+		port: 4004,
 		hostname: HOSTNAME.replace(/^https?:\/\//, ''),
 	});
 

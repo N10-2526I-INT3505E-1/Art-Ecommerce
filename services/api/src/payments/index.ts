@@ -33,8 +33,8 @@ export const paymentsPlugin = (dependencies: { paymentService: PaymentService })
 									}
 								}
 								// Nếu không có header -> Ai đó đang gọi thẳng vào Service bỏ qua Gateway -> Chặn
-								if (userId == null || internalSecret == null) {
-									throw new UnauthorizedError('Missing Gateway Headers (x-user-id)');
+								if (userId == null) {
+									throw new UnauthorizedError('Missing Gateway Headers (x-user-id).');
 								}
 								// Nếu secret đúng thì bỏ qua, đây là call nội bộ giữa các service
 								

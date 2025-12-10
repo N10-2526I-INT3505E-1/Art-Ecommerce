@@ -18,7 +18,7 @@ async function refreshAccessToken(
 	try {
 		// Send refresh token in request body (you'll need to update your API endpoint to accept this)
 		const response = await client
-			.post('api/sessions/refresh', {
+			.post('sessions/refresh', {
 				json: { refreshToken },
 			})
 			.json<{ accessToken: string }>();
@@ -53,7 +53,7 @@ async function fetchUser(
 	client: ReturnType<typeof api>,
 ): Promise<boolean> {
 	try {
-		const responseData: unknown = await client.get('api/users/profile').json();
+		const responseData: unknown = await client.get('users/profile').json();
 
 		if (
 			responseData &&

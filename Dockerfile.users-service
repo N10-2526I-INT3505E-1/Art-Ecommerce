@@ -41,6 +41,7 @@ COPY services/api ./services/api
 ENV NODE_ENV=production
 EXPOSE 4004
 
+
 USER bun
 
 # Ensure the path matches where you copied the files

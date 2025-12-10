@@ -83,3 +83,13 @@ export const productTagsRelations = relations(product_tags, ({ one }) => ({
 export const categoriesRelations = relations(categories, ({ many }) => ({
   products: many(products),
 }));
+
+const orderItemSchema = t.Object({
+  productId: t.String(),
+  quantity: t.Number()
+});
+
+export const reduceStockBody = t.Object({
+  action: t.Literal('reduce_stock'),
+  items: t.Array(orderItemSchema)
+})

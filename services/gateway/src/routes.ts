@@ -70,7 +70,7 @@ export function setupRoutes(app: Elysia) {
 			.all('/vnpay_ipn*', async (ctx: ContextWithUser) => {
 				const urlPath = new URL(ctx.request.url).pathname;
 				const response = await proxyRequest(
-					USERS_SERVICE_URL,
+					PAYMENTS_SERVICE_URL,
 					urlPath,
 					ctx.request.method,
 					ctx.request.headers,

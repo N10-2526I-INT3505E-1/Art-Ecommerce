@@ -39,9 +39,9 @@ COPY tsconfig.json ./
 COPY services/api ./services/api
 
 ENV NODE_ENV=production
-EXPOSE 4004
+EXPOSE 4001
 
 USER bun
 
 # Ensure the path matches where you copied the files
-ENTRYPOINT ["bun", "run", "./services/api/src/users/server.ts"]
+ENTRYPOINT ["bun", "run", "./services/api/src/orders/server.ts"]

@@ -20,8 +20,7 @@ async function proxyRequest(
 	body?: RequestInit['body'],
 	user?: User,
 ): Promise<Response> {
-	const finalPath = fullPath.replace(/^\/api/, '');
-	const url = `${serviceUrl}${finalPath}`;
+	const url = `${serviceUrl}${fullPath}`;
 
 	// Prepare headers for forwarding
 	const forwardHeaders = new Headers(headers);
@@ -48,11 +47,101 @@ async function proxyRequest(
 export function setupRoutes(app: Elysia) {
 	return (
 		app
+		// OpenAPI Documentation routes
+		.all('/openapi/orders*', async (ctx: ContextWithUser) => {
+			const urlPath = new URL(ctx.request.url).pathname;
+			const finalPath = urlPath.replace(/^\/openapi\/orders/, '');
+			const response = await proxyRequest(
+				ORDERS_SERVICE_URL,
+				`/openapi${finalPath}`,
+				ctx.request.method,
+				ctx.request.headers,
+				ctx.request.body,
+				ctx.user,
+			);
+			const finalHeaders = new Headers(response.headers);
+			return new Response(response.body, {
+					status: response.status,
+					headers: finalHeaders,
+				});
+			})
+
+		.all('/openapi/payments*', async (ctx: ContextWithUser) => {
+			const urlPath = new URL(ctx.request.url).pathname;
+			const finalPath = urlPath.replace(/^\/openapi\/payments/, '');
+			const response = await proxyRequest(
+				PAYMENTS_SERVICE_URL,
+				`/openapi${finalPath}`,
+				ctx.request.method,
+				ctx.request.headers,
+				ctx.request.body,
+				ctx.user,
+			);				
+			const finalHeaders = new Headers(response.headers);
+			return new Response(response.body, {
+					status: response.status,
+					headers: finalHeaders,
+				});
+			})
+
+		.all('/openapi/products*', async (ctx: ContextWithUser) => {
+			const urlPath = new URL(ctx.request.url).pathname;
+			const finalPath = urlPath.replace(/^\/openapi\/products/, '');
+			const response = await proxyRequest(
+				PRODUCTS_SERVICE_URL,
+				`/openapi${finalPath}`,
+				ctx.request.method,
+				ctx.request.headers,
+				ctx.request.body,
+				ctx.user,
+			);				
+			const finalHeaders = new Headers(response.headers);
+			return new Response(response.body, {
+					status: response.status,
+					headers: finalHeaders,
+				});
+			})
+		.all('/openapi/users*', async (ctx: ContextWithUser) => {
+			const urlPath = new URL(ctx.request.url).pathname;
+			const finalPath = urlPath.replace(/^\/openapi\/users/, '');
+			const response = await proxyRequest(
+				USERS_SERVICE_URL,
+				`/openapi${finalPath}`,
+				ctx.request.method,
+				ctx.request.headers,
+				ctx.request.body,
+				ctx.user,
+			);			
+			const finalHeaders = new Headers(response.headers);
+			return new Response(response.body, {
+					status: response.status,
+					headers: finalHeaders,
+				});
+			})
+
 			// Sessions routes (public, no JWT required)
 			.all('/sessions*', async (ctx: ContextWithUser) => {
 				const urlPath = new URL(ctx.request.url).pathname;
 				const response = await proxyRequest(
 					USERS_SERVICE_URL,
+					urlPath,
+					ctx.request.method,
+					ctx.request.headers,
+					ctx.request.body,
+					ctx.user,
+				);
+
+				return new Response(response.body, {
+					status: response.status,
+					headers: response.headers,
+				});
+			})
+
+			// Sessions routes (public, no JWT required)
+			.all('/vnpay_ipn*', async (ctx: ContextWithUser) => {
+				const urlPath = new URL(ctx.request.url).pathname;
+				const response = await proxyRequest(
+					PAYMENTS_SERVICE_URL,
 					urlPath,
 					ctx.request.method,
 					ctx.request.headers,

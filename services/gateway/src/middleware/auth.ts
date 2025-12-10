@@ -1,7 +1,7 @@
 import { type Context } from 'elysia';
 
 export interface User {
-	id: string | number;
+	id: string ;
 	email: string;
 	role: string;
 }
@@ -16,7 +16,7 @@ interface JWTContext {
 	};
 }
 
-export async function verifyToken(ctx: Context & JWTContext) {
+export async function verifyToken(ctx: any) {
 	const authorizationHeader =
 		ctx.request.headers.get('Authorization') || ctx.request.headers.get('authorization');
 	const cookieHeader = ctx.request.headers.get('Cookie') || ctx.request.headers.get('cookie');
@@ -27,7 +27,8 @@ export async function verifyToken(ctx: Context & JWTContext) {
 	if (
 		url.pathname.includes('/health') ||
 		url.pathname.includes('/sessions') ||
-		url.pathname.includes('/vnpay_ipn')
+		url.pathname.includes('/vnpay_ipn') ||
+		url.pathname.includes('/openapi')
 	) {
 		return { user: null };
 	}

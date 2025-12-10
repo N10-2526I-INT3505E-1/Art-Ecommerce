@@ -290,11 +290,8 @@ const validateAddress = (shipping_address: any) => {
     if (typeof shipping_address.phone !== 'string') {
         errors.phone = "Phone must be a string";
     } else if (!phoneRegex.test(shipping_address.phone)) {
-        errors.phone = "Invalid phone number";
-    } else if (shipping_address.phone.length > 10) { 
-        // Explicitly checking your schema's maxLength limit
-        errors.phone = "Phone number cannot be longer than 10 characters"; 
-    }
+        errors.phone = "Invalid phone number";	
+	}			
 
     // 3. Validate Ward (String, max 100)
     if (typeof shipping_address.ward !== 'string') {

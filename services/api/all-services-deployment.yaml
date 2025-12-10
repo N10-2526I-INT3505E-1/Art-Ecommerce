@@ -1,0 +1,270 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: services-env
+type: Opaque
+stringData:
+  TURSO_ORDERS_DATABASE_URL: "libsql://orders-hoang001.aws-ap-northeast-1.turso.io"
+  TURSO_ORDERS_AUTH_TOKEN: "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3NTg1OTUwNzUsImlkIjoiZTgyMTA1ZmUtZDc5NC00NzA4LWIyNmMtMDBkN2Q0NzhiMWQ1IiwicmlkIjoiZDM4NWNkZDQtZTg2Yy00ZDE5LThkNjItMTRjNjUwNzY5MjE1In0.Fc10P__9MDUc7zTdT-7Bjm3Pxk6uoc1INUR6B3NyJZ9RnS7ytlYKkKDvNnbTL3arNxnGHtO-MTQfJLOwBFGYAg"
+  TURSO_USERS_DATABASE_URL: "libsql://artecomm-dungngx.aws-ap-northeast-1.turso.io"
+  TURSO_USERS_AUTH_TOKEN: "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJnaWQiOiJkOTY0NWVlZS04MmRmLTRhMDctOTBmZi1mNmM0NjJkMGMwZTciLCJpYXQiOjE3NTgwMTE0NjksInJpZCI6Ijg0NmM1ZGI5LTAxN2YtNDM3Ni1hZWYzLWM0ZDgzZWQ1YWMzOSJ9.2IpKWm-61LR3upvW0QjITNnqg6noFGk3Asmlta09ewXsx7sNyk2-6pH_GizwQI8ml-vTed1-NEEERGY8DZSYBQ"
+  TURSO_PAYMENTS_DATABASE_URL: "libsql://paymentartecomercedb-xhatsu.aws-ap-northeast-1.turso.io"
+  TURSO_PAYMENTS_AUTH_TOKEN: "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3NTg0Mzk1NTgsImlkIjoiYzQ1YTViZTctYjJjNC00ZDYwLThlNWQtNjdhNGI2OTU0NWYwIiwicmlkIjoiNjZkMTNkMjctMGM0MS00YzdhLWE1MTQtZmQ3MjQ5NTA1ZGEwIn0.BBfhD0l_XDrWKF3HL1z1RaMw3nvNvx-CcLQ9OPHqgx724lHwYoYrm3h0O_7-SlKre9WPegjCByhR955E3taaCA"
+  TURSO_PRODUCTS_DATABASE_URL: "libsql://mainproduct-hnd2584.aws-ap-northeast-1.turso.io"
+  TURSO_PRODUCTS_AUTH_TOKEN: "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3NjEyODExMzQsImlkIjoiODFkODNiZTEtOTkwYi00ZDEzLWE3MDEtYzBjZGMwNjliZDRjIiwicmlkIjoiNzcwMDg0YjAtYTM4ZS00ZWMxLTg4NDEtNzljYmJjMWUzODg2In0.utp8DRl1MvyXLBa1o1Bsm9NK5kC4Ws8cWYJIHVu2e5pacNdlISdQYLG559dsy0N-eMuz7el2n76oAJLh6h5PBw"
+  JWT_SECRET: "wf8gHasGwEQ/80Dghle5/x6Adl/dbUJoGs5vRq/wui5zQ3IObkJMnmLh7Qt0zJ6Ltq4WhmIkojtsl8du7sxtdA=="
+  GOOGLE_CLIENT_ID: ""
+  GOOGLE_CLIENT_SECRET: ""
+  BETTER_AUTH_SECRET: "WVYaN3wagHRpmW7fQb6kmmbyDA9Rq3p7"
+  BETTER_AUTH_URL: "http://api-gateway:3000"
+  ORDER_SERVICE_URL: "http://orders-service:4001"
+  PRODUCT_SERVICE_URL: "http://products-service:4003"
+  PAYMENT_SERVICE_URL: "http://payments-service:4002"
+  USER_SERVICE_URL: "http://users-service:4004"
+  INTERNAL_HEADER_SECRET: "vvcsAz84eEBVyQSqDP1yX+6K7QGj7CusGhTL9Rr3D7s="
+  RABBIT_URL: "amqp://user:password@158.178.228.216:30159"
+  NODE_ENV: "production"
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-service
+  labels:
+    app: orders-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: orders-service
+  template:
+    metadata:
+      labels:
+        app: orders-service
+    spec:
+      containers:
+      - name: orders-service
+        image: xhatsu101/novus-orders-service:lastest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 4001
+        envFrom:
+        - secretRef:
+            name: services-env
+        resources:
+          requests:
+            memory: "256Mi"
+          limits:
+            memory: "512Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 4001
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 4001
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orders-service
+  labels:
+    app: orders-service
+spec:
+  type: ClusterIP
+  selector:
+    app: orders-service
+  ports:
+  - port: 4001
+    targetPort: 4001
+    protocol: TCP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payments-service
+  labels:
+    app: payments-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: payments-service
+  template:
+    metadata:
+      labels:
+        app: payments-service
+    spec:
+      containers:
+      - name: payments-service
+        image: xhatsu101/novus-payments-service:lastest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 4002
+        envFrom:
+        - secretRef:
+            name: services-env
+        resources:
+          requests:
+            memory: "256Mi"
+          limits:
+            memory: "512Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 4002
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 4002
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payments-service
+  labels:
+    app: payments-service
+spec:
+  type: ClusterIP
+  selector:
+    app: payments-service
+  ports:
+  - port: 4002
+    targetPort: 4002
+    protocol: TCP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: products-service
+  labels:
+    app: products-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: products-service
+  template:
+    metadata:
+      labels:
+        app: products-service
+    spec:
+      containers:
+      - name: products-service
+        image: xhatsu101/novus-products-service:lastest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 4003
+        envFrom:
+        - secretRef:
+            name: services-env
+        resources:
+          requests:
+            memory: "256Mi"
+          limits:
+            memory: "512Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 4003
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 4003
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: products-service
+  labels:
+    app: products-service
+spec:
+  type: ClusterIP
+  selector:
+    app: products-service
+  ports:
+  - port: 4003
+    targetPort: 4003
+    protocol: TCP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: users-service
+  labels:
+    app: users-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: users-service
+  template:
+    metadata:
+      labels:
+        app: users-service
+    spec:
+      containers:
+      - name: users-service
+        image: xhatsu101/novus-users-service:lastest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 4004
+        envFrom:
+        - secretRef:
+            name: services-env
+        resources:
+          requests:
+            memory: "256Mi"
+          limits:
+            memory: "512Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 4004
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 4004
+          initialDelaySeconds: 5
+          periodSeconds: 5
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: users-service
+  labels:
+    app: users-service
+spec:
+  type: ClusterIP
+  selector:
+    app: users-service
+  ports:
+  - port: 4004
+    targetPort: 4004
+    protocol: TCP

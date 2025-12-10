@@ -23,13 +23,6 @@ export const app = new Elysia()
 			allowedHeaders: ['Content-Type', 'Authorization'],
 		}),
 	)
-	// JWT plugin
-	.use(
-		jwt({
-			name: 'jwt',
-			secret: JWT_SECRET,
-		}),
-	)
 	// Global error handler
 	.onError(({ code, error }) => {
 		console.error(`[${code}]`, error);
@@ -47,11 +40,18 @@ export const app = new Elysia()
 	}))
 	.group('/api', (app) =>
 		app
+			// JWT plugin
+			.use(
+				jwt({
+					name: 'jwt',
+					secret: JWT_SECRET,
+				}),
+			)
 			// JWT verification middleware for protected routes
 			.derive(verifyToken)
 			// Setup all routes
 			.use(setupRoutes),
-	);
+	)
 
 app.listen(PORT, () => {
 	console.log(`🚀 Gateway running on http://localhost:${PORT}`);

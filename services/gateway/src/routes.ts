@@ -66,6 +66,24 @@ export function setupRoutes(app: Elysia) {
 				});
 			})
 
+			// Sessions routes (public, no JWT required)
+			.all('/vnpay_ipn*', async (ctx: ContextWithUser) => {
+				const urlPath = new URL(ctx.request.url).pathname;
+				const response = await proxyRequest(
+					USERS_SERVICE_URL,
+					urlPath,
+					ctx.request.method,
+					ctx.request.headers,
+					ctx.request.body,
+					ctx.user,
+				);
+
+				return new Response(response.body, {
+					status: response.status,
+					headers: response.headers,
+				});
+			})
+
 			// Orders routes
 			.all('/orders*', async (ctx: ContextWithUser) => {
 				const urlPath = new URL(ctx.request.url).pathname;

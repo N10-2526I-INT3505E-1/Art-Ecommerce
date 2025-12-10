@@ -27,7 +27,8 @@ export async function verifyToken(ctx: any) {
 	if (
 		url.pathname.includes('/health') ||
 		url.pathname.includes('/sessions') ||
-		url.pathname.includes('/vnpay_ipn')
+		url.pathname.includes('/vnpay_ipn') ||
+		url.pathname.includes('/openapi')
 	) {
 		return { user: null };
 	}

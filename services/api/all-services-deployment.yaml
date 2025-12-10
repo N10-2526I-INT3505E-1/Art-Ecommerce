@@ -13,7 +13,7 @@ stringData:
   TURSO_PRODUCTS_DATABASE_URL: "libsql://mainproduct-hnd2584.aws-ap-northeast-1.turso.io"
   TURSO_PRODUCTS_AUTH_TOKEN: "eyJhbGciOiJFZERTQSIsInR5cCI6IkpXVCJ9.eyJhIjoicnciLCJpYXQiOjE3NjEyODExMzQsImlkIjoiODFkODNiZTEtOTkwYi00ZDEzLWE3MDEtYzBjZGMwNjliZDRjIiwicmlkIjoiNzcwMDg0YjAtYTM4ZS00ZWMxLTg4NDEtNzljYmJjMWUzODg2In0.utp8DRl1MvyXLBa1o1Bsm9NK5kC4Ws8cWYJIHVu2e5pacNdlISdQYLG559dsy0N-eMuz7el2n76oAJLh6h5PBw"
   JWT_SECRET: "wf8gHasGwEQ/80Dghle5/x6Adl/dbUJoGs5vRq/wui5zQ3IObkJMnmLh7Qt0zJ6Ltq4WhmIkojtsl8du7sxtdA=="
-  GOOGLE_CLIENT_ID: ""
+  GOOGLE_CLIENT_ID: "276935575196-vl694uhrc2icvg0n4fv7ev5fbvcvfu9o.apps.googleusercontent.com"
   GOOGLE_CLIENT_SECRET: ""
   BETTER_AUTH_SECRET: "WVYaN3wagHRpmW7fQb6kmmbyDA9Rq3p7"
   BETTER_AUTH_URL: "http://api-gateway:3000"

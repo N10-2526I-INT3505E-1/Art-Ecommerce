@@ -44,7 +44,7 @@ spec:
     spec:
       containers:
       - name: orders-service
-        image: xhatsu101/novus-orders-service:lastest
+        image: xhatsu101/novus-orders-service:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 4001
@@ -105,7 +105,7 @@ spec:
     spec:
       containers:
       - name: payments-service
-        image: xhatsu101/novus-payments-service:lastest
+        image: xhatsu101/novus-payments-service:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 4002
@@ -166,7 +166,7 @@ spec:
     spec:
       containers:
       - name: products-service
-        image: xhatsu101/novus-products-service:lastest
+        image: xhatsu101/novus-products-service:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 4003
@@ -227,7 +227,7 @@ spec:
     spec:
       containers:
       - name: users-service
-        image: xhatsu101/novus-users-service:lastest
+        image: xhatsu101/novus-users-service:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 4004

@@ -66,18 +66,16 @@ export const OrderItemInputSchema = t.Object({
 	product_snapshot: t.Optional(t.Record(t.String(), t.Any())),
 });
 
-
-
 /** Create Order with Items schema */
 export const CreateOrderWithItemsSchema = t.Object({
 	user_id: t.String(),
 	total_amount: t.Number({ minimum: 0 }),
-	status: t.Optional(t.UnionEnum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled'])),
+	status: t.Optional(
+		t.UnionEnum(['pending', 'paid', 'processing', 'shipped', 'delivered', 'cancelled']),
+	),
 	shipping_address: t.Union([t.String(), UserAddressSchema]),
 	items: t.Optional(t.Array(OrderItemInputSchema)),
 });
-
-
 
 export const OrderResponseSchema = createSelectSchema(ordersTable);
 export type Table = typeof ordersTable;

@@ -6,6 +6,7 @@
 	import { page } from '$app/state';
 	import { PUBLIC_GOOGLE_CLIENT_ID } from '$env/static/public';
 	import { showToast } from '$lib/toastStore';
+	import { api } from '$lib/api-client';
 
 	let submitting = $state(false);
 
@@ -52,27 +53,17 @@
 
 	async function handleGoogleLogin(response: google.accounts.id.CredentialResponse) {
 		try {
-			const res = await fetch('/api/sessions/google', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ token: response.credential }),
+			await api.post('sessions/google', {
+				json: { token: response.credential },
 			});
 
-			const data = await res.json();
+			showToast({ message: 'Logged in successfully!', type: 'success' });
 
-			if (data.status === 'login') {
-				showToast({ message: 'Logged in successfully!', type: 'success' });
-				await goto('/');
-			} else if (data.status === 'register') {
-				firstName = data.first_name || firstName;
-				lastName = data.last_name || lastName;
-				email = data.email || email;
-			} else {
-				showToast({ message: 'Login failed', type: 'error' });
-			}
+			await invalidateAll();
+			await goto('/');
 		} catch (err) {
-			console.error(err);
-			showToast({ message: 'An error occurred', type: 'error' });
+			console.error('Google Login Error:', err);
+			showToast({ message: 'Login failed', type: 'error' });
 		}
 	}
 

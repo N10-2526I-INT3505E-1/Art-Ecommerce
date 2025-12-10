@@ -68,7 +68,7 @@ const DECAY = {
 	CLASH_LOSER: 0.2, // Thua xung
 	CLASH_DRAW: 0.4, // Xung hòa
 
-	// Dòng chảy & Vị trí (VuLong Physics - Chương 9)
+	// Dòng chảy & Vị trí (VuLong - Chương 9)
 	ENTER_CENTER_FACTOR: 0.6, // Đi vào vùng tâm bị giảm 2/5 (còn lại 0.6)
 	INTRA_CENTER_FACTOR: 1.0, // Trong vùng tâm giữ nguyên
 

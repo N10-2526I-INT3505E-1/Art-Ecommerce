@@ -13,6 +13,8 @@ export function api(
 			(import.meta.env.DEV ? 'http://localhost:3000' : DEFAULT_PROD_API),
 	);
 
+	console.log('API Prefix URL:', defaultPrefix);
+
 	const defaultOptions: Options = {
 		prefixUrl: defaultPrefix,
 		credentials: 'include',

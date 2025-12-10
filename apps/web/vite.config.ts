@@ -5,6 +5,8 @@ import { visualizer } from 'rollup-plugin-visualizer';
 import { defineConfig } from 'vite';
 import { imagetools } from 'vite-imagetools';
 
+const API_URL = process.env.PRIVATE_API_URL || 'http://localhost:3000';
+
 export default defineConfig({
 	plugins: [
 		enhancedImages(),
@@ -32,11 +34,6 @@ export default defineConfig({
 					threlte: ['@threlte/core', '@threlte/extras'],
 				},
 			},
-		},
-	},
-	server: {
-		proxy: {
-			'/api': { target: 'http://localhost:3000', changeOrigin: true },
 		},
 	},
 });

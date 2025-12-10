@@ -6,6 +6,7 @@
 	import { page } from '$app/state';
 	import { PUBLIC_GOOGLE_CLIENT_ID } from '$env/static/public';
 	import { showToast } from '$lib/toastStore';
+	import { api } from '$lib/api-client';
 
 	let submitting = $state(false);
 
@@ -40,25 +41,18 @@
 
 	async function handleGoogleLogin(response: google.accounts.id.CredentialResponse) {
 		try {
-			const res = await fetch('/sessions/google', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ token: response.credential }),
+			await api.post('sessions/google', {
+				json: { token: response.credential },
 			});
 
-			if (res.ok) {
-				// Chỉ cần check status 200/201
-				showToast({ message: 'Logged in successfully!', type: 'success' });
+			// If 'api' uses ky and throws on error, code below only runs on success
+			showToast({ message: 'Logged in successfully!', type: 'success' });
 
-				// Cookie đã được set tự động bởi Backend response
-				await invalidateAll();
-				await goto('/');
-			} else {
-				showToast({ message: 'Login failed', type: 'error' });
-			}
+			await invalidateAll();
+			await goto('/');
 		} catch (err) {
-			console.error(err);
-			showToast({ message: 'An error occurred', type: 'error' });
+			console.error('Google Login Error:', err);
+			showToast({ message: 'Login failed', type: 'error' });
 		}
 	}
 </script>

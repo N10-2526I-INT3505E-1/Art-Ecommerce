@@ -99,6 +99,7 @@ export const usersPlugin = (dependencies: { userService: UserService }) =>
 					'/google',
 					async ({ body, set, userService, jwt, cookie }) => {
 						// Thêm 'cookie' vào đây
+						await console.log('Google login with token:', body);
 						const result = await userService.loginWithGoogle(body.token, jwt as any);
 
 						cookie.auth.set({

@@ -1,4 +1,3 @@
-<!-- src/routes/products/[id]/+page.svelte -->
 <script lang="ts">
 	import type { EmblaCarouselType } from 'embla-carousel';
 	import AutoHeight from 'embla-carousel-auto-height';
@@ -20,10 +19,12 @@
 		X,
 	} from 'lucide-svelte';
 	import { onMount, onDestroy } from 'svelte';
-	import { browser } from '$app/environment'; // Add this import
-	import { page } from '$app/state';
-	import TreeBg from '$lib/assets/backgrounds/Tree.jpg';
-	import type { Product } from '$lib/types/product';
+	import { browser } from '$app/environment';
+	import { goto } from '$app/navigation';
+	import { cart } from '$lib/stores/cart.svelte';
+	import type { PageData } from './$types';
+
+	let { data }: { data: PageData } = $props();
 
 	// ============================================
 	// Constants
@@ -41,32 +42,9 @@
 	const LOW_STOCK_THRESHOLD = 5;
 
 	// ============================================
-	// Product Data (replace with actual data fetching)
+	// Product Data (Derived from Server Data)
 	// ============================================
-	const product: Product = {
-		id: page.params.id,
-		name: 'Tranh phong cảnh rừng',
-		price: 2500000,
-		imageUrl: TreeBg,
-		description:
-			'Bức tranh là một bức chân dung nửa người và thể hiện một phụ nữ có những nét thể hiện trên khuôn mặt thường được miêu tả là bí ẩn. Sự mơ hồ trong nét thể hiện của người mẫu, sự lạ thường của thành phần nửa khuôn mặt, và sự huyền ảo của các kiểu mẫu hình thức và không khí hư ảo là những tính chất mới lạ góp phần vào sức mê hoặc của bức tranh.',
-		slug: 'ethereal-landscapes-4',
-		stock: 3,
-		category: {
-			name: 'Tranh',
-			slug: 'painting',
-		},
-		sourceUrl: '',
-		tags: [
-			{ id: '1', name: 'Thiên nhiên', type: 'auto' },
-			{ id: '2', name: 'Sơn dầu', type: 'auto' },
-			{ id: '3', name: 'Khổ lớn', type: 'manual' },
-			{ id: '4', name: 'Đương đại', type: 'manual' },
-		],
-		images: [TreeBg, TreeBg, TreeBg, TreeBg],
-		rating: 4.8,
-		reviewCount: 127,
-	};
+	let product = $derived(data.product);
 
 	// ============================================
 	// State
@@ -100,7 +78,7 @@
 	// ============================================
 	const isLowStock = $derived(product.stock > 0 && product.stock <= LOW_STOCK_THRESHOLD);
 	const isOutOfStock = $derived(product.stock === 0);
-	const formattedPrice = $derived(product.price.toLocaleString('vi-VN'));
+	const formattedPrice = $derived(new Intl.NumberFormat('vi-VN').format(product.price));
 
 	const structuredData = $derived(
 		JSON.stringify({
@@ -125,6 +103,18 @@
 	);
 
 	// ============================================
+	// Reset State on Navigation
+	// ============================================
+	$effect(() => {
+		// Watch for product ID changes to reset local state
+		const _id = product.id;
+		quantity = 1;
+		addedToCart = false;
+		selectedIndex = 0;
+		if (emblaApi) emblaApi.scrollTo(0);
+	});
+
+	// ============================================
 	// Embla Carousel Functions
 	// ============================================
 	function updateScrollButtons() {
@@ -145,6 +135,9 @@
 		};
 
 		emblaApi.on('select', emblaSelectHandler);
+
+		// Re-init if images loaded late
+		emblaApi.reInit();
 	}
 
 	function scrollPrev() {
@@ -189,6 +182,9 @@
 	function addToCart() {
 		if (isOutOfStock) return;
 
+		// Call the store method
+		cart.addItem(product, quantity);
+
 		console.log(`Added ${quantity} of ${product.name} to cart`);
 		addedToCart = true;
 
@@ -200,7 +196,9 @@
 
 	function buyNow() {
 		if (isOutOfStock) return;
-		console.log(`Buy now: ${quantity} of ${product.name}`);
+		// Add to cart and redirect
+		cart.addItem(product, quantity);
+		goto('/cart');
 	}
 
 	function toggleWishlist() {
@@ -366,7 +364,7 @@
 	<meta name="description" content={product.description} />
 	<meta property="og:title" content={product.name} />
 	<meta property="og:description" content={product.description} />
-	<meta property="og:image" content={product.imageUrl} />
+	<meta property="og:image" content={product.images[0]} />
 	<meta property="og:type" content="product" />
 	<meta
 		name="viewport"
@@ -502,34 +500,36 @@
 				</div>
 
 				<!-- Thumbnail Navigation -->
-				<div
-					class="scrollbar-hide flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 py-1 md:gap-3 md:px-1"
-					role="tablist"
-					aria-label="Ảnh thu nhỏ"
-				>
-					{#each product.images as img, i}
-						<button
-							type="button"
-							class="relative size-14 shrink-0 touch-manipulation snap-start overflow-hidden rounded-lg transition-all md:size-20 md:rounded-xl {selectedIndex ===
-							i
-								? 'ring-primary ring-offset-base-100 scale-95 opacity-100 ring-2 ring-offset-2'
-								: 'opacity-60 hover:opacity-80 active:scale-95'}"
-							onclick={() => scrollTo(i)}
-							role="tab"
-							aria-selected={selectedIndex === i}
-							aria-label="Xem ảnh {i + 1}"
-							tabindex={selectedIndex === i ? 0 : -1}
-						>
-							<img
-								src={img}
-								alt=""
-								loading="lazy"
-								decoding="async"
-								class="h-full w-full object-cover"
-							/>
-						</button>
-					{/each}
-				</div>
+				{#if product.images.length > 1}
+					<div
+						class="scrollbar-hide flex snap-x snap-mandatory gap-2 overflow-x-auto px-4 py-1 md:gap-3 md:px-1"
+						role="tablist"
+						aria-label="Ảnh thu nhỏ"
+					>
+						{#each product.images as img, i}
+							<button
+								type="button"
+								class="relative size-14 shrink-0 touch-manipulation snap-start overflow-hidden rounded-lg transition-all md:size-20 md:rounded-xl {selectedIndex ===
+								i
+									? 'ring-primary ring-offset-base-100 scale-95 opacity-100 ring-2 ring-offset-2'
+									: 'opacity-60 hover:opacity-80 active:scale-95'}"
+								onclick={() => scrollTo(i)}
+								role="tab"
+								aria-selected={selectedIndex === i}
+								aria-label="Xem ảnh {i + 1}"
+								tabindex={selectedIndex === i ? 0 : -1}
+							>
+								<img
+									src={img}
+									alt=""
+									loading="lazy"
+									decoding="async"
+									class="h-full w-full object-cover"
+								/>
+							</button>
+						{/each}
+					</div>
+				{/if}
 			</section>
 
 			<!-- Product Info Section -->
@@ -783,7 +783,7 @@
 					{product.description}
 				</p>
 
-				{#if product.tags.length > 0}
+				{#if product.tags && product.tags.length > 0}
 					<div class="flex flex-wrap gap-2" role="list" aria-label="Thẻ sản phẩm">
 						{#each product.tags as tag (tag.id)}
 							<div
@@ -910,34 +910,36 @@
 			</div>
 
 			<!-- Thumbnails -->
-			<div
-				class="scrollbar-hide mt-3 flex max-w-full gap-1.5 overflow-x-auto px-2 md:mt-4 md:gap-2 md:px-4"
-				role="tablist"
-				aria-label="Ảnh thu nhỏ trong lightbox"
-			>
-				{#each product.images as img, i}
-					<button
-						type="button"
-						class="relative size-12 shrink-0 touch-manipulation overflow-hidden rounded-lg border-2 transition-all active:scale-90 md:size-16 lg:size-20 {lightboxIndex ===
-						i
-							? 'border-white opacity-100'
-							: 'border-white/20 opacity-60 hover:opacity-80'}"
-						onclick={() => goToImage(i)}
-						role="tab"
-						aria-selected={lightboxIndex === i}
-						aria-label="Xem ảnh phóng to {i + 1}"
-						tabindex={lightboxIndex === i ? 0 : -1}
-					>
-						<img
-							src={img}
-							alt=""
-							loading="lazy"
-							decoding="async"
-							class="h-full w-full object-cover"
-						/>
-					</button>
-				{/each}
-			</div>
+			{#if product.images.length > 1}
+				<div
+					class="scrollbar-hide mt-3 flex max-w-full gap-1.5 overflow-x-auto px-2 md:mt-4 md:gap-2 md:px-4"
+					role="tablist"
+					aria-label="Ảnh thu nhỏ trong lightbox"
+				>
+					{#each product.images as img, i}
+						<button
+							type="button"
+							class="relative size-12 shrink-0 touch-manipulation overflow-hidden rounded-lg border-2 transition-all active:scale-90 md:size-16 lg:size-20 {lightboxIndex ===
+							i
+								? 'border-white opacity-100'
+								: 'border-white/20 opacity-60 hover:opacity-80'}"
+							onclick={() => goToImage(i)}
+							role="tab"
+							aria-selected={lightboxIndex === i}
+							aria-label="Xem ảnh phóng to {i + 1}"
+							tabindex={lightboxIndex === i ? 0 : -1}
+						>
+							<img
+								src={img}
+								alt=""
+								loading="lazy"
+								decoding="async"
+								class="h-full w-full object-cover"
+							/>
+						</button>
+					{/each}
+				</div>
+			{/if}
 
 			<!-- Image Counter -->
 			<div

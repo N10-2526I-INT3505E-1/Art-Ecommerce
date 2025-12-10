@@ -12,14 +12,17 @@
 		UserPlus,
 	} from 'lucide-svelte';
 	import { page } from '$app/state';
+	import { cart } from '$lib/stores/cart.svelte';
 
 	let { user = null } = $props();
 	let currentUser = $derived(user || page.data.user);
 	let currentPath = $derived(page.url.pathname);
 
-	// Mock cart state
-	let cartCount = $state(8);
-	let cartSubtotal = $state(1200000);
+	let cartItems = $derived(cart.items);
+
+	let cartCount = $derived(cartItems.reduce((sum, item) => sum + item.quantity, 0));
+
+	let cartSubtotal = $derived(cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0));
 
 	const categories = [
 		{ label: 'Tranh', href: '/c/tranh' },
@@ -150,7 +153,11 @@
 							</a>
 						</div>
 					{:else}
-						<p class="text-base-content/60 py-4 text-center text-sm">Giỏ hàng trống</p>
+						<div class="flex flex-col items-center justify-center py-6 text-center">
+							<ShoppingCart class="text-base-content/20 mb-2 h-10 w-10" />
+							<p class="text-base-content/60 text-sm">Giỏ hàng trống</p>
+							<a href="/" class="btn btn-ghost btn-xs text-primary mt-2">Mua sắm ngay</a>
+						</div>
 					{/if}
 				</div>
 			</div>

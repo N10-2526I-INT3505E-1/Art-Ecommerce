@@ -19,11 +19,11 @@ import { ProductService } from './products/product.service';
 const baziService = new BaziService();
 const userService = new UserService(userDb, baziService);
 
-export const app = new Elysia({ prefix: '/api' })
+export const app = new Elysia()
 	.use(errorHandler)
 	.use(
 		cors({
-			origin: 'http://localhost:5173',
+			origin: ['http://localhost:5173', 'https://novus.io.vn/', 'http://localhost:3000'],
 			credentials: true,
 			methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 			allowedHeaders: ['Content-Type', 'Authorization'],

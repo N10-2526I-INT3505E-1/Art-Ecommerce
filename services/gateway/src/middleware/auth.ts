@@ -1,36 +1,30 @@
 import { type Context } from 'elysia';
 
 export interface User {
-	id: string ;
+	id: string;
 	email: string;
 	role: string;
 }
 
-interface JWTContext {
-	jwt: {
-		sign: (payload: Record<string, any>) => Promise<string>;
-		verify: (token: string) => Promise<Record<string, any> | false>;
-	};
-	set: {
-		status?: number;
-	};
-}
-
 export async function verifyToken(ctx: any) {
+	const url = new URL(ctx.request.url);
+	const path = url.pathname;
+	const method = ctx.request.method;
+
+	if (
+		path.startsWith('/sessions') || // Login/Google
+		path.startsWith('/vnpay_ipn') || // Payment Webhook
+		path.startsWith('/products') || // Public Catalog
+		(path === '/users' && method === 'POST') || // Registration ONLY
+		(path === '/users/' && method === 'POST') // Handle trailing slash
+	) {
+		console.log(`[Auth] Public route detected: ${method} ${path}`);
+		return;
+	}
+
 	const authorizationHeader =
 		ctx.request.headers.get('Authorization') || ctx.request.headers.get('authorization');
 	const cookieHeader = ctx.request.headers.get('Cookie') || ctx.request.headers.get('cookie');
-
-	const url = new URL(ctx.request.url);
-
-	// Public endpoints that don't need auth
-	if (
-		url.pathname.includes('/health') ||
-		url.pathname.includes('/sessions') ||
-		url.pathname.includes('/vnpay_ipn')
-	) {
-		return { user: null };
-	}
 
 	function parseCookie(cookieHeaderStr: string | null, name: string): string | null {
 		if (!cookieHeaderStr) return null;
@@ -45,10 +39,6 @@ export async function verifyToken(ctx: any) {
 		return null;
 	}
 
-	console.log('[auth] Authorization header:', !!authorizationHeader);
-	console.log('[auth] Cookie header:', !!cookieHeader);
-	console.log('[auth] Pathname:', url.pathname);
-
 	let token: string | null = null;
 
 	// Try Authorization header first
@@ -62,15 +52,13 @@ export async function verifyToken(ctx: any) {
 		if (cookieToken) token = decodeURIComponent(cookieToken.trim());
 	}
 
-	// Clean up token
 	if (token) {
 		token = token.replace(/^["']|["']$/g, '');
-		console.log('[auth] Token (masked):', `${token.slice(0, 10)}...`);
 	}
 
 	if (!token) {
 		ctx.set.status = 401;
-		throw new Error('Authorization token missing or malformed');
+		throw new Error('Authentication required');
 	}
 
 	// Verify JWT
@@ -78,21 +66,8 @@ export async function verifyToken(ctx: any) {
 
 	if (!payload) {
 		ctx.set.status = 401;
-		console.error('[auth] JWT verification returned false');
 		throw new Error('Invalid or expired token');
 	}
 
-	console.log('[auth] Verified payload:', payload);
 	return { user: payload as User };
-}
-
-export function requireRole(allowedRoles: string[]) {
-	return (ctx: Context & { user?: User }) => {
-		if (!ctx.user) {
-			throw new Error('User not authenticated');
-		}
-		if (!allowedRoles.includes(ctx.user.role)) {
-			throw new Error(`Access denied. Required roles: ${allowedRoles.join(', ')}`);
-		}
-	};
 }

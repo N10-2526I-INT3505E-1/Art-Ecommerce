@@ -7,8 +7,8 @@ import { randomUUIDv7 } from 'bun';
 import { UserAddressSchema } from './order.model';
 
 // URL của Payment Service (Lấy từ .env hoặc mặc định)
-const PAYMENT_SERVICE_URL = process.env.PAYMENT_SERVICE_URL || 'http://localhost:4003';
-const PRODUCT_SERVICE_URL = process.env.PRODUCT_SERVICE_URL || 'http://localhost:4002';
+const PAYMENT_SERVICE_URL = process.env.PAYMENT_SERVICE_URL || 'http://localhost:4002';
+const PRODUCT_SERVICE_URL = process.env.PRODUCT_SERVICE_URL || 'http://localhost:4003';
 export type NewOrder = typeof ordersTable.$inferInsert;
 export type NewOrderItem = typeof orderItemsTable.$inferInsert;
 
@@ -21,7 +21,6 @@ export interface PaymentLinkResponse {
 	status: string;
 	paymentUrl: string;
 }
-
 
 type DrizzleDB = typeof db;
 
@@ -55,16 +54,16 @@ export class OrderService {
 		try {
 			const orderData = { ...data };
 			const shipping_address = data.shipping_address;
-			
+
 			// Validate address (works for both string and object)
 			const addressErrors = validateAddress(shipping_address);
 			if (Object.keys(addressErrors).length > 0) {
 				throw new BadRequestError(String(JSON.stringify(addressErrors)));
 			}
-			
+
 			// Convert to storage format (string)
 			orderData.shipping_address = this.serializeShippingAddress(shipping_address);
-			
+
 			orderData.id = randomUUIDv7();
 			const [newOrder] = await this.database.insert(ordersTable).values(orderData).returning();
 			if (!newOrder) {
@@ -168,13 +167,7 @@ export class OrderService {
 			.from(orderItemsTable)
 			.where(eq(orderItemsTable.order_id, orderId));
 
-		return items.map((it) => ({
-			...it,
-			product_snapshot:
-				it.product_snapshot && it.product_snapshot !== '{}'
-					? JSON.parse(it.product_snapshot)
-					: null,
-		}));
+		return items;
 	}
 
 	// 8. Create Payment Link (Gọi sang Payment Service)
@@ -194,8 +187,10 @@ export class OrderService {
 		try {
 			const response = await fetch(`${PAYMENT_SERVICE_URL}/payments`, {
 				method: 'POST',
-				headers: { 
-					'Content-Type': 'application/json',	'x-internal-secret': process.env.INTERNAL_HEADER_SECRET || '' },
+				headers: {
+					'Content-Type': 'application/json',
+					'x-internal-secret': process.env.INTERNAL_HEADER_SECRET || '',
+				},
 				body: JSON.stringify({
 					order_id: order.id,
 					amount: Number(order.total_amount),
@@ -232,7 +227,9 @@ export class OrderService {
 	}
 
 	// 10. Fetch Product Details from Product Service
-	async getProductDetails(productId: string): Promise<{ price: number; name: string; id: string }> {
+	async getProductDetails(
+		productId: string,
+	): Promise<{ price: number; name: string; id: string; imageUrl: string }> {
 		try {
 			const response = await fetch(`${PRODUCT_SERVICE_URL}/products/${productId}`, {
 				method: 'GET',
@@ -252,35 +249,45 @@ export class OrderService {
 				id: product.id,
 				name: product.name,
 				price: Number(product.price),
+				// Map đúng trường ảnh từ Product Service (thường là imageUrl hoặc image)
+				imageUrl: product.imageUrl || product.image || '',
 			};
 		} catch (error) {
-			console.log(PRODUCT_SERVICE_URL);
 			console.error(`Failed to fetch product ${productId}:`, error);
 			if (error instanceof Error && (error as any).status) throw error;
-			throw new InternalServerError(`Không thể lấy thông tin sản phẩm ${productId} từ dịch vụ.`);
+			throw new InternalServerError(`Không thể lấy thông tin sản phẩm ${productId}.`);
 		}
 	}
 
 	// 11. Calculate Total Amount from Order Items
-	async calculateTotalAmount(
-		items: Array<{ product_id: string; quantity: number }>,
-	): Promise<{ total: number; itemDetails: Array<{ product_id: string; quantity: number; price: number }> }> {
+	async calculateTotalAmount(items: Array<{ product_id: string; quantity: number }>): Promise<{
+		total: number;
+		// Trả về map để dễ lookup: { "productId": { name, price, imageUrl } }
+		productMap: Record<string, { name: string; price: number; imageUrl: string }>;
+	}> {
 		let total = 0;
-		const itemDetails: Array<{ product_id: string; quantity: number; price: number }> = [];
+		const productMap: Record<string, { name: string; price: number; imageUrl: string }> = {};
 
 		try {
-			for (const item of items) {
-				const product = await this.getProductDetails(item.product_id);
-				const itemTotal = product.price * item.quantity;
-				total += itemTotal;
-				itemDetails.push({
-					product_id: item.product_id,
-					quantity: item.quantity,
-					price: product.price,
-				});
-			}
+			// Dùng Promise.all để fetch song song cho nhanh
+			await Promise.all(
+				items.map(async (item) => {
+					const product = await this.getProductDetails(item.product_id);
+					const itemTotal = product.price * item.quantity;
 
-			return { total, itemDetails };
+					// Cộng dồn tổng tiền (Mutex không cần thiết vì Node là single thread event loop ở đây)
+					total += itemTotal;
+
+					// Lưu info sản phẩm để tí nữa dùng tạo snapshot
+					productMap[item.product_id] = {
+						name: product.name,
+						price: product.price,
+						imageUrl: product.imageUrl,
+					};
+				}),
+			);
+
+			return { total, productMap };
 		} catch (error) {
 			console.error('Calculate Total Amount Error:', error);
 			if (error instanceof Error && (error as any).status) throw error;

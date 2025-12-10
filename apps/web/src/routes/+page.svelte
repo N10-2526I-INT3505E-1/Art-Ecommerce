@@ -11,18 +11,27 @@
 	} from 'lucide-svelte';
 	import { animate, stagger } from 'motion';
 	import { onDestroy, onMount } from 'svelte';
+	import type { PageData } from './$types';
 
-	// Background Images
+	// Background Images (Keep these for Hero Section)
 	import LanBg from '$lib/assets/images/Lan.webp';
 	import LongBg from '$lib/assets/images/Long.webp';
 	import PhungBg from '$lib/assets/images/Phung.webp';
 	import QuyBg from '$lib/assets/images/Quy.webp';
 
-	// Title SVGs
+	// Title SVGs (Keep these for Hero Section)
 	import LanTitle from '$lib/assets/titles/Lan.svg';
 	import LongTitle from '$lib/assets/titles/Long.svg';
 	import PhungTitle from '$lib/assets/titles/Phung.svg';
 	import QuyTitle from '$lib/assets/titles/Quy.svg';
+
+	// Receive data from +page.server.ts
+	let { data }: { data: PageData } = $props();
+
+	// Helper to format currency
+	const formatCurrency = (amount: number) => {
+		return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
+	};
 
 	// --- MAIN CAROUSEL CONFIG ---
 	const slides = [
@@ -63,40 +72,6 @@
 			currentSlide = mainEmblaApi.selectedScrollSnap();
 		});
 	}
-
-	// --- SHARED PRODUCT DATA ---
-	const bgImages = [LongBg, LanBg, QuyBg, PhungBg];
-	const categories = ['Rồng', 'Kỳ Lân', 'Quy', 'Phượng'];
-	const titles = [
-		'Tượng Rồng Thiên Thanh',
-		'Kỳ Lân Bạch Ngọc',
-		'Quy Hóa Long Thọ',
-		'Phượng Hoàng Lửa',
-		'Rồng Vàng Cửu Long',
-		'Lân Đá Trấn Trạch',
-		'Quy Thần Thủy',
-		'Phượng Vũ Hoàng Kim',
-		'Rồng Phong Thủy',
-		'Kỳ Lân Minh Châu',
-		'Quy Trường Thọ',
-		'Phượng Hoàng Bất Diệt',
-		'Rồng Thăng Long',
-		'Lân Chiêu Tài',
-		'Quy Thiên Niên',
-		'Phượng Hoàng Bất Tử',
-	];
-
-	const skeletonProducts = Array.from({ length: 16 }, (_, i) => ({
-		id: i,
-		title: titles[i],
-		category: categories[i % 4],
-		price: [
-			2850, 1500, 3200, 4100, 2950, 1850, 3450, 3900, 2650, 1750, 3100, 4250, 2750, 1950, 3350,
-			4050,
-		][i],
-		rating: [4.9, 4.8, 5.0, 4.7][i % 4],
-		image: bgImages[i % 4],
-	}));
 
 	const productOptions = {
 		align: 'start',
@@ -251,7 +226,7 @@
 		</div>
 	</div>
 
-	<!-- Navigation Arrows -->
+	<!-- Navigation Arrows and Dots (Unchanged from original) -->
 	<div
 		class="pointer-events-none absolute inset-0 z-30 flex items-center justify-between px-3 md:px-6"
 	>
@@ -288,7 +263,7 @@
 </section>
 
 <div class="snap-section">
-	<!-- PRODUCTS CAROUSEL 1 -->
+	<!-- PRODUCTS CAROUSEL 1: COLLECTION -->
 	<section class="products-section products-section-1 flex flex-col justify-center bg-gray-50">
 		<div class="container mx-auto w-full max-w-[1600px] px-4 py-10 md:px-6 md:py-12 lg:px-8">
 			<div
@@ -343,24 +318,25 @@
 				<div
 					class="embla__container flex touch-pan-y gap-3 py-3 pl-2 md:gap-4 md:py-4 md:pl-4 lg:gap-5"
 				>
-					{#each skeletonProducts as product}
+					{#each data.collection as product}
 						<div
 							class="product-card min-w-0 flex-[0_0_70%] sm:flex-[0_0_45%] md:flex-[0_0_30%] lg:flex-[0_0_22%] xl:flex-[0_0_18%]"
 						>
 							<article
 								class="group relative h-full overflow-hidden rounded-xl bg-white shadow-sm transition-all hover:shadow-lg md:rounded-2xl"
 							>
-								<figure class="relative aspect-[3/4] overflow-hidden">
-									<enhanced:img
-										src={product.image}
-										alt={product.title}
+								<figure class="relative aspect-[3/4] overflow-hidden bg-gray-100">
+									<img
+										src={product.imageUrl}
+										alt={product.name}
 										class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
 										loading="lazy"
 									/>
 									<div
 										class="badge badge-sm badge-neutral md:badge-md absolute top-2 left-2 border-none bg-black/70 text-[10px] text-white backdrop-blur-md md:top-3 md:left-3 md:text-xs"
 									>
-										{product.category}
+										<!-- Using categoryId as API doesn't provide category name in sample -->
+										{product.categoryId}
 									</div>
 
 									<div
@@ -368,7 +344,7 @@
 									>
 										<button
 											class="btn btn-primary btn-xs md:btn-sm w-full shadow-lg"
-											aria-label={`Thêm ${product.title} vào giỏ`}
+											aria-label={`Thêm ${product.name} vào giỏ`}
 										>
 											<ShoppingCart size={14} class="md:hidden" />
 											<ShoppingCart size={16} class="hidden md:block" />
@@ -378,20 +354,22 @@
 								</figure>
 
 								<div class="p-3 md:p-4">
-									<h3
-										class="group-hover:text-primary line-clamp-2 text-sm font-bold text-gray-900 transition-colors md:text-base"
+									<a
+										href={`/products/${product.id}`}
+										class="group-hover:text-primary line-clamp-2 block text-sm font-bold text-gray-900 transition-colors md:text-base"
 									>
-										{product.title}
-									</h3>
+										{product.name}
+									</a>
 									<div class="mt-2 flex items-center justify-between">
 										<span class="text-primary text-base font-semibold md:text-lg"
-											>${product.price}</span
+											>{formatCurrency(product.price)}</span
 										>
-										<div class="flex items-center gap-1">
+										<!-- API response doesn't strictly include rating, hiding to prevent error, or toggle if extended -->
+										<!-- <div class="flex items-center gap-1">
 											<Star size={12} class="fill-orange-400 text-orange-400 md:hidden" />
 											<Star size={14} class="hidden fill-orange-400 text-orange-400 md:block" />
-											<span class="text-[10px] text-gray-600 md:text-xs">{product.rating}</span>
-										</div>
+											<span class="text-[10px] text-gray-600 md:text-xs">5.0</span>
+										</div> -->
 									</div>
 								</div>
 							</article>
@@ -402,7 +380,7 @@
 		</div>
 	</section>
 
-	<!-- PRODUCTS CAROUSEL 2 -->
+	<!-- PRODUCTS CAROUSEL 2: NEW ARRIVALS -->
 	<section class="products-section products-section-2 flex flex-col justify-center bg-white">
 		<div class="container mx-auto w-full max-w-[1600px] px-4 py-10 md:px-6 md:py-12 lg:px-8">
 			<div
@@ -457,24 +435,24 @@
 				<div
 					class="embla__container flex touch-pan-y gap-3 py-3 pl-2 md:gap-4 md:py-4 md:pl-4 lg:gap-5"
 				>
-					{#each skeletonProducts as product}
+					{#each data.newArrivals as product}
 						<div
 							class="product-card min-w-0 flex-[0_0_70%] sm:flex-[0_0_45%] md:flex-[0_0_30%] lg:flex-[0_0_22%] xl:flex-[0_0_18%]"
 						>
 							<article
 								class="group relative h-full overflow-hidden rounded-xl bg-white shadow-sm transition-all hover:shadow-lg md:rounded-2xl"
 							>
-								<figure class="relative aspect-[3/4] overflow-hidden">
-									<enhanced:img
-										src={product.image}
-										alt={product.title}
+								<figure class="relative aspect-[3/4] overflow-hidden bg-gray-100">
+									<img
+										src={product.imageUrl}
+										alt={product.name}
 										class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
 										loading="lazy"
 									/>
 									<div
 										class="badge badge-sm badge-neutral md:badge-md absolute top-2 left-2 border-none bg-black/70 text-[10px] text-white backdrop-blur-md md:top-3 md:left-3 md:text-xs"
 									>
-										{product.category}
+										{product.categoryId}
 									</div>
 
 									<div
@@ -482,7 +460,7 @@
 									>
 										<button
 											class="btn btn-primary btn-xs md:btn-sm w-full shadow-lg"
-											aria-label={`Thêm ${product.title} vào giỏ`}
+											aria-label={`Thêm ${product.name} vào giỏ`}
 										>
 											<ShoppingCart size={14} class="md:hidden" />
 											<ShoppingCart size={16} class="hidden md:block" />
@@ -492,20 +470,16 @@
 								</figure>
 
 								<div class="p-3 md:p-4">
-									<h3
-										class="group-hover:text-primary line-clamp-2 text-sm font-bold text-gray-900 transition-colors md:text-base"
+									<a
+										href={`/products/${product.id}`}
+										class="group-hover:text-primary line-clamp-2 block text-sm font-bold text-gray-900 transition-colors md:text-base"
 									>
-										{product.title}
-									</h3>
+										{product.name}
+									</a>
 									<div class="mt-2 flex items-center justify-between">
 										<span class="text-primary text-base font-semibold md:text-lg"
-											>${product.price}</span
+											>{formatCurrency(product.price)}</span
 										>
-										<div class="flex items-center gap-1">
-											<Star size={12} class="fill-orange-400 text-orange-400 md:hidden" />
-											<Star size={14} class="hidden fill-orange-400 text-orange-400 md:block" />
-											<span class="text-[10px] text-gray-600 md:text-xs">{product.rating}</span>
-										</div>
 									</div>
 								</div>
 							</article>
@@ -516,7 +490,7 @@
 		</div>
 	</section>
 
-	<!-- PRODUCTS CAROUSEL 3 -->
+	<!-- PRODUCTS CAROUSEL 3: BEST SELLERS -->
 	<section class="products-section products-section-3 flex flex-col justify-center bg-gray-50">
 		<div class="container mx-auto w-full max-w-[1600px] px-4 py-10 md:px-6 md:py-12 lg:px-8">
 			<div
@@ -571,24 +545,24 @@
 				<div
 					class="embla__container flex touch-pan-y gap-3 py-3 pl-2 md:gap-4 md:py-4 md:pl-4 lg:gap-5"
 				>
-					{#each skeletonProducts as product}
+					{#each data.bestSellers as product}
 						<div
 							class="product-card min-w-0 flex-[0_0_70%] sm:flex-[0_0_45%] md:flex-[0_0_30%] lg:flex-[0_0_22%] xl:flex-[0_0_18%]"
 						>
 							<article
 								class="group relative h-full overflow-hidden rounded-xl bg-white shadow-sm transition-all hover:shadow-lg md:rounded-2xl"
 							>
-								<figure class="relative aspect-[3/4] overflow-hidden">
-									<enhanced:img
-										src={product.image}
-										alt={product.title}
+								<figure class="relative aspect-[3/4] overflow-hidden bg-gray-100">
+									<img
+										src={product.imageUrl}
+										alt={product.name}
 										class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
 										loading="lazy"
 									/>
 									<div
 										class="badge badge-sm badge-neutral md:badge-md absolute top-2 left-2 border-none bg-black/70 text-[10px] text-white backdrop-blur-md md:top-3 md:left-3 md:text-xs"
 									>
-										{product.category}
+										{product.categoryId}
 									</div>
 
 									<div
@@ -596,7 +570,7 @@
 									>
 										<button
 											class="btn btn-primary btn-xs md:btn-sm w-full shadow-lg"
-											aria-label={`Thêm ${product.title} vào giỏ`}
+											aria-label={`Thêm ${product.name} vào giỏ`}
 										>
 											<ShoppingCart size={14} class="md:hidden" />
 											<ShoppingCart size={16} class="hidden md:block" />
@@ -606,20 +580,16 @@
 								</figure>
 
 								<div class="p-3 md:p-4">
-									<h3
-										class="group-hover:text-primary line-clamp-2 text-sm font-bold text-gray-900 transition-colors md:text-base"
+									<a
+										href={`/products/${product.id}`}
+										class="group-hover:text-primary line-clamp-2 block text-sm font-bold text-gray-900 transition-colors md:text-base"
 									>
-										{product.title}
-									</h3>
+										{product.name}
+									</a>
 									<div class="mt-2 flex items-center justify-between">
 										<span class="text-primary text-base font-semibold md:text-lg"
-											>${product.price}</span
+											>{formatCurrency(product.price)}</span
 										>
-										<div class="flex items-center gap-1">
-											<Star size={12} class="fill-orange-400 text-orange-400 md:hidden" />
-											<Star size={14} class="hidden fill-orange-400 text-orange-400 md:block" />
-											<span class="text-[10px] text-gray-600 md:text-xs">{product.rating}</span>
-										</div>
 									</div>
 								</div>
 							</article>

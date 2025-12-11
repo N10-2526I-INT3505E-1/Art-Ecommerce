@@ -3,9 +3,12 @@ import { HashAlgorithm, ProductCode, VnpLocale } from 'vnpay/enums';
 import { dateFormat, resolveUrlString } from 'vnpay/utils';
 import { VNPay } from 'vnpay/vnpay';
 
+const vnp_TmnCode = process.env.VNP_TMNCODE || '';
+const vnp_HashSecret = process.env.VNP_HASHSECRET || '';
+
 const vnpay = new VNPay({
-	tmnCode: 'DZL95F29',
-	secureSecret: 'QHLBD47T4UNA2EM6CK09J00TUQ6DXLCW',
+	tmnCode: vnp_TmnCode,
+	secureSecret: vnp_HashSecret,
 	vnpayHost: 'https://sandbox.vnpayment.vn',
 	queryDrAndRefundHost: 'https://sandbox.vnpayment.vn', // tùy chọn, trường hợp khi url của querydr và refund khác với url khởi tạo thanh toán (thường sẽ sử dụng cho production)
 

@@ -23,7 +23,12 @@ export const app = new Elysia()
 	.use(errorHandler)
 	.use(
 		cors({
-			origin: ['http://localhost:5173', 'https://novus.io.vn/', 'http://localhost:3000'],
+			origin: [
+				'http://localhost:5173',
+				'https://novus.io.vn',
+				'https://api.novus.io.vn',
+				'http://localhost:3000',
+			],
 			credentials: true,
 			methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 			allowedHeaders: ['Content-Type', 'Authorization'],

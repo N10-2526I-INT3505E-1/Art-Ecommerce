@@ -13,8 +13,8 @@ const app = new Elysia()
 		cors({
 			origin: [
 				'http://localhost:5173',
-				'https://novus.io.vn/',
-				'https://api.novus.io.vn/',
+				'https://novus.io.vn',
+				'https://api.novus.io.vn',
 				'http://localhost:3000',
 			],
 			credentials: true,

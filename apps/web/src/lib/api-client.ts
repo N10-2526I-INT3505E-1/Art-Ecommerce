@@ -15,6 +15,6 @@ const defaultPrefix = ensureTrailingSlash(
 export const api = ky.create({
 	prefixUrl: defaultPrefix, // 4. Fixed: You were ignoring defaultPrefix in your snippet
 	credentials: 'include',
-	timeout: 5000,
+	timeout: 10000,
 	retry: 0,
 });

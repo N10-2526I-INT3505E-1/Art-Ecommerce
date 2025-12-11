@@ -4,11 +4,33 @@ import { cors } from '@elysiajs/cors';
 import { helmet } from 'elysia-helmet';
 import { verifyToken } from './middleware/auth';
 import { routes } from './routes'; // Import the plugin instance
+import path from 'path';
 
 // Load environment variables
 const PORT = Number(process.env.PORT || 3000);
 const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+// Resolve SSL certificate paths
+const certPath = path.join('/app/certs/tls.crt');
+const keyPath = path.join('/app/certs/tls.key');
+
+// Check if SSL files exist - gracefully handle missing certs
+let sslEnabled = false;
+try {
+	const cert = Bun.file(certPath);
+	const key = Bun.file(keyPath);
+	sslEnabled = cert.size > 0 && key.size > 0;
+} catch {
+	sslEnabled = false;
+}
+
+console.log(`SSL Enabled: ${sslEnabled}`);
+if (!sslEnabled) {
+	console.warn('⚠️  SSL certificates not found. Running in HTTP mode.');
+	console.warn(`Expected cert at: ${certPath}`);
+	console.warn(`Expected key at: ${keyPath}`);
+}
 
 export const app = new Elysia()
 	// 1. Security & Global Middleware
@@ -55,9 +77,20 @@ export const app = new Elysia()
 	// 5. Register Application Routes
 	.use(routes);
 
-app.listen(PORT, () => {
-	console.log(`🚀 Gateway running on http://localhost:${PORT}`);
-	console.log(`📝 Serving for frontend URL: ${FRONTEND_URL}`);
-});
+	// Start the server
+	const serverConfig: any = { port: PORT };
+
+	if (sslEnabled) {
+		serverConfig.tls = {
+		cert: Bun.file(certPath),
+		key: Bun.file(keyPath),
+		};
+	}
+
+	app.listen(serverConfig, (server) => {
+		const protocol = sslEnabled ? 'https' : 'http';
+		console.log(`🚀 Gateway running on ${protocol}://${server.hostname}:${server.port}`);
+		console.log(`📝 Serving for frontend URL: ${FRONTEND_URL}`);
+	});
 
 export type App = typeof app;

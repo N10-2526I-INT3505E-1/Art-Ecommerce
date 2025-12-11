@@ -1,4 +1,4 @@
-import { api } from '$lib/server/http'; // Adjust path to your api helper
+import { api } from '$lib/server/http';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 

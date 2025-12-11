@@ -26,15 +26,12 @@
 	const phonePattern = '[0-9]{9,11}';
 
 	const PROVINCES = [
-		// Thành phố trực thuộc TW
 		'TP. Hồ Chí Minh',
 		'Hà Nội',
 		'Hải Phòng',
 		'Đà Nẵng',
 		'Cần Thơ',
 		'Huế',
-
-		// 28 tỉnh
 		'Cao Bằng',
 		'Điện Biên',
 		'Hà Tĩnh',
@@ -44,7 +41,6 @@
 		'Quảng Ninh',
 		'Thanh Hóa',
 		'Sơn La',
-
 		'Tuyên Quang',
 		'Lào Cai',
 		'Thái Nguyên',
@@ -118,13 +114,11 @@
 
 	// --- INITIALIZATION ---
 	onMount(async () => {
-		// 1. Redirect if cart is empty
 		if (cartItems.length === 0) {
 			goto('/cart');
 			return;
 		}
 
-		// 2. Pre-fill data
 		if (currentUser) {
 			email = currentUser.email || '';
 			fullName = (currentUser.first_name + ' ' + currentUser.last_name).trim();
@@ -147,11 +141,10 @@
 
 	// --- FORM ACTION HANDLER ---
 	const handleSubmit = () => {
-		// Client-side basic validation
 		if (!acceptTerms) {
 			termsError = 'Vui lòng đồng ý điều khoản';
-			// Prevent form submission by canceling (we can't cancel enhance easily here without check,
-			// but we can return early inside enhance's callback or check before submit)
+			// We can't easily cancel the enhance here, so we handle it via early return or UI state
+			// Ideally, the submit button is disabled if validation fails
 		}
 
 		isSubmitting = true;
@@ -159,18 +152,29 @@
 		return async ({ result, update }: any) => {
 			isSubmitting = false;
 
+			// Handle successful return from server (type: success)
 			if (result.type === 'success' && result.data?.paymentUrl) {
 				toastMessage = 'Đang chuyển hướng đến VNPay...';
 				toastType = 'success';
 
-				// Optional: Clear cart here or after payment success callback
+				// Optional: Clear cart before redirect
 				// cart.items = [];
 
+				// Redirect to the payment gateway
 				window.location.href = result.data.paymentUrl;
-			} else if (result.type === 'failure') {
+			}
+			// Handle redirects (if server uses throw redirect instead of return)
+			else if (result.type === 'redirect') {
+				goto(result.location);
+			}
+			// Handle errors
+			else if (result.type === 'failure') {
 				toastMessage = result.data?.message || 'Có lỗi xảy ra';
 				toastType = 'error';
-				await update(); // Reset form state if needed
+				await update();
+			} else {
+				// Fallback for unexpected states
+				await update();
 			}
 		};
 	};

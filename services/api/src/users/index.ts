@@ -102,11 +102,15 @@ export const usersPlugin = (dependencies: { userService: UserService }) =>
 						await console.log('Google login with token:', body);
 						const result = await userService.loginWithGoogle(body.token, jwt as any);
 
+						const isProduction = process.env.NODE_ENV === 'production';
+
+						const cookieDomain = isProduction ? '.novus.io.vn' : undefined;
 						cookie.auth.set({
 							value: result.accessToken,
 							httpOnly: true,
 							secure: process.env.NODE_ENV === 'production',
 							path: '/',
+							domain: cookieDomain,
 							maxAge: 60 * 30, // 30 phút
 							sameSite: 'lax',
 						});
@@ -116,6 +120,7 @@ export const usersPlugin = (dependencies: { userService: UserService }) =>
 							httpOnly: true,
 							secure: process.env.NODE_ENV === 'production',
 							path: '/',
+							domain: cookieDomain,
 							maxAge: 7 * 86400, // 7 ngày
 							sameSite: 'lax',
 						});

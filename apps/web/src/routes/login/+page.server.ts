@@ -1,13 +1,15 @@
 import { type Actions, fail, redirect } from '@sveltejs/kit';
 import { HTTPError } from 'ky';
 import { api } from '$lib/server/http';
+import { dev } from '$app/environment'; // Use SvelteKit's environment check
 
 export const load = async ({ locals }) => {
 	if (locals.user) {
-		redirect(302, '/');
+		throw redirect(302, '/');
 	}
 	return {};
 };
+
 export const actions: Actions = {
 	login: async (event) => {
 		const fd = await event.request.formData();
@@ -26,23 +28,32 @@ export const actions: Actions = {
 		const client = api(event);
 
 		try {
+			// 1. Call API
 			const response = await client
 				.post('sessions', { json: payload })
 				.json<{ accessToken: string; refreshToken: string }>();
 
-			event.cookies.set('auth', response.accessToken, {
+			// 2. Define Cookie Options (CRITICAL FIX)
+			const isProduction = !dev; // True if not in dev mode
+
+			// This allows the cookie to be shared with subdomains (api.) if needed,
+			// and matches the logic we used in Google Login/Refresh.
+			const commonCookieOpts = {
 				path: '/',
 				httpOnly: true,
-				secure: process.env.NODE_ENV === 'production',
-				sameSite: 'lax',
+				secure: isProduction,
+				sameSite: 'lax' as const,
+				domain: isProduction ? '.novus.io.vn' : undefined,
+			};
+
+			// 3. Set Cookies with Domain
+			event.cookies.set('auth', response.accessToken, {
+				...commonCookieOpts,
 				maxAge: 60 * 30, // 30 minutes
 			});
 
 			event.cookies.set('refresh_token', response.refreshToken, {
-				path: '/',
-				httpOnly: true,
-				secure: process.env.NODE_ENV === 'production',
-				sameSite: 'lax',
+				...commonCookieOpts,
 				maxAge: 60 * 60 * 24 * 7, // 7 days
 			});
 		} catch (e) {
@@ -56,22 +67,30 @@ export const actions: Actions = {
 			return fail(500, { message: 'An unexpected error occurred.' });
 		}
 
+		// 4. Redirect
 		throw redirect(303, '/');
 	},
+
 	logout: async (event) => {
 		const client = api(event);
 		const refreshToken = event.cookies.get('refresh_token');
 
 		if (refreshToken) {
 			try {
-				await client.delete('session', { json: { refreshToken } });
+				await client.delete('sessions', { json: { refreshToken } });
 			} catch (e) {
 				console.error('Logout failed', e);
 			}
 		}
 
-		event.cookies.delete('auth', { path: '/' });
-		event.cookies.delete('refresh_token', { path: '/' });
+		const isProduction = !dev;
+		const deleteOpts = {
+			path: '/',
+			domain: isProduction ? '.novus.io.vn' : undefined,
+		};
+
+		event.cookies.delete('auth', deleteOpts);
+		event.cookies.delete('refresh_token', deleteOpts);
 
 		throw redirect(303, '/login');
 	},

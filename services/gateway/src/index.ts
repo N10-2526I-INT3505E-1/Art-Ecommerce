@@ -38,9 +38,9 @@ export const app = new Elysia()
 	.use(
 		cors({
 			origin: [
-				FRONTEND_URL,
-				'https://novus.io.vn/',
 				'http://localhost:5173',
+				'https://novus.io.vn',
+				'https://api.novus.io.vn',
 				'http://localhost:3000',
 			],
 			credentials: true,
@@ -77,20 +77,20 @@ export const app = new Elysia()
 	// 5. Register Application Routes
 	.use(routes);
 
-	// Start the server
-	const serverConfig: any = { port: PORT };
+// Start the server
+const serverConfig: any = { port: PORT };
 
-	if (sslEnabled) {
-		serverConfig.tls = {
+if (sslEnabled) {
+	serverConfig.tls = {
 		cert: Bun.file(certPath),
 		key: Bun.file(keyPath),
-		};
-	}
+	};
+}
 
-	app.listen(serverConfig, (server) => {
-		const protocol = sslEnabled ? 'https' : 'http';
-		console.log(`🚀 Gateway running on ${protocol}://${server.hostname}:${server.port}`);
-		console.log(`📝 Serving for frontend URL: ${FRONTEND_URL}`);
-	});
+app.listen(serverConfig, (server) => {
+	const protocol = sslEnabled ? 'https' : 'http';
+	console.log(`🚀 Gateway running on ${protocol}://${server.hostname}:${server.port}`);
+	console.log(`📝 Serving for frontend URL: ${FRONTEND_URL}`);
+});
 
 export type App = typeof app;

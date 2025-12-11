@@ -1,97 +1,99 @@
-import { type Actions, fail, redirect } from '@sveltejs/kit';
-import { HTTPError } from 'ky';
-import { api } from '$lib/server/http';
-import { dev } from '$app/environment'; // Use SvelteKit's environment check
+import { api } from '$lib/server/http'; // Adjust path if needed
+import { fail, redirect } from '@sveltejs/kit';
+import type { Actions } from './$types';
 
-export const load = async ({ locals }) => {
-	if (locals.user) {
-		throw redirect(302, '/');
-	}
-	return {};
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Common cookie options to match your hooks.server.ts logic
+const cookieOptions = {
+	path: '/',
+	domain: isProduction ? '.novus.io.vn' : undefined,
+	httpOnly: true,
+	secure: isProduction,
+	sameSite: 'lax' as const,
+	maxAge: 60 * 30, // 30 minutes for access token
 };
 
-export const actions: Actions = {
-	login: async (event) => {
-		const fd = await event.request.formData();
+const refreshCookieOptions = {
+	...cookieOptions,
+	maxAge: 60 * 60 * 24 * 7, // 7 days (example for refresh token)
+};
 
-		const loginId = String(fd.get('loginId') ?? '');
-		const password = String(fd.get('password') ?? '');
+export const actions = {
+	// Standard Login Action
+	login: async ({ request, cookies, fetch }) => {
+		const formData = await request.formData();
+		const loginId = formData.get('loginId') as string;
+		const password = formData.get('password') as string;
 
 		if (!loginId || !password) {
-			return fail(400, { message: 'Username/Email and password are required.' });
+			return fail(400, { message: 'Missing credentials' });
 		}
 
-		const payload = loginId.includes('@')
-			? { email: loginId, password }
-			: { username: loginId, password };
-
-		const client = api(event);
+		const client = api({ fetch, request });
 
 		try {
-			// 1. Call API
+			// Adjust endpoint to match your backend
 			const response = await client
-				.post('sessions', { json: payload })
-				.json<{ accessToken: string; refreshToken: string }>();
+				.post('sessions', {
+					json: { loginId, password },
+				})
+				.json<{ accessToken: string; refreshToken?: string }>();
 
-			// 2. Define Cookie Options (CRITICAL FIX)
-			const isProduction = !dev; // True if not in dev mode
+			// Set Access Token
+			cookies.set('auth', response.accessToken, cookieOptions);
 
-			// This allows the cookie to be shared with subdomains (api.) if needed,
-			// and matches the logic we used in Google Login/Refresh.
-			const commonCookieOpts = {
-				path: '/',
-				httpOnly: true,
-				secure: isProduction,
-				sameSite: 'lax' as const,
-				domain: isProduction ? '.novus.io.vn' : undefined,
-			};
-
-			// 3. Set Cookies with Domain
-			event.cookies.set('auth', response.accessToken, {
-				...commonCookieOpts,
-				maxAge: 60 * 30, // 30 minutes
-			});
-
-			event.cookies.set('refresh_token', response.refreshToken, {
-				...commonCookieOpts,
-				maxAge: 60 * 60 * 24 * 7, // 7 days
-			});
-		} catch (e) {
-			if (e instanceof HTTPError) {
-				const body = await e.response.json().catch(() => null);
-				return fail(e.response.status ?? 400, {
-					message: body?.message ?? 'Invalid credentials.',
-				});
+			// Set Refresh Token if returned
+			if (response.refreshToken) {
+				cookies.set('refresh_token', response.refreshToken, refreshCookieOptions);
 			}
-			console.error('Login Error:', e);
-			return fail(500, { message: 'An unexpected error occurred.' });
-		}
 
-		// 4. Redirect
-		throw redirect(303, '/');
+			return { success: true };
+		} catch (err: any) {
+			// Handle ky errors
+			let message = 'Login failed';
+			if (err.response) {
+				try {
+					const body = await err.response.json();
+					message = body.message || message;
+				} catch (e) {
+					/* ignore */
+				}
+			}
+			return fail(400, { message, type: 'error' });
+		}
 	},
 
-	logout: async (event) => {
-		const client = api(event);
-		const refreshToken = event.cookies.get('refresh_token');
+	// Google Login Action
+	google: async ({ request, cookies, fetch }) => {
+		const formData = await request.formData();
+		const credential = formData.get('credential');
 
-		if (refreshToken) {
-			try {
-				await client.delete('sessions', { json: { refreshToken } });
-			} catch (e) {
-				console.error('Logout failed', e);
-			}
+		if (!credential) {
+			return fail(400, { message: 'Missing Google credential' });
 		}
 
-		const isProduction = !dev;
-		const deleteOpts = {
-			path: '/',
-			domain: isProduction ? '.novus.io.vn' : undefined,
-		};
+		const client = api({ fetch, request });
 
-		event.cookies.delete('auth', deleteOpts);
-		event.cookies.delete('refresh_token', deleteOpts);
+		try {
+			// Exchange Google token for App tokens
+			const response = await client
+				.post('sessions/google', {
+					json: { token: credential },
+				})
+				.json<{ accessToken: string; refreshToken?: string }>();
 
-		throw redirect(303, '/login');
+			// Set Cookies on the Server Side
+			cookies.set('auth', response.accessToken, cookieOptions);
+
+			if (response.refreshToken) {
+				cookies.set('refresh_token', response.refreshToken, refreshCookieOptions);
+			}
+
+			return { success: true };
+		} catch (err: any) {
+			console.error('Google Server Action Error:', err);
+			return fail(400, { message: 'Google login failed on server', type: 'error' });
+		}
 	},
-};
+} satisfies Actions;

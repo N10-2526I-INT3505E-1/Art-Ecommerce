@@ -35,7 +35,7 @@ export const actions = {
 			return fail(400, { message: 'Vui lòng điền đầy đủ thông tin giao hàng.' });
 		}
 
-		// Clean Phone Number (Remove spaces/dots to match regex ^[0-9]{9,11}$)
+		// Clean Phone Number
 		const cleanPhone = phone.replace(/\D/g, '');
 		if (cleanPhone.length < 9 || cleanPhone.length > 11) {
 			return fail(400, { message: 'Số điện thoại không hợp lệ.' });
@@ -51,7 +51,7 @@ export const actions = {
 			return fail(400, { message: 'Giỏ hàng lỗi. Vui lòng thử lại.' });
 		}
 
-		// 4. Calculate Totals (Server-side source of truth)
+		// 4. Calculate Totals (Server-side)
 		const FREE_SHIPPING_THRESHOLD = 10_000_000;
 		const SHIPPING_FEE = 50_000;
 		const TAX_RATE = 0.1;
@@ -62,20 +62,21 @@ export const actions = {
 		);
 		const shipping = subtotal >= FREE_SHIPPING_THRESHOLD ? 0 : SHIPPING_FEE;
 		const tax = Math.round(subtotal * TAX_RATE);
-		const total = Math.round(subtotal + tax + shipping); // Ensure Integer
+		const total = Math.round(subtotal + tax + shipping);
 
-		// 5. Construct Payload matching your API Schema exactly
+		// 5. Construct Payload matching OpenAPI /orders/ schema
 		const orderPayload = {
 			user_id: locals.user.id,
 			total_amount: total,
-			status: 'pending',
+			status: 'pending', // Enum: pending, paid, etc.
 			shipping_address: {
 				address: address,
 				phone: cleanPhone,
 				ward: ward,
 				state: province,
 				country: 'Vietnam',
-				// 'postal_code' and 'is_default' are optional in your schema, so we omit them to be safe
+				postal_code: null,
+				is_default: 0,
 			},
 			items: cartItems.map((item: any) => ({
 				product_id: String(item.id),
@@ -90,49 +91,47 @@ export const actions = {
 		};
 
 		// 6. Execute API Calls
-		const client = api({ fetch, request }); // Pass context to propagate Auth Cookies
+		const client = api({ fetch, request });
 
 		try {
-			console.log('Creating Order:', JSON.stringify(orderPayload, null, 2));
+			// Call POST /orders/
+			// Based on OpenAPI, this returns { order: {...}, items: [...], paymentUrl: string|null }
+			const response = await client
+				.post('orders/', {
+					json: orderPayload,
+					retry: 0, // Prevent double charging on network glitches
+				})
+				.json<{
+					order: { id: string };
+					items: any[];
+					paymentUrl?: string | null;
+				}>();
 
-			// A. Create Order
-			const orderRes = await client
-				.post('orders/', { json: orderPayload })
-				.json<{ order: { id: string } }>();
-
-			if (!orderRes?.order?.id) {
+			if (!response?.order?.id) {
 				throw new Error('Không nhận được mã đơn hàng từ hệ thống.');
 			}
 
-			// B. Create Payment
-			const paymentPayload = {
-				order_id: orderRes.order.id,
-				amount: total,
-				payment_gateway: 'vnpay',
-			};
-
-			const paymentRes = await client
-				.post('payments/', { json: paymentPayload })
-				.json<{ paymentUrl: string }>();
-
-			if (paymentRes.paymentUrl) {
-				return { success: true, paymentUrl: paymentRes.paymentUrl };
+			// Check for paymentUrl directly from the Order response
+			if (response.paymentUrl) {
+				// Return the URL to the frontend so it can handle the redirect
+				return {
+					success: true,
+					paymentUrl: response.paymentUrl,
+				};
 			} else {
-				return fail(500, { message: 'Lỗi khởi tạo cổng thanh toán VNPay.' });
+				// If no payment URL (e.g. total is 0 or system error), logic depends on business rules.
+				// Assuming standard flow requires payment:
+				throw new Error('Hệ thống không trả về đường dẫn thanh toán.');
 			}
 		} catch (err: any) {
 			console.error('Checkout Error:', err);
 
-			// Try to parse backend error message
 			let apiError = 'Có lỗi xảy ra khi xử lý đơn hàng.';
+
 			if (err.response) {
 				try {
 					const body = await err.response.json();
-					console.error('API Error Body:', body);
-					// Extract validation message if available
-					if (body.summary) apiError = body.summary;
-					else if (body.message) apiError = body.message;
-					else if (body.error) apiError = body.error;
+					apiError = body.summary || body.message || body.error || apiError;
 				} catch (e) {
 					/* ignore */
 				}

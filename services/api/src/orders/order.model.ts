@@ -77,16 +77,6 @@ export const CreateOrderWithItemsSchema = t.Object({
 	items: t.Optional(t.Array(OrderItemInputSchema)),
 });
 
-export const UserAddressSchema = t.Object({
-	address: t.String({ minLength: 5, maxLength: 255 }),
-	phone: t.String({ maxLength: 10, pattern: '^[0-9]{9,11}$', error: 'Invalid phone number' }),
-	ward: t.String({ maxLength: 100 }),
-	state: t.String({ maxLength: 100 }),
-	postal_code: t.Optional(t.Union([t.String({ maxLength: 20 }), t.Null()])),
-	country: t.String({ maxLength: 100 }),
-	is_default: t.Optional(t.Integer({ minimum: 0, maximum: 1, default: 0 })),
-});
-
 export const OrderResponseSchema = createSelectSchema(ordersTable);
 export type Table = typeof ordersTable;
 export type CreateOrderInput = typeof CreateOrderSchema extends infer R ? R : unknown;

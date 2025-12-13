@@ -54,7 +54,7 @@ export const createVNPPaymentUrl = async (amount: number, id: string): Promise<s
 		vnp_TxnRef: id,
 		vnp_OrderInfo: 'Thanh toan don hang ' + id,
 		vnp_OrderType: ProductCode.Other,
-		vnp_ReturnUrl: 'https://www.google.com/',
+		vnp_ReturnUrl: 'https://novus.io.vn/orders',
 		//vnp_ReturnUrl: 'http://localhost:3000/vnpay-return',
 		vnp_Locale: VnpLocale.VN, // 'vn' hoặc 'en'
 		vnp_CreateDate: dateFormat(new Date()), // tùy chọn, mặc định là thời gian hiện tại

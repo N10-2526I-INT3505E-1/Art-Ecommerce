@@ -101,9 +101,9 @@ export const usersPlugin = (dependencies: { userService: UserService }) =>
 						// Thêm 'cookie' vào đây
 						await console.log('Google login with token:', body);
 						const result = await userService.loginWithGoogle(body.token, jwt as any);
-
 						const isProduction = process.env.NODE_ENV === 'production';
-
+						
+						set.headers['Cross-Origin-Opener-Policy'] = 'same-origin-allow-popups';
 						const cookieDomain = isProduction ? '.novus.io.vn' : undefined;
 						cookie.auth.set({
 							value: result.accessToken,
@@ -124,7 +124,7 @@ export const usersPlugin = (dependencies: { userService: UserService }) =>
 							maxAge: 7 * 86400, // 7 ngày
 							sameSite: 'lax',
 						});
-
+						
 						set.status = 201;
 						return { accessToken: result.accessToken, refreshToken: result.refreshToken };
 					},

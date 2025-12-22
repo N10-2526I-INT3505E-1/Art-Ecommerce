@@ -5,6 +5,7 @@ import { ordersTable } from './order.model';
 import { orderItemsTable } from './order_item.model';
 import { randomUUIDv7 } from 'bun';
 import { UserAddressSchema } from './order.model';
+import type { Channel } from 'amqplib';
 
 // URL của Payment Service (Lấy từ .env hoặc mặc định)
 const PAYMENT_SERVICE_URL = process.env.PAYMENT_SERVICE_URL || 'http://localhost:4002';
@@ -25,7 +26,16 @@ export interface PaymentLinkResponse {
 type DrizzleDB = typeof db;
 
 export class OrderService {
-	constructor(private readonly database: DrizzleDB) {}
+	private rabbitChannel: Channel | null = null;
+
+	constructor(database: DrizzleDB, rabbitChannel?: Channel) {
+		this.database = database;
+		if (rabbitChannel) {
+			this.rabbitChannel = rabbitChannel;
+		}
+	}
+
+	private readonly database: DrizzleDB;
 
 	// Helper: Parse shipping address from storage (string) to object if valid JSON
 	private parseShippingAddress(addressData: string | any): string | any {
@@ -49,6 +59,39 @@ export class OrderService {
 		return JSON.stringify(address);
 	}
 
+	// Helper: Send order expiry message to queue with 15-minute delay
+	private sendOrderExpiryMessage(orderId: string): boolean {
+		if (!this.rabbitChannel) {
+			console.warn(`RabbitMQ channel not available. Order expiry timer not set for order ${orderId}`);
+			return false;
+		}
+
+		try {
+			const message = {
+				type: 'ORDER_EXPIRY_CHECK',
+				orderId: orderId,
+				timestamp: new Date().toISOString(),
+			};
+
+			// Send to the temporary queue with TTL
+			const sent = this.rabbitChannel.sendToQueue(
+				'queue_order_expiry_temp',
+				Buffer.from(JSON.stringify(message)),
+			);
+
+			if (sent) {
+				console.log(`Sent order expiry message for order ${orderId} (will be delivered after 15 minutes)`);
+			} else {
+				console.error(`Failed to queue order expiry message for order ${orderId}`);
+			}
+
+			return sent;
+		} catch (error) {
+			console.error(`Error sending order expiry message for order ${orderId}:`, error);
+			return false;
+		}
+	}
+
 	// 1. Create Order
 	async createOrder(data: NewOrder) {
 		try {
@@ -69,6 +112,12 @@ export class OrderService {
 			if (!newOrder) {
 				throw new InternalServerError('Không thể tạo đơn hàng (Database Error).');
 			}
+
+			// If order status is PENDING, send expiry message for 15-minute auto-cancellation
+			if (newOrder.status === 'pending') {
+				this.sendOrderExpiryMessage(newOrder.id);
+			}
+
 			return newOrder;
 		} catch (error) {
 			if (error instanceof Error && error.name === 'HttpError') throw error;

@@ -7,7 +7,7 @@ import { rabbitPlugin, QUEUES } from './rabbitmq';
 import type { Channel } from 'amqplib';
 import { ForbiddenError, UnauthorizedError } from '@common/errors/httpErrors';
 
-const orderService = new OrderService(db);
+let orderService = new OrderService(db);
 
 export const ordersPlugin = async (dependencies: { orderService: OrderService }) =>
 	new Elysia({ name: 'orders-plugin' })
@@ -16,7 +16,14 @@ export const ordersPlugin = async (dependencies: { orderService: OrderService })
 		.onStart(async (app) => {
 			const rabbitChannel: Channel = app.decorator.rabbitChannel;
 			const sendToQueue = app.decorator.sendToQueue;
+			
+			// Re-initialize orderService with rabbit channel for expiry messaging
+			orderService = new OrderService(db, rabbitChannel);
+			app.decorator.orderService = orderService;
+			
 			console.log('Order Service listening...');
+			
+			// Consumer 1: Handle Payment Results
 			rabbitChannel.consume(QUEUES.PAYMENT_PROCESS, async (msg) => {
 				if (!msg) return;
 
@@ -55,6 +62,53 @@ export const ordersPlugin = async (dependencies: { orderService: OrderService })
 				} catch (err) {
 					console.error('Error processing RabbitMQ message:', err);
 					// Ack to prevent infinite loops if data is bad
+					rabbitChannel.ack(msg);
+				}
+			});
+
+			// Consumer 2: Handle Order Expiry (Auto-cancel pending orders after 15 minutes)
+			rabbitChannel.consume(QUEUES.ORDER_EXPIRY, async (msg) => {
+				if (!msg) return;
+
+				try {
+					const data = JSON.parse(msg.content.toString());
+
+					// Only process ORDER_EXPIRY_CHECK messages
+					if (data.type === 'ORDER_EXPIRY_CHECK') {
+						const orderId = data.orderId;
+						console.log(`Processing order expiry check for Order ID: ${orderId}`);
+
+						try {
+							const order = await orderService.getOrderById(orderId);
+
+							// If order is still PENDING, cancel it automatically
+							if (order.status === 'pending') {
+								console.log(
+									`Order ${orderId} is still PENDING after 15 minutes. Auto-cancelling...`,
+								);
+								await orderService.updateOrder(orderId, {
+									status: 'cancelled',
+								});
+								console.log(`Order ${orderId} has been cancelled due to inactivity.`);
+							} else if (order.status === 'paid') {
+								// Order was paid, no action needed
+								console.log(`Order ${orderId} is already PAID. Ignoring expiry message.`);
+							} else {
+								// Order has other status (cancelled, shipped, etc.)
+								console.log(
+									`Order ${orderId} has status '${order.status}'. No expiry action needed.`,
+								);
+							}
+						} catch (err) {
+							console.error(`Error processing order expiry for ${orderId}:`, err);
+						}
+					}
+
+					// Acknowledge the message
+					rabbitChannel.ack(msg);
+				} catch (err) {
+					console.error('Error processing order expiry message:', err);
+					// Ack to prevent infinite loops
 					rabbitChannel.ack(msg);
 				}
 			});

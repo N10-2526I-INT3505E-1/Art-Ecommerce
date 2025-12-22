@@ -474,7 +474,7 @@
 					<div class="flex items-center gap-2">
 						<Sparkles class="text-primary h-6 w-6" aria-hidden="true" />
 						<h1 class="font-heading text-base-content text-xl font-black sm:text-2xl">
-							Bát Tự Định Lượng
+							Bát Tự Tử Bình
 						</h1>
 					</div>
 

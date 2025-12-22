@@ -1,12 +1,11 @@
 <script lang="ts">
 	import { Lock, type Icon as LucideIcon, User } from 'lucide-svelte';
 	import { onMount } from 'svelte';
-	import { enhance } from '$app/forms';
+	import { enhance, applyAction, deserialize } from '$app/forms'; // Import deserialize
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { PUBLIC_GOOGLE_CLIENT_ID } from '$env/static/public';
 	import { showToast } from '$lib/toastStore';
-	import { api } from '$lib/api-client';
 
 	let submitting = $state(false);
 
@@ -41,15 +40,29 @@
 
 	async function handleGoogleLogin(response: google.accounts.id.CredentialResponse) {
 		try {
-			await api.post('sessions/google', {
-				json: { token: response.credential },
+			// Create form data to send to SvelteKit Server Action
+			const data = new FormData();
+			data.append('credential', response.credential);
+
+			// Post to the ?/google action in +page.server.ts
+			const res = await fetch('?/google', {
+				method: 'POST',
+				body: data,
 			});
 
-			// If 'api' uses ky and throws on error, code below only runs on success
-			showToast({ message: 'Logged in successfully!', type: 'success' });
+			// Process the result using SvelteKit's standard tools
+			const result = deserialize(await res.text());
 
-			await invalidateAll();
-			await goto('/');
+			if (result.type === 'success') {
+				showToast({ message: 'Logged in successfully!', type: 'success' });
+				// Now cookies are set by the server, so we can invalidate and redirect
+				await invalidateAll();
+				await goto('/');
+			} else {
+				// Handle failure (result.data contains the fail return)
+				const msg = (result.data as any)?.message || 'Google Login failed';
+				showToast({ message: msg, type: 'error' });
+			}
 		} catch (err) {
 			console.error('Google Login Error:', err);
 			showToast({ message: 'Login failed', type: 'error' });

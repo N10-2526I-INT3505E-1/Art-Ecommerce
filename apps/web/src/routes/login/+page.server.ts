@@ -1,78 +1,99 @@
-import { type Actions, fail, redirect } from '@sveltejs/kit';
-import { HTTPError } from 'ky';
-import { api } from '$lib/server/http';
+import { api } from '$lib/server/http'; // Adjust path if needed
+import { fail, redirect } from '@sveltejs/kit';
+import type { Actions } from './$types';
 
-export const load = async ({ locals }) => {
-	if (locals.user) {
-		redirect(302, '/');
-	}
-	return {};
+const isProduction = process.env.NODE_ENV === 'production';
+
+// Common cookie options to match your hooks.server.ts logic
+const cookieOptions = {
+	path: '/',
+	domain: isProduction ? '.novus.io.vn' : undefined,
+	httpOnly: true,
+	secure: isProduction,
+	sameSite: 'lax' as const,
+	maxAge: 60 * 30, // 30 minutes for access token
 };
-export const actions: Actions = {
-	login: async (event) => {
-		const fd = await event.request.formData();
 
-		const loginId = String(fd.get('loginId') ?? '');
-		const password = String(fd.get('password') ?? '');
+const refreshCookieOptions = {
+	...cookieOptions,
+	maxAge: 60 * 60 * 24 * 7, // 7 days (example for refresh token)
+};
+
+export const actions = {
+	// Standard Login Action
+	login: async ({ request, cookies, fetch }) => {
+		const formData = await request.formData();
+		const loginId = formData.get('loginId') as string;
+		const password = formData.get('password') as string;
 
 		if (!loginId || !password) {
-			return fail(400, { message: 'Username/Email and password are required.' });
+			return fail(400, { message: 'Missing credentials' });
 		}
 
-		const payload = loginId.includes('@')
-			? { email: loginId, password }
-			: { username: loginId, password };
-
-		const client = api(event);
+		const client = api({ fetch, request });
 
 		try {
+			// Adjust endpoint to match your backend
 			const response = await client
-				.post('sessions', { json: payload })
-				.json<{ accessToken: string; refreshToken: string }>();
+				.post('sessions', {
+					json: { loginId, password },
+				})
+				.json<{ accessToken: string; refreshToken?: string }>();
 
-			event.cookies.set('auth', response.accessToken, {
-				path: '/',
-				httpOnly: true,
-				secure: process.env.NODE_ENV === 'production',
-				sameSite: 'lax',
-				maxAge: 60 * 30, // 30 minutes
-			});
+			// Set Access Token
+			cookies.set('auth', response.accessToken, cookieOptions);
 
-			event.cookies.set('refresh_token', response.refreshToken, {
-				path: '/',
-				httpOnly: true,
-				secure: process.env.NODE_ENV === 'production',
-				sameSite: 'lax',
-				maxAge: 60 * 60 * 24 * 7, // 7 days
-			});
-		} catch (e) {
-			if (e instanceof HTTPError) {
-				const body = await e.response.json().catch(() => null);
-				return fail(e.response.status ?? 400, {
-					message: body?.message ?? 'Invalid credentials.',
-				});
+			// Set Refresh Token if returned
+			if (response.refreshToken) {
+				cookies.set('refresh_token', response.refreshToken, refreshCookieOptions);
 			}
-			console.error('Login Error:', e);
-			return fail(500, { message: 'An unexpected error occurred.' });
+
+			return { success: true };
+		} catch (err: any) {
+			// Handle ky errors
+			let message = 'Login failed';
+			if (err.response) {
+				try {
+					const body = await err.response.json();
+					message = body.message || message;
+				} catch (e) {
+					/* ignore */
+				}
+			}
+			return fail(400, { message, type: 'error' });
+		}
+	},
+
+	// Google Login Action
+	google: async ({ request, cookies, fetch }) => {
+		const formData = await request.formData();
+		const credential = formData.get('credential');
+
+		if (!credential) {
+			return fail(400, { message: 'Missing Google credential' });
 		}
 
-		throw redirect(303, '/');
-	},
-	logout: async (event) => {
-		const client = api(event);
-		const refreshToken = event.cookies.get('refresh_token');
+		const client = api({ fetch, request });
 
-		if (refreshToken) {
-			try {
-				await client.delete('session', { json: { refreshToken } });
-			} catch (e) {
-				console.error('Logout failed', e);
+		try {
+			// Exchange Google token for App tokens
+			const response = await client
+				.post('sessions/google', {
+					json: { token: credential },
+				})
+				.json<{ accessToken: string; refreshToken?: string }>();
+
+			// Set Cookies on the Server Side
+			cookies.set('auth', response.accessToken, cookieOptions);
+
+			if (response.refreshToken) {
+				cookies.set('refresh_token', response.refreshToken, refreshCookieOptions);
 			}
+
+			return { success: true };
+		} catch (err: any) {
+			console.error('Google Server Action Error:', err);
+			return fail(400, { message: 'Google login failed on server', type: 'error' });
 		}
-
-		event.cookies.delete('auth', { path: '/' });
-		event.cookies.delete('refresh_token', { path: '/' });
-
-		throw redirect(303, '/login');
 	},
-};
+} satisfies Actions;

@@ -1,3 +1,4 @@
+import { date } from 'drizzle-orm/mysql-core';
 import { PAYMENT_ENDPOINT, VNP_VERSION } from 'vnpay/constants';
 import { HashAlgorithm, ProductCode, VnpLocale } from 'vnpay/enums';
 import { dateFormat, resolveUrlString } from 'vnpay/utils';
@@ -43,22 +44,21 @@ const vnpay = new VNPay({
 	}, // tùy chọn
 });
 
-const tomorrow = new Date();
-tomorrow.setDate(tomorrow.getDate() + 1);
-
 export const createVNPPaymentUrl = async (amount: number, id: string): Promise<string> => {
 	console.log('Creating VNPay payment URL for transaction ID:', id, 'with amount:', amount);
+	const createDate = new Date(new Date().getTime() + 7 * 60 * 60 * 1000); // GMT+7
+	const expireDate = new Date(createDate.getTime() + 15 * 60 * 1000); // 15 minutes later
 	const paymentUrl = vnpay.buildPaymentUrl({
 		vnp_Amount: amount,
 		vnp_IpAddr: '1.1.1.1',
 		vnp_TxnRef: id,
 		vnp_OrderInfo: 'Thanh toan don hang ' + id,
 		vnp_OrderType: ProductCode.Other,
-		vnp_ReturnUrl: 'https://www.google.com/',
-		//vnp_ReturnUrl: 'http://localhost:3000/vnpay-return',
+		//vnp_ReturnUrl: 'https://www.google.com/',
+		vnp_ReturnUrl: 'https://novus.io.vn/orders',
 		vnp_Locale: VnpLocale.VN, // 'vn' hoặc 'en'
-		vnp_CreateDate: dateFormat(new Date()), // tùy chọn, mặc định là thời gian hiện tại
-		vnp_ExpireDate: dateFormat(tomorrow), // tùy chọn
+		vnp_CreateDate: dateFormat(createDate), // tùy chọn, mặc định là thời gian hiện tại
+		vnp_ExpireDate: dateFormat(expireDate), // tùy chọn
 	});
 
 	return paymentUrl;

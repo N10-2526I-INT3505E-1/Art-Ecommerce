@@ -111,7 +111,9 @@ export const productsPlugin = async (dependencies: { productService: ProductServ
 						}),
 						response: {
 							200: t.Object({
-								data: t.Array(selectProductSchema),
+								data: t.Array(
+									t.Composite([selectProductSchema, t.Object({ tags: t.Array(t.String()) })]),
+								),
 								pagination: t.Object({
 									page: t.Number(),
 									limit: t.Number(),

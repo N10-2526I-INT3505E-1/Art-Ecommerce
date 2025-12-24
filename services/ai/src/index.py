@@ -24,7 +24,7 @@ def run_indexing():
     print(f"📥 Đang tải dữ liệu từ {settings.PRODUCT_SERVICE_URL}...")
     try:
         # Lấy limit lớn để index hết (ví dụ 1000 sản phẩm)
-        resp = requests.get(settings.PRODUCT_SERVICE_URL, params={"limit": 1000})
+        resp = requests.get(settings.PRODUCT_SERVICE_URL, params={"limit": 10})
         if resp.status_code != 200:
             print(f"❌ Lỗi API Backend: {resp.text}")
             return
@@ -77,14 +77,23 @@ def run_indexing():
                 # --- SỬA LỖI: Xử lý Tags an toàn ---
                 tags_list = []
                 
+                # DEBUG: In ra cấu trúc tags
+                print(f"      🔍 DEBUG - Product: {p['name']}")
+                print(f"         'tags' in p: {'tags' in p}")
+                print(f"         'productTags' in p: {'productTags' in p}")
+                
                 if 'tags' in p and p['tags']:
+                    print(f"         ✅ Found tags (direct): {p['tags']}")
                     tags_list = p['tags']
 
                 elif 'productTags' in p and p['productTags']:
+                    print(f"         ✅ Found productTags: {p['productTags']}")
                     for pt in p['productTags'] : 
                         if 'tag' in pt and pt['tag'] and 'name' in pt['tag'] : 
                             if pt['tag']['name'] and pt['tag']['name'] not in tags_list : 
                                 tags_list.append(pt['tag']['name'])
+                
+                print(f"         📋 Final tags_list: {tags_list}")
 
                 # Metadata: Lưu lại thông tin
                 payload = {

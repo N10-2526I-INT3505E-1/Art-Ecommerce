@@ -240,9 +240,14 @@ export class ProductService {
 				.select({ count: sql<number>`count(*)` })
 				.from(products)
 				.where(and(...conditions));
+			
+			const dataWithFlatTags = data.map(product => {
+                const flatTags = product.productTags.map(pt => pt.tag);
+                return { ...product, tags: flatTags, productTags: undefined };
+            });
 
 			return {
-				data,
+				data: dataWithFlatTags,
 				pagination: {
 					page,
 					limit,

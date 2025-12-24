@@ -6,6 +6,7 @@ import { Elysia } from 'elysia';
 import { ordersPlugin } from './orders';
 import { paymentsPlugin, vnpayIpnHandler } from './payments';
 import { productsPlugin } from './products';
+import { searchRoutes } from './search/index';
 
 import { db as userDb } from './users/db';
 import { db as orderDb } from './orders/db';
@@ -47,9 +48,10 @@ export const app = new Elysia()
 
 	.use(usersPlugin({ userService }))
 	.use(productsPlugin({ productService: new ProductService(productDb) }))
-	.use(ordersPlugin({ orderService: new OrderService(orderDb) }))
-	.use(paymentsPlugin({ paymentService: new PaymentService(paymentDb) }))
-	.use(vnpayIpnHandler({ paymentIPN: new PaymentIPN(paymentDb) }))
+	.use(searchRoutes)
+	// .use(ordersPlugin({ orderService: new OrderService(orderDb) }))
+	// .use(paymentsPlugin({ paymentService: new PaymentService(paymentDb) }))
+	// .use(vnpayIpnHandler({ paymentIPN: new PaymentIPN(paymentDb) }))
 
 	.get('/', () => ({ status: 'ok' }), {
 		detail: { summary: 'Health check endpoint' },

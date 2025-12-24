@@ -46,47 +46,47 @@ export const ensureRole = (user: any, role: string) => {
 export const productsPlugin = async (dependencies: { productService: ProductService }) =>
 	new Elysia()
 		.decorate('productService', dependencies.productService)
-		.use(await rabbitPlugin())
+		// .use(await rabbitPlugin())
 
 		// ====================================================================================================
-		// RABBITMQ MESSAGE CONSUMER
+		// RABBITMQ MESSAGE CONSUMER (TEMPORARILY DISABLED)
 		// ====================================================================================================
-		.onStart(async (app) => {
-			const rabbitChannel = app.decorator.rabbitChannel;
-			const productService = app.decorator.productService;
+		// .onStart(async (app) => {
+		// 	const rabbitChannel = app.decorator.rabbitChannel;
+		// 	const productService = app.decorator.productService;
 
-			console.log('Product Service listening for RabbitMQ messages...');
+		// 	console.log('Product Service listening for RabbitMQ messages...');
 
-			rabbitChannel.consume(QUEUES.PRODUCT_UPDATES, async (msg) => {
-				if (!msg) return;
+		// 	rabbitChannel.consume(QUEUES.PRODUCT_UPDATES, async (msg) => {
+		// 		if (!msg) return;
 
-				try {
-					const data = JSON.parse(msg.content.toString());
+		// 		try {
+		// 			const data = JSON.parse(msg.content.toString());
 
-					switch (data.type) {
-						case 'PRODUCT_STOCK_UPDATE':
-							console.log('Processing PRODUCT_STOCK_UPDATE');
-							await productService.reduceStock(data.orderItems);
-							break;
+		// 			switch (data.type) {
+		// 				case 'PRODUCT_STOCK_UPDATE':
+		// 					console.log('Processing PRODUCT_STOCK_UPDATE');
+		// 					await productService.reduceStock(data.orderItems);
+		// 					break;
 
-						case 'PRODUCT_STOCK_RESTORE':
-							console.log('Processing PRODUCT_STOCK_RESTORE');
-							await productService.restoreStock(data.orderItems);
-							break;
+		// 				case 'PRODUCT_STOCK_RESTORE':
+		// 					console.log('Processing PRODUCT_STOCK_RESTORE');
+		// 					await productService.restoreStock(data.orderItems);
+		// 					break;
 
-						default:
-							console.warn(`Unknown message type: ${data.type}`);
-					}
+		// 				default:
+		// 					console.warn(`Unknown message type: ${data.type}`);
+		// 			}
 
-					rabbitChannel.ack(msg);
-				} catch (err) {
-					console.error('Error processing RabbitMQ message:', err);
-					// Optionally: nack and requeue for retriable errors
-					// rabbitChannel.nack(msg, false, true);
-					rabbitChannel.ack(msg);
-				}
-			});
-		})
+		// 			rabbitChannel.ack(msg);
+		// 		} catch (err) {
+		// 			console.error('Error processing RabbitMQ message:', err);
+		// 			// Optionally: nack and requeue for retriable errors
+		// 			// rabbitChannel.nack(msg, false, true);
+		// 			rabbitChannel.ack(msg);
+		// 		}
+		// 	});
+		// })
 
 		.group('/products', (app) =>
 			app

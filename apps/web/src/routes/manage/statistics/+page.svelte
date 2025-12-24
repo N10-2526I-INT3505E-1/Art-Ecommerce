@@ -1,6 +1,5 @@
 <script lang="ts">
 	import type { PageData } from './$types';
-	// Assuming these are the names of the components we improved previously
 	import RevenueLineChart from '$lib/components/charts/RevenueLineChart.svelte';
 	import OrderStatusDonutChart from '$lib/components/charts/OrderStatusDonutChart.svelte';
 	import TopProductsBarChart from '$lib/components/charts/TopProductsBarChart.svelte';
@@ -56,7 +55,7 @@
 	<div class="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
 		<div>
 			<h1 class="text-base-content text-3xl font-bold tracking-tight">Thống kê</h1>
-			<p class="text-base-content/60 mt-1">Tổng quan hiệu quả kinh doanh của cửa hàng</p>
+			<p class="text-base-content/60 mt-1">Tổng quan hiệu quả kinh doanh của hệ thống</p>
 		</div>
 
 		<!-- Date Range Filter -->
@@ -194,74 +193,81 @@
 
 	<!-- Charts Grid -->
 	<div class="grid grid-cols-1 gap-6 lg:grid-cols-3">
-		<!-- 1. Revenue Chart (Full Width on Mobile, 2/3 on Desktop) -->
-		<div class="bg-base-100 border-base-200 rounded-2xl border p-6 shadow-sm lg:col-span-2">
-			<div class="mb-6">
+		<!-- 1. Revenue Chart -->
+		<!-- Added: flex flex-col to parent, flex-1 to wrapper to make it fill height -->
+		<div
+			class="bg-base-100 border-base-200 flex h-full flex-col rounded-2xl border p-6 shadow-sm lg:col-span-2"
+		>
+			<div class="mb-6 flex-shrink-0">
 				<h2 class="text-lg font-bold">Doanh thu theo thời gian</h2>
 				<p class="text-base-content/50 text-xs">Biểu đồ thể hiện dòng tiền thực tế</p>
 			</div>
 
-			{#if charts.revenue.length > 0}
-				<!-- Just pass height, width is handled by the component -->
-				<RevenueLineChart data={charts.revenue} height={320} />
-			{:else}
-				<div
-					class="bg-base-200/50 flex h-[320px] flex-col items-center justify-center rounded-xl border border-dashed"
-				>
-					<AlertCircle class="text-base-content/20 mb-2 h-10 w-10" />
-					<span class="text-base-content/50 text-sm">Chưa có dữ liệu doanh thu</span>
-				</div>
-			{/if}
+			<div class="min-h-[300px] w-full flex-1">
+				{#if charts.revenue.length > 0}
+					<RevenueLineChart data={charts.revenue} height={320} />
+				{:else}
+					<div
+						class="bg-base-200/50 flex h-full items-center justify-center rounded-xl border border-dashed"
+					>
+						<AlertCircle class="text-base-content/20 mb-2 h-10 w-10" />
+						<span class="text-base-content/50 text-sm">Chưa có dữ liệu doanh thu</span>
+					</div>
+				{/if}
+			</div>
 		</div>
 
 		<!-- 2. Order Status (Donut) -->
-		<div class="bg-base-100 border-base-200 rounded-2xl border p-6 shadow-sm">
-			<div class="mb-6">
+		<div class="bg-base-100 border-base-200 flex h-full flex-col rounded-2xl border p-6 shadow-sm">
+			<div class="mb-6 flex-shrink-0">
 				<h2 class="text-lg font-bold">Trạng thái đơn hàng</h2>
 				<p class="text-base-content/50 text-xs">Tỷ lệ hoàn thành và hủy</p>
 			</div>
 
-			{#if charts.orderStatus.length > 0}
-				<!-- The new donut chart is self-contained and responsive -->
-				<OrderStatusDonutChart data={charts.orderStatus} height={320} />
-			{:else}
-				<div
-					class="bg-base-200/50 flex h-[320px] flex-col items-center justify-center rounded-xl border border-dashed"
-				>
-					<AlertCircle class="text-base-content/20 mb-2 h-10 w-10" />
-					<span class="text-base-content/50 text-sm">Chưa có dữ liệu đơn hàng</span>
-				</div>
-			{/if}
+			<div class="flex min-h-[300px] w-full flex-1 items-center justify-center">
+				{#if charts.orderStatus.length > 0}
+					<OrderStatusDonutChart data={charts.orderStatus} height={320} />
+				{:else}
+					<div
+						class="bg-base-200/50 flex h-full w-full items-center justify-center rounded-xl border border-dashed"
+					>
+						<AlertCircle class="text-base-content/20 mb-2 h-10 w-10" />
+						<span class="text-base-content/50 text-sm">Chưa có dữ liệu đơn hàng</span>
+					</div>
+				{/if}
+			</div>
 		</div>
 
-		<!-- 3. Sales Trend (Dual Axis) -->
-		<div class="bg-base-100 border-base-200 rounded-2xl border p-6 shadow-sm lg:col-span-2">
-			<div class="mb-6">
+		<!-- 3. Sales Trend -->
+		<div
+			class="bg-base-100 border-base-200 flex flex-col rounded-2xl border p-6 shadow-sm lg:col-span-2"
+		>
+			<div class="mb-6 flex-shrink-0">
 				<h2 class="text-lg font-bold">Xu hướng bán hàng</h2>
 				<p class="text-base-content/50 text-xs">So sánh số lượng đơn và doanh thu</p>
 			</div>
 
-			{#if charts.trend.length > 0}
-				<SalesTrendAreaChart data={charts.trend} height={300} />
-			{:else}
-				<div
-					class="bg-base-200/50 flex h-[300px] flex-col items-center justify-center rounded-xl border border-dashed"
-				>
-					<AlertCircle class="text-base-content/20 mb-2 h-10 w-10" />
-					<span class="text-base-content/50 text-sm">Chưa có dữ liệu xu hướng</span>
-				</div>
-			{/if}
+			<div class="min-h-[300px] w-full flex-1">
+				{#if charts.trend.length > 0}
+					<SalesTrendAreaChart data={charts.trend} height={300} />
+				{:else}
+					<div
+						class="bg-base-200/50 flex h-full items-center justify-center rounded-xl border border-dashed"
+					>
+						<AlertCircle class="text-base-content/20 mb-2 h-10 w-10" />
+						<span class="text-base-content/50 text-sm">Chưa có dữ liệu xu hướng</span>
+					</div>
+				{/if}
+			</div>
 		</div>
 
-		<!-- 4. Top Products (Bar) -->
-		<div class="bg-base-100 border-base-200 rounded-2xl border p-6 shadow-sm">
-			<div class="mb-6 flex items-center justify-between">
+		<!-- 4. Top Products -->
+		<div class="bg-base-100 border-base-200 flex flex-col rounded-2xl border p-6 shadow-sm">
+			<div class="mb-6 flex flex-shrink-0 items-center justify-between">
 				<div>
-					<h2 class="text-lg font-bold">Top Sản phẩm</h2>
+					<h2 class="text-lg font-bold">Top sản phẩm</h2>
 					<p class="text-base-content/50 text-xs">5 sản phẩm hiệu quả nhất</p>
 				</div>
-
-				<!-- Switcher for Revenue/Quantity -->
 				<div class="join bg-base-200 rounded-lg p-1">
 					<button
 						class="join-item btn btn-xs border-none shadow-none {!showRevenueInTopProducts
@@ -282,20 +288,22 @@
 				</div>
 			</div>
 
-			{#if charts.topProducts.length > 0}
-				<TopProductsBarChart
-					data={charts.topProducts}
-					height={300}
-					showRevenue={showRevenueInTopProducts}
-				/>
-			{:else}
-				<div
-					class="bg-base-200/50 flex h-[300px] flex-col items-center justify-center rounded-xl border border-dashed"
-				>
-					<AlertCircle class="text-base-content/20 mb-2 h-10 w-10" />
-					<span class="text-base-content/50 text-sm">Chưa có dữ liệu sản phẩm</span>
-				</div>
-			{/if}
+			<div class="min-h-[300px] w-full flex-1">
+				{#if charts.topProducts.length > 0}
+					<TopProductsBarChart
+						data={charts.topProducts}
+						height={300}
+						showRevenue={showRevenueInTopProducts}
+					/>
+				{:else}
+					<div
+						class="bg-base-200/50 flex h-full items-center justify-center rounded-xl border border-dashed"
+					>
+						<AlertCircle class="text-base-content/20 mb-2 h-10 w-10" />
+						<span class="text-base-content/50 text-sm">Chưa có dữ liệu sản phẩm</span>
+					</div>
+				{/if}
+			</div>
 		</div>
 	</div>
 </div>

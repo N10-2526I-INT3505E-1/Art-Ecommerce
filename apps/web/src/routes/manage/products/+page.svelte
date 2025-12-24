@@ -1,10 +1,43 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
 	import { page } from '$app/stores';
+	import {
+		Copy,
+		Check,
+		Plus,
+		Search,
+		X,
+		Package,
+		DollarSign,
+		Boxes,
+		FolderOpen,
+		Image,
+		Tags,
+		FileText,
+		AlertCircle,
+		Pencil,
+		Trash2,
+	} from 'lucide-svelte';
 	import type { PageData, ActionData } from './$types';
 
 	export let data: PageData;
 	export let form: ActionData;
+
+	// Copy to clipboard state
+	let copiedId: string | null = null;
+	let isSubmitting = false;
+
+	async function copyToClipboard(text: string) {
+		try {
+			await navigator.clipboard.writeText(text);
+			copiedId = text;
+			setTimeout(() => {
+				copiedId = null;
+			}, 2000);
+		} catch (err) {
+			console.error('Failed to copy:', err);
+		}
+	}
 
 	$: products = data?.products || [];
 	$: pagination = data?.pagination || { page: 1, limit: 10, total: 0, totalPages: 1 };
@@ -65,8 +98,20 @@
 		return 'Còn hàng';
 	}
 
+	function getProductTags(product: any): string[] {
+		// Handle different tag formats from API
+		if (Array.isArray(product.tags)) {
+			return product.tags;
+		}
+		if (Array.isArray(product.productTags)) {
+			return product.productTags.map((pt: any) => pt.tag?.name || pt.name).filter(Boolean);
+		}
+		return [];
+	}
+
 	function openEditModal(product: any) {
 		selectedProduct = product;
+		const productTags = getProductTags(product);
 		editForm = {
 			id: product.id,
 			name: product.name,
@@ -75,7 +120,7 @@
 			description: product.description || '',
 			categoryName: product.category?.name || '',
 			imageUrl: product.imageUrl || '',
-			tags: (product.tags || []).join(', '),
+			tags: productTags.join(', '),
 		};
 		showEditModal = true;
 	}
@@ -123,42 +168,43 @@
 	}
 </script>
 
-<div class="container mx-auto">
-	<div class="mb-6 flex items-center justify-between">
-		<h1 class="text-3xl font-bold">Quản lý sản phẩm</h1>
+<div class="container mx-auto max-w-7xl p-4 lg:p-6">
+	<div class="mb-8 flex flex-col justify-between gap-4 md:flex-row md:items-center">
+		<div>
+			<h1 class="text-3xl font-bold tracking-tight">Quản lý sản phẩm</h1>
+			<p class="text-base-content/60 mt-1 flex items-center gap-2">
+				<Package class="h-4 w-4" />
+				Tổng cộng {pagination.total} sản phẩm trong hệ thống
+			</p>
+		</div>
 		<button class="btn btn-primary" on:click={() => (showCreateModal = true)}>
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				class="mr-2 h-5 w-5"
-				fill="none"
-				viewBox="0 0 24 24"
-				stroke="currentColor"
-			>
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-			</svg>
+			<Plus class="h-5 w-5" />
 			Thêm sản phẩm
 		</button>
 	</div>
 
 	<!-- Bộ lọc -->
-	<div class="bg-base-100 rounded-box mb-6 p-4 shadow">
+	<div class="bg-base-100 border-base-200 mb-6 rounded-2xl border p-4 shadow-sm">
 		<div class="flex flex-wrap items-end gap-4">
 			<div class="form-control flex-1">
-				<label class="label" for="search">
-					<span class="label-text">Tìm kiếm</span>
+				<label class="label py-0 pb-1.5" for="search">
+					<span class="label-text text-base-content/60 text-xs font-bold uppercase">Tìm kiếm</span>
 				</label>
-				<input
-					type="text"
-					id="search"
-					class="input input-bordered"
-					placeholder="Tìm sản phẩm..."
-					bind:value={searchQuery}
-					on:keypress={(e) => e.key === 'Enter' && handleSearch()}
-				/>
+				<div class="relative">
+					<Search class="absolute top-1/2 left-3 z-10 h-4 w-4 -translate-y-1/2 opacity-50" />
+					<input
+						type="text"
+						id="search"
+						class="input input-bordered w-full pl-9"
+						placeholder="Tìm sản phẩm..."
+						bind:value={searchQuery}
+						on:keypress={(e) => e.key === 'Enter' && handleSearch()}
+					/>
+				</div>
 			</div>
 			<div class="form-control w-48">
-				<label class="label" for="category">
-					<span class="label-text">Danh mục</span>
+				<label class="label py-0 pb-1.5" for="category">
+					<span class="label-text text-base-content/60 text-xs font-bold uppercase">Danh mục</span>
 				</label>
 				<select id="category" class="select select-bordered" bind:value={selectedCategoryId}>
 					<option value="">Tất cả danh mục</option>
@@ -185,73 +231,123 @@
 	{/if}
 
 	<!-- Bảng sản phẩm -->
-	<div class="bg-base-100 rounded-box overflow-x-auto shadow-xl">
-		<table class="table w-full">
-			<thead>
-				<tr class="bg-base-200">
-					<th>Sản phẩm</th>
-					<th>Danh mục</th>
-					<th>Giá</th>
-					<th>Tồn kho</th>
-					<th>Trạng thái</th>
-					<th>Thao tác</th>
-				</tr>
-			</thead>
-			<tbody>
-				{#if products.length === 0}
-					<tr>
-						<td colspan="6" class="py-8 text-center opacity-50">Không tìm thấy sản phẩm nào</td>
+	<div class="bg-base-100 border-base-200 overflow-hidden rounded-2xl border shadow-lg">
+		<div class="overflow-x-auto">
+			<table class="table w-full">
+				<thead>
+					<tr class="bg-base-200/50 text-base-content/70">
+						<th class="font-bold">Sản phẩm</th>
+						<th class="font-bold">Danh mục</th>
+						<th class="font-bold">Tags</th>
+						<th class="font-bold">Giá</th>
+						<th class="font-bold">Tồn kho</th>
+						<th class="font-bold">Trạng thái</th>
+						<th class="pr-6 text-right font-bold">Thao tác</th>
 					</tr>
-				{:else}
-					{#each products as product}
-						<tr class="hover">
-							<td>
-								<div class="flex items-center gap-3">
-									<div class="avatar">
-										<div class="mask mask-squircle h-12 w-12">
-											<img
-												src={product.imageUrl ||
-													'https://img.daisyui.com/images/stock/photo-1534528741775-53994a69daeb.webp'}
-												alt={product.name}
-											/>
-										</div>
-									</div>
-									<div>
-										<div class="font-bold">{product.name}</div>
-										<div class="text-sm opacity-50">ID: {product.id.slice(0, 8)}...</div>
-									</div>
-								</div>
-							</td>
-							<td>{product.category?.name || '-'}</td>
-							<td>{formatCurrency(product.price)}</td>
-							<td>
-								<span class={product.stock < 10 ? 'text-error font-bold' : ''}>
-									{product.stock ?? 0}
-								</span>
-							</td>
-							<td>
-								<span class="badge {getStockStatusClass(product.stock ?? 0)}">
-									{getStockStatusText(product.stock ?? 0)}
-								</span>
-							</td>
-							<td>
-								<div class="flex gap-2">
-									<button class="btn btn-ghost btn-sm" on:click={() => openEditModal(product)}>
-										Sửa
-									</button>
-									<button
-										class="btn btn-ghost btn-sm text-error"
-										on:click={() => openDeleteModal(product)}
-									>
-										Xóa
-									</button>
+				</thead>
+				<tbody>
+					{#if products.length === 0}
+						<tr>
+							<td colspan="7" class="py-16 text-center">
+								<div class="flex flex-col items-center justify-center opacity-50">
+									<Package class="text-base-content/20 mb-4 h-16 w-16" />
+									<p class="font-bold">Không tìm thấy sản phẩm nào</p>
+									<p class="text-sm">Thử thay đổi bộ lọc tìm kiếm</p>
 								</div>
 							</td>
 						</tr>
-					{/each}
-				{/if}
-			</tbody>
-		</table>
+					{:else}
+						{#each products as product}
+							{@const productTags = getProductTags(product)}
+							<tr class="hover group/row transition-colors">
+								<td>
+									<div class="flex items-center gap-3">
+										<div class="avatar">
+											<div class="mask mask-squircle bg-base-200 h-12 w-12">
+												<img
+													src={product.imageUrl ||
+														'https://img.daisyui.com/images/stock/photo-1534528741775-53994a69daeb.webp'}
+													alt={product.name}
+												/>
+											</div>
+										</div>
+										<div class="max-w-xs min-w-0">
+											<div class="font-bold">{product.name}</div>
+											<div class="group/id flex items-center gap-1">
+												<span
+													class="max-w-[200px] truncate font-mono text-xs opacity-50"
+													title={product.id}
+												>
+													{product.id}
+												</span>
+												<button
+													type="button"
+													class="btn btn-ghost btn-xs opacity-0 transition-opacity group-hover/id:opacity-100"
+													title="Copy ID"
+													on:click|stopPropagation={() => copyToClipboard(product.id)}
+												>
+													{#if copiedId === product.id}
+														<Check class="text-success h-3 w-3" />
+													{:else}
+														<Copy class="h-3 w-3" />
+													{/if}
+												</button>
+											</div>
+										</div>
+									</div>
+								</td>
+								<td>
+									<span class="badge badge-ghost">{product.category?.name || '-'}</span>
+								</td>
+								<td>
+									<div class="flex max-w-[200px] flex-wrap gap-1">
+										{#if productTags.length > 0}
+											{#each productTags.slice(0, 3) as tag}
+												<span class="badge badge-outline badge-sm">{tag}</span>
+											{/each}
+											{#if productTags.length > 3}
+												<span class="badge badge-ghost badge-sm">+{productTags.length - 3}</span>
+											{/if}
+										{:else}
+											<span class="text-xs opacity-50">-</span>
+										{/if}
+									</div>
+								</td>
+								<td class="font-semibold">{formatCurrency(product.price)}</td>
+								<td>
+									<span class={product.stock < 10 ? 'text-error font-bold' : ''}>
+										{product.stock ?? 0}
+									</span>
+								</td>
+								<td>
+									<span class="badge {getStockStatusClass(product.stock ?? 0)}">
+										{getStockStatusText(product.stock ?? 0)}
+									</span>
+								</td>
+								<td class="text-right">
+									<div class="join">
+										<button
+											class="btn btn-ghost btn-sm btn-square join-item"
+											title="Sửa"
+											on:click={() => openEditModal(product)}
+										>
+											<Pencil class="h-4 w-4" />
+										</button>
+										<button
+											class="btn btn-ghost btn-sm btn-square join-item text-error hover:bg-error/10"
+											title="Xóa"
+											on:click={() => openDeleteModal(product)}
+										>
+											<Trash2 class="h-4 w-4" />
+										</button>
+									</div>
+								</td>
+							</tr>
+						{/each}
+					{/if}
+				</tbody>
+			</table>
+		</div>
 	</div>
 
 	<!-- Phân trang -->
@@ -297,114 +393,202 @@
 <!-- Modal Thêm sản phẩm -->
 {#if showCreateModal}
 	<div class="modal modal-open">
-		<div class="modal-box max-w-2xl">
-			<h3 class="mb-4 text-lg font-bold">Thêm sản phẩm mới</h3>
-			<form method="POST" action="?/create" use:enhance>
-				<div class="grid grid-cols-2 gap-4">
-					<div class="form-control col-span-2">
-						<label class="label" for="create-name">
-							<span class="label-text">Tên sản phẩm *</span>
-						</label>
-						<input
-							type="text"
-							id="create-name"
-							name="name"
-							class="input input-bordered"
-							required
-							bind:value={createForm.name}
-						/>
+		<div class="modal-box max-w-2xl overflow-hidden p-0">
+			<!-- Modal Header -->
+			<div class="bg-base-200/50 border-base-200 flex items-center justify-between border-b p-4">
+				<div class="flex items-center gap-3">
+					<div class="bg-primary/10 rounded-full p-2">
+						<Plus class="text-primary h-5 w-5" />
 					</div>
-
-					<div class="form-control">
-						<label class="label" for="create-price">
-							<span class="label-text">Giá (VND) *</span>
-						</label>
-						<input
-							type="number"
-							id="create-price"
-							name="price"
-							class="input input-bordered"
-							required
-							min="0"
-							bind:value={createForm.price}
-						/>
+					<div>
+						<h3 class="text-lg font-bold">Thêm sản phẩm mới</h3>
+						<p class="text-xs opacity-60">Điền thông tin sản phẩm bên dưới</p>
 					</div>
+				</div>
+				<button class="btn btn-sm btn-circle btn-ghost" on:click={closeModals}>
+					<X class="h-5 w-5" />
+				</button>
+			</div>
 
-					<div class="form-control">
-						<label class="label" for="create-stock">
-							<span class="label-text">Tồn kho</span>
-						</label>
-						<input
-							type="number"
-							id="create-stock"
-							name="stock"
-							class="input input-bordered"
-							min="0"
-							bind:value={createForm.stock}
-						/>
-					</div>
+			<form
+				method="POST"
+				action="?/create"
+				use:enhance={() => {
+					isSubmitting = true;
+					return async ({ update }) => {
+						await update();
+						isSubmitting = false;
+					};
+				}}
+			>
+				<div class="max-h-[70vh] overflow-y-auto p-6">
+					<div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+						<!-- Tên sản phẩm -->
+						<div class="form-control col-span-2">
+							<label class="label" for="create-name">
+								<span class="label-text flex items-center gap-2 font-medium">
+									<Package class="h-4 w-4 opacity-50" />
+									Tên sản phẩm <span class="text-error">*</span>
+								</span>
+							</label>
+							<input
+								type="text"
+								id="create-name"
+								name="name"
+								class="input input-bordered"
+								placeholder="Nhập tên sản phẩm"
+								required
+								bind:value={createForm.name}
+							/>
+						</div>
 
-					<div class="form-control">
-						<label class="label" for="create-category">
-							<span class="label-text">Tên danh mục</span>
-						</label>
-						<input
-							type="text"
-							id="create-category"
-							name="categoryName"
-							class="input input-bordered"
-							bind:value={createForm.categoryName}
-						/>
-					</div>
+						<!-- Giá -->
+						<div class="form-control">
+							<label class="label" for="create-price">
+								<span class="label-text flex items-center gap-2 font-medium">
+									<DollarSign class="h-4 w-4 opacity-50" />
+									Giá (VND) <span class="text-error">*</span>
+								</span>
+							</label>
+							<input
+								type="number"
+								id="create-price"
+								name="price"
+								class="input input-bordered"
+								placeholder="0"
+								required
+								min="0"
+								bind:value={createForm.price}
+							/>
+						</div>
 
-					<div class="form-control">
-						<label class="label" for="create-tags">
-							<span class="label-text">Tags (phân cách bằng dấu phẩy)</span>
-						</label>
-						<input
-							type="text"
-							id="create-tags"
-							name="tags"
-							class="input input-bordered"
-							placeholder="tag1, tag2"
-							bind:value={createForm.tags}
-						/>
-					</div>
+						<!-- Tồn kho -->
+						<div class="form-control">
+							<label class="label" for="create-stock">
+								<span class="label-text flex items-center gap-2 font-medium">
+									<Boxes class="h-4 w-4 opacity-50" />
+									Tồn kho
+								</span>
+							</label>
+							<input
+								type="number"
+								id="create-stock"
+								name="stock"
+								class="input input-bordered"
+								placeholder="10"
+								min="0"
+								bind:value={createForm.stock}
+							/>
+						</div>
 
-					<div class="form-control col-span-2">
-						<label class="label" for="create-image">
-							<span class="label-text">URL hình ảnh</span>
-						</label>
-						<input
-							type="url"
-							id="create-image"
-							name="imageUrl"
-							class="input input-bordered"
-							bind:value={createForm.imageUrl}
-						/>
-					</div>
+						<!-- Danh mục -->
+						<div class="form-control">
+							<label class="label" for="create-category">
+								<span class="label-text flex items-center gap-2 font-medium">
+									<FolderOpen class="h-4 w-4 opacity-50" />
+									Danh mục
+								</span>
+							</label>
+							<input
+								type="text"
+								id="create-category"
+								name="categoryName"
+								class="input input-bordered"
+								placeholder="Nhập tên danh mục"
+								list="category-list"
+								bind:value={createForm.categoryName}
+							/>
+							<datalist id="category-list">
+								{#each categories as category}
+									<option value={category.name}></option>
+								{/each}
+							</datalist>
+						</div>
 
-					<div class="form-control col-span-2">
-						<label class="label" for="create-description">
-							<span class="label-text">Mô tả</span>
-						</label>
-						<textarea
-							id="create-description"
-							name="description"
-							class="textarea textarea-bordered h-24"
-							bind:value={createForm.description}
-						></textarea>
+						<!-- Tags -->
+						<div class="form-control">
+							<label class="label" for="create-tags">
+								<span class="label-text flex items-center gap-2 font-medium">
+									<Tags class="h-4 w-4 opacity-50" />
+									Tags
+								</span>
+							</label>
+							<input
+								type="text"
+								id="create-tags"
+								name="tags"
+								class="input input-bordered"
+								placeholder="tag1, tag2, tag3"
+								bind:value={createForm.tags}
+							/>
+							<label class="label" for="create-tags">
+								<span class="label-text-alt opacity-50">Phân cách bằng dấu phẩy</span>
+							</label>
+						</div>
+
+						<!-- URL hình ảnh -->
+						<div class="form-control col-span-2">
+							<label class="label" for="create-image">
+								<span class="label-text flex items-center gap-2 font-medium">
+									<Image class="h-4 w-4 opacity-50" />
+									URL hình ảnh
+								</span>
+							</label>
+							<input
+								type="url"
+								id="create-image"
+								name="imageUrl"
+								class="input input-bordered"
+								placeholder="https://example.com/image.jpg"
+								bind:value={createForm.imageUrl}
+							/>
+							{#if createForm.imageUrl}
+								<div class="mt-2">
+									<img
+										src={createForm.imageUrl}
+										alt="Preview"
+										class="h-20 w-20 rounded-lg object-cover"
+										on:error={(e) => (e.currentTarget.style.display = 'none')}
+									/>
+								</div>
+							{/if}
+						</div>
+
+						<!-- Mô tả -->
+						<div class="form-control col-span-2">
+							<label class="label" for="create-description">
+								<span class="label-text flex items-center gap-2 font-medium">
+									<FileText class="h-4 w-4 opacity-50" />
+									Mô tả
+								</span>
+							</label>
+							<textarea
+								id="create-description"
+								name="description"
+								class="textarea textarea-bordered h-28"
+								placeholder="Nhập mô tả sản phẩm..."
+								bind:value={createForm.description}
+							></textarea>
+						</div>
 					</div>
 				</div>
 
-				<div class="modal-action">
-					<button type="button" class="btn btn-ghost" on:click={closeModals}>Hủy</button>
-					<button type="submit" class="btn btn-primary">Tạo sản phẩm</button>
+				<!-- Modal Footer -->
+				<div class="bg-base-200/30 flex justify-end gap-2 p-4">
+					<button type="button" class="btn btn-ghost" on:click={closeModals} disabled={isSubmitting}
+						>Hủy</button
+					>
+					<button type="submit" class="btn btn-primary" disabled={isSubmitting}>
+						{#if isSubmitting}
+							<span class="loading loading-spinner loading-sm"></span>
+						{/if}
+						Tạo sản phẩm
+					</button>
 				</div>
 			</form>
 		</div>
 		<div
-			class="modal-backdrop"
+			class="modal-backdrop bg-neutral/50 backdrop-blur-sm"
 			on:click={closeModals}
 			on:keypress={closeModals}
 			role="button"
@@ -416,113 +600,200 @@
 <!-- Modal Sửa sản phẩm -->
 {#if showEditModal && selectedProduct}
 	<div class="modal modal-open">
-		<div class="modal-box max-w-2xl">
-			<h3 class="mb-4 text-lg font-bold">Chỉnh sửa sản phẩm</h3>
-			<form method="POST" action="?/update" use:enhance>
+		<div class="modal-box max-w-2xl overflow-hidden p-0">
+			<!-- Modal Header -->
+			<div class="bg-base-200/50 border-base-200 flex items-center justify-between border-b p-4">
+				<div class="flex items-center gap-3">
+					<div class="bg-info/10 rounded-full p-2">
+						<Pencil class="text-info h-5 w-5" />
+					</div>
+					<div>
+						<h3 class="text-lg font-bold">Chỉnh sửa sản phẩm</h3>
+						<p class="font-mono text-xs opacity-60">{editForm.id}</p>
+					</div>
+				</div>
+				<button class="btn btn-sm btn-circle btn-ghost" on:click={closeModals}>
+					<X class="h-5 w-5" />
+				</button>
+			</div>
+
+			<form
+				method="POST"
+				action="?/update"
+				use:enhance={() => {
+					isSubmitting = true;
+					return async ({ update }) => {
+						await update();
+						isSubmitting = false;
+					};
+				}}
+			>
 				<input type="hidden" name="id" value={editForm.id} />
 
-				<div class="grid grid-cols-2 gap-4">
-					<div class="form-control col-span-2">
-						<label class="label" for="edit-name">
-							<span class="label-text">Tên sản phẩm</span>
-						</label>
-						<input
-							type="text"
-							id="edit-name"
-							name="name"
-							class="input input-bordered"
-							bind:value={editForm.name}
-						/>
-					</div>
+				<div class="max-h-[70vh] overflow-y-auto p-6">
+					<div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+						<!-- Tên sản phẩm -->
+						<div class="form-control col-span-2">
+							<label class="label" for="edit-name">
+								<span class="label-text flex items-center gap-2 font-medium">
+									<Package class="h-4 w-4 opacity-50" />
+									Tên sản phẩm
+								</span>
+							</label>
+							<input
+								type="text"
+								id="edit-name"
+								name="name"
+								class="input input-bordered"
+								placeholder="Nhập tên sản phẩm"
+								bind:value={editForm.name}
+							/>
+						</div>
 
-					<div class="form-control">
-						<label class="label" for="edit-price">
-							<span class="label-text">Giá (VND)</span>
-						</label>
-						<input
-							type="number"
-							id="edit-price"
-							name="price"
-							class="input input-bordered"
-							min="0"
-							bind:value={editForm.price}
-						/>
-					</div>
+						<!-- Giá -->
+						<div class="form-control">
+							<label class="label" for="edit-price">
+								<span class="label-text flex items-center gap-2 font-medium">
+									<DollarSign class="h-4 w-4 opacity-50" />
+									Giá (VND)
+								</span>
+							</label>
+							<input
+								type="number"
+								id="edit-price"
+								name="price"
+								class="input input-bordered"
+								min="0"
+								bind:value={editForm.price}
+							/>
+						</div>
 
-					<div class="form-control">
-						<label class="label" for="edit-stock">
-							<span class="label-text">Tồn kho</span>
-						</label>
-						<input
-							type="number"
-							id="edit-stock"
-							name="stock"
-							class="input input-bordered"
-							min="0"
-							bind:value={editForm.stock}
-						/>
-					</div>
+						<!-- Tồn kho -->
+						<div class="form-control">
+							<label class="label" for="edit-stock">
+								<span class="label-text flex items-center gap-2 font-medium">
+									<Boxes class="h-4 w-4 opacity-50" />
+									Tồn kho
+								</span>
+							</label>
+							<input
+								type="number"
+								id="edit-stock"
+								name="stock"
+								class="input input-bordered"
+								min="0"
+								bind:value={editForm.stock}
+							/>
+						</div>
 
-					<div class="form-control">
-						<label class="label" for="edit-category">
-							<span class="label-text">Tên danh mục</span>
-						</label>
-						<input
-							type="text"
-							id="edit-category"
-							name="categoryName"
-							class="input input-bordered"
-							bind:value={editForm.categoryName}
-						/>
-					</div>
+						<!-- Danh mục -->
+						<div class="form-control">
+							<label class="label" for="edit-category">
+								<span class="label-text flex items-center gap-2 font-medium">
+									<FolderOpen class="h-4 w-4 opacity-50" />
+									Danh mục
+								</span>
+							</label>
+							<input
+								type="text"
+								id="edit-category"
+								name="categoryName"
+								class="input input-bordered"
+								placeholder="Nhập tên danh mục"
+								list="edit-category-list"
+								bind:value={editForm.categoryName}
+							/>
+							<datalist id="edit-category-list">
+								{#each categories as category}
+									<option value={category.name}></option>
+								{/each}
+							</datalist>
+						</div>
 
-					<div class="form-control">
-						<label class="label" for="edit-tags">
-							<span class="label-text">Tags (phân cách bằng dấu phẩy)</span>
-						</label>
-						<input
-							type="text"
-							id="edit-tags"
-							name="tags"
-							class="input input-bordered"
-							bind:value={editForm.tags}
-						/>
-					</div>
+						<!-- Tags -->
+						<div class="form-control">
+							<label class="label" for="edit-tags">
+								<span class="label-text flex items-center gap-2 font-medium">
+									<Tags class="h-4 w-4 opacity-50" />
+									Tags
+								</span>
+							</label>
+							<input
+								type="text"
+								id="edit-tags"
+								name="tags"
+								class="input input-bordered"
+								placeholder="tag1, tag2, tag3"
+								bind:value={editForm.tags}
+							/>
+							<label class="label" for="edit-tags">
+								<span class="label-text-alt opacity-50">Phân cách bằng dấu phẩy</span>
+							</label>
+						</div>
 
-					<div class="form-control col-span-2">
-						<label class="label" for="edit-image">
-							<span class="label-text">URL hình ảnh</span>
-						</label>
-						<input
-							type="url"
-							id="edit-image"
-							name="imageUrl"
-							class="input input-bordered"
-							bind:value={editForm.imageUrl}
-						/>
-					</div>
+						<!-- URL hình ảnh -->
+						<div class="form-control col-span-2">
+							<label class="label" for="edit-image">
+								<span class="label-text flex items-center gap-2 font-medium">
+									<Image class="h-4 w-4 opacity-50" />
+									URL hình ảnh
+								</span>
+							</label>
+							<input
+								type="url"
+								id="edit-image"
+								name="imageUrl"
+								class="input input-bordered"
+								placeholder="https://example.com/image.jpg"
+								bind:value={editForm.imageUrl}
+							/>
+							{#if editForm.imageUrl}
+								<div class="mt-2">
+									<img
+										src={editForm.imageUrl}
+										alt="Preview"
+										class="h-20 w-20 rounded-lg object-cover"
+										on:error={(e) => (e.currentTarget.style.display = 'none')}
+									/>
+								</div>
+							{/if}
+						</div>
 
-					<div class="form-control col-span-2">
-						<label class="label" for="edit-description">
-							<span class="label-text">Mô tả</span>
-						</label>
-						<textarea
-							id="edit-description"
-							name="description"
-							class="textarea textarea-bordered h-24"
-							bind:value={editForm.description}
-						></textarea>
+						<!-- Mô tả -->
+						<div class="form-control col-span-2">
+							<label class="label" for="edit-description">
+								<span class="label-text flex items-center gap-2 font-medium">
+									<FileText class="h-4 w-4 opacity-50" />
+									Mô tả
+								</span>
+							</label>
+							<textarea
+								id="edit-description"
+								name="description"
+								class="textarea textarea-bordered h-28"
+								placeholder="Nhập mô tả sản phẩm..."
+								bind:value={editForm.description}
+							></textarea>
+						</div>
 					</div>
 				</div>
 
-				<div class="modal-action">
-					<button type="button" class="btn btn-ghost" on:click={closeModals}>Hủy</button>
-					<button type="submit" class="btn btn-primary">Lưu thay đổi</button>
+				<!-- Modal Footer -->
+				<div class="bg-base-200/30 flex justify-end gap-2 p-4">
+					<button type="button" class="btn btn-ghost" on:click={closeModals} disabled={isSubmitting}
+						>Hủy</button
+					>
+					<button type="submit" class="btn btn-primary" disabled={isSubmitting}>
+						{#if isSubmitting}
+							<span class="loading loading-spinner loading-sm"></span>
+						{/if}
+						Lưu thay đổi
+					</button>
 				</div>
 			</form>
 		</div>
 		<div
-			class="modal-backdrop"
+			class="modal-backdrop bg-neutral/50 backdrop-blur-sm"
 			on:click={closeModals}
 			on:keypress={closeModals}
 			role="button"
@@ -535,21 +806,49 @@
 {#if showDeleteModal && selectedProduct}
 	<div class="modal modal-open">
 		<div class="modal-box">
-			<h3 class="text-lg font-bold">Xác nhận Xóa</h3>
-			<p class="py-4">
-				Bạn có chắc chắn muốn xóa sản phẩm <strong>{selectedProduct.name}</strong>? Hành động này
-				không thể hoàn tác.
-			</p>
-			<form method="POST" action="?/delete" use:enhance>
+			<div class="flex gap-4">
+				<div
+					class="bg-error/10 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full"
+				>
+					<AlertCircle class="text-error h-6 w-6" />
+				</div>
+				<div>
+					<h3 class="text-error text-lg font-bold">Xóa sản phẩm?</h3>
+					<p class="py-2 text-sm opacity-80">
+						Bạn có chắc chắn muốn xóa sản phẩm <strong class="text-base-content"
+							>{selectedProduct.name}</strong
+						>? Hành động này không thể hoàn tác.
+					</p>
+				</div>
+			</div>
+
+			<form
+				method="POST"
+				action="?/delete"
+				use:enhance={() => {
+					isSubmitting = true;
+					return async ({ update }) => {
+						await update();
+						isSubmitting = false;
+					};
+				}}
+			>
 				<input type="hidden" name="id" value={selectedProduct.id} />
 				<div class="modal-action">
-					<button type="button" class="btn btn-ghost" on:click={closeModals}>Hủy</button>
-					<button type="submit" class="btn btn-error">Xóa</button>
+					<button type="button" class="btn btn-ghost" on:click={closeModals} disabled={isSubmitting}
+						>Hủy bỏ</button
+					>
+					<button type="submit" class="btn btn-error" disabled={isSubmitting}>
+						{#if isSubmitting}
+							<span class="loading loading-spinner loading-sm"></span>
+						{/if}
+						Xóa vĩnh viễn
+					</button>
 				</div>
 			</form>
 		</div>
 		<div
-			class="modal-backdrop"
+			class="modal-backdrop bg-neutral/50 backdrop-blur-sm"
 			on:click={closeModals}
 			on:keypress={closeModals}
 			role="button"

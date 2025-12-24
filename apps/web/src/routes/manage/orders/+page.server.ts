@@ -2,6 +2,14 @@ import { api } from '$lib/server/http';
 import { fail } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 
+interface UserInfo {
+	id: string;
+	username: string;
+	first_name: string;
+	last_name: string;
+	email: string;
+}
+
 export const load: PageServerLoad = async ({ fetch, request, url }) => {
 	const client = api({ fetch, request });
 
@@ -38,6 +46,30 @@ export const load: PageServerLoad = async ({ fetch, request, url }) => {
 
 		// Paginate
 		const paginatedOrders = allOrders.slice(offset, offset + limit);
+
+		// Get unique user IDs from paginated orders
+		const uniqueUserIds = [...new Set(paginatedOrders.map((o: any) => o.user_id).filter(Boolean))];
+
+		// Fetch user information for all unique users
+		const userMap: Record<string, UserInfo> = {};
+		await Promise.all(
+			uniqueUserIds.map(async (userId: string) => {
+				try {
+					const userResponse = await client.get(`users/${userId}`).json<UserInfo>();
+					userMap[userId] = userResponse;
+				} catch (e) {
+					console.error(`Không thể lấy thông tin user ${userId}`, e);
+					// Set default user info if fetch fails
+					userMap[userId] = {
+						id: userId,
+						username: 'N/A',
+						first_name: '',
+						last_name: '',
+						email: '',
+					};
+				}
+			}),
+		);
 
 		// Fetch order items for paginated orders only
 		const ordersWithDetails = await Promise.all(
@@ -86,12 +118,25 @@ export const load: PageServerLoad = async ({ fetch, request, url }) => {
 					}
 				}
 
+				// Get user info from map
+				const userInfo = userMap[order.user_id] || {
+					id: order.user_id,
+					username: 'N/A',
+					first_name: '',
+					last_name: '',
+					email: '',
+				};
+
 				return {
 					...order,
 					total_amount: Number(order.total_amount),
 					shipping_address: formattedAddress,
 					items: mappedItems,
 					itemCount: mappedItems.length,
+					// Add user information
+					user_name: `${userInfo.first_name} ${userInfo.last_name}`.trim() || 'N/A',
+					user_username: userInfo.username || 'N/A',
+					user_email: userInfo.email || '',
 				};
 			}),
 		);

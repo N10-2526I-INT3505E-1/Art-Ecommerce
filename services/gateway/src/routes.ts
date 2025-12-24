@@ -8,11 +8,50 @@ const PAYMENTS_SERVICE_URL = process.env.PAYMENTS_SERVICE_URL || 'http://localho
 const PRODUCTS_SERVICE_URL = process.env.PRODUCTS_SERVICE_URL || 'http://localhost:4003';
 const USERS_SERVICE_URL = process.env.USERS_SERVICE_URL || 'http://localhost:4004';
 
+// Default API version
+const DEFAULT_API_VERSION = 'v1';
+
+const VERSIONABLE_ROUTES = [
+	'/products',
+	'/orders',
+	'/payments',
+	'/users',
+	'/sessions',
+	'/vnpay_ipn',
+];
+
 // Helper to sanitize and join URLs
 const joinUrl = (baseUrl: string, path: string, search: string) => {
 	const cleanBase = baseUrl.replace(/\/$/, ''); // Remove trailing slash
 	const cleanPath = path.startsWith('/') ? path : `/${path}`; // Ensure leading slash
 	return `${cleanBase}${cleanPath}${search}`;
+};
+
+// Helper to check if a path matches any versionable route
+const matchesVersionableRoute = (pathname: string): boolean => {
+	return VERSIONABLE_ROUTES.some(
+		(route) =>
+			pathname === route || pathname.startsWith(`${route}/`) || pathname.startsWith(`${route}?`),
+	);
+};
+
+// Helper to rewrite URL with version prefix
+const rewriteUrlWithVersion = (
+	request: Request,
+	version: string = DEFAULT_API_VERSION,
+): Request => {
+	const url = new URL(request.url);
+	const newPathname = `/${version}${url.pathname}`;
+	const newUrl = new URL(newPathname + url.search, url.origin);
+
+	console.log(`[Auto-Version] Rewriting ${url.pathname} -> ${newPathname}`);
+
+	return new Request(newUrl.toString(), {
+		method: request.method,
+		headers: request.headers,
+		body: request.method !== 'GET' && request.method !== 'HEAD' ? request.body : undefined,
+		duplex: 'half',
+	} as RequestInit);
 };
 
 async function proxyRequest(serviceUrl: string, request: Request, user?: User): Promise<Response> {
@@ -37,7 +76,6 @@ async function proxyRequest(serviceUrl: string, request: Request, user?: User): 
 			method: request.method,
 			headers: forwardHeaders,
 			body: body,
-			duplex: 'half',
 		});
 	} catch (error) {
 		console.error(`[Proxy Error] Failed to reach ${targetUrl}`, error);
@@ -52,53 +90,81 @@ interface ContextWithUser extends Context {
 
 // Create and export the plugin
 export const routes = new Elysia({ name: 'gateway-routes' })
-	// ==========================================
-	// 1. PUBLIC ROUTES (No Token Check)
-	// ==========================================
+	// AUTO-VERSIONING MIDDLEWARE
+	.onRequest(({ request, set }) => {
+		const url = new URL(request.url);
+		const pathname = url.pathname;
 
-	// Sessions (Login/Register/Google)
-	.all('/sessions*', async (ctx) => {
-		console.log(ctx.request.url);
-		return proxyRequest(USERS_SERVICE_URL, ctx.request);
-	})
+		// Skip if already versioned (starts with /v1, /v2, etc.)
+		if (/^\/v\d+/.test(pathname)) {
+			return;
+		}
 
-	// User Registration (Must be public!)
-	.post('/users', async (ctx) => {
-		return proxyRequest(USERS_SERVICE_URL, ctx.request);
-	})
-	.post('/users/', async (ctx) => {
-		return proxyRequest(USERS_SERVICE_URL, ctx.request);
-	})
+		// Check if this is a versionable route
+		if (matchesVersionableRoute(pathname)) {
+			// Redirect to versioned URL
+			const versionedPath = `/${DEFAULT_API_VERSION}${pathname}${url.search}`;
+			console.log(`[Auto-Version] Redirecting ${pathname} -> ${versionedPath}`);
 
-	// Payment Webhooks
-	.all('/vnpay_ipn*', async (ctx) => {
-		return proxyRequest(PAYMENTS_SERVICE_URL, ctx.request);
-	})
-
-	// Products (Public View)
-	.all('/products*', async (ctx) => {
-		return proxyRequest(PRODUCTS_SERVICE_URL, ctx.request);
+			set.status = 308; // Permanent Redirect (preserves method)
+			set.headers['Location'] = versionedPath;
+			return { message: `Redirecting to ${versionedPath}` };
+		}
 	})
 
 	// ==========================================
-	// 2. PROTECTED ROUTES (Enforce Token)
+	// API v1 ROUTES
 	// ==========================================
-	.group('', (app) =>
-		app
-			.derive(verifyToken) // This middleware will run for everything below
+	.group('/v1', (v1) =>
+		v1
+			// ==========================================
+			// 1. PUBLIC ROUTES (No Token Check)
+			// ==========================================
 
-			// Orders
-			.all('/orders*', async (ctx: ContextWithUser) => {
-				return proxyRequest(ORDERS_SERVICE_URL, ctx.request, ctx.user);
+			// Sessions (Login/Register/Google)
+			.all('/sessions*', async (ctx) => {
+				console.log(ctx.request.url);
+				return proxyRequest(USERS_SERVICE_URL, ctx.request);
 			})
 
-			// Payments (Create/Update)
-			.all('/payments*', async (ctx: ContextWithUser) => {
-				return proxyRequest(PAYMENTS_SERVICE_URL, ctx.request, ctx.user);
+			// User Registration (Must be public!)
+			.post('/users', async (ctx) => {
+				return proxyRequest(USERS_SERVICE_URL, ctx.request);
+			})
+			.post('/users/', async (ctx) => {
+				return proxyRequest(USERS_SERVICE_URL, ctx.request);
 			})
 
-			// Users (Profile, Addresses, Bazi - anything NOT registration)
-			.all('/users*', async (ctx: ContextWithUser) => {
-				return proxyRequest(USERS_SERVICE_URL, ctx.request, ctx.user);
-			}),
+			// Payment Webhooks
+			.all('/vnpay_ipn*', async (ctx) => {
+				return proxyRequest(PAYMENTS_SERVICE_URL, ctx.request);
+			})
+
+			// Products (Public View)
+			.all('/products*', async (ctx) => {
+				return proxyRequest(PRODUCTS_SERVICE_URL, ctx.request);
+			})
+
+			// ==========================================
+			// 2. PROTECTED ROUTES (Enforce Token)
+			// ==========================================
+			.group('', (app) =>
+				app
+					.derive(verifyToken) // This middleware will run for everything below
+
+					// Orders
+					.all('/orders*', async (ctx: ContextWithUser) => {
+						return proxyRequest(ORDERS_SERVICE_URL, ctx.request, ctx.user);
+					})
+
+					// Payments (Create/Update)
+					.all('/payments*', async (ctx: ContextWithUser) => {
+						return proxyRequest(PAYMENTS_SERVICE_URL, ctx.request, ctx.user);
+					})
+
+					// Users (Profile, Addresses, Bazi - anything NOT registration)
+					.all('/users*', async (ctx: ContextWithUser) => {
+						return proxyRequest(USERS_SERVICE_URL, ctx.request, ctx.user);
+					}),
+			),
 	);

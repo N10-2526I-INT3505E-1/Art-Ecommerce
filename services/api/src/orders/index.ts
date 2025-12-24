@@ -16,13 +16,13 @@ export const ordersPlugin = async (dependencies: { orderService: OrderService })
 		.onStart(async (app) => {
 			const rabbitChannel: Channel = app.decorator.rabbitChannel;
 			const sendToQueue = app.decorator.sendToQueue;
-			
+
 			// Re-initialize orderService with rabbit channel for expiry messaging
 			orderService = new OrderService(db, rabbitChannel);
 			app.decorator.orderService = orderService;
-			
+
 			console.log('Order Service listening...');
-			
+
 			// Consumer 1: Handle Payment Results
 			rabbitChannel.consume(QUEUES.PAYMENT_PROCESS, async (msg) => {
 				if (!msg) return;
@@ -113,7 +113,7 @@ export const ordersPlugin = async (dependencies: { orderService: OrderService })
 				}
 			});
 		})
-		.group('/orders', (app) =>
+		.group('/v1/orders', (app) =>
 			app
 				// 1. Create Order with Items
 				.post(

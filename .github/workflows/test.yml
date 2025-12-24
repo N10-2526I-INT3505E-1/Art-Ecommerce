@@ -1,0 +1,157 @@
+name: Test Affected Services
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      - 'services/api/**'
+      - 'package.json'
+      - 'bun.lock'
+  pull_request:
+    branches: [main, master, develop]
+    paths:
+      - 'services/api/**'
+      - 'package.json'
+      - 'bun.lock'
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      products: ${{ steps.changes.outputs.products }}
+      orders: ${{ steps.changes.outputs.orders }}
+      payments: ${{ steps.changes.outputs.payments }}
+      users: ${{ steps.changes.outputs.users }}
+      common: ${{ steps.changes.outputs.common }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect changed paths
+        id: changes
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            products:
+              - 'services/api/src/products/**'
+            orders:
+              - 'services/api/src/orders/**'
+            payments:
+              - 'services/api/src/payments/**'
+            users:
+              - 'services/api/src/users/**'
+            common:
+              - 'services/api/src/common/**'
+              - 'services/api/package.json'
+              - 'package.json'
+              - 'bun.lock'
+
+  test-products:
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.products == 'true' || needs.detect-changes.outputs.common == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run Products Service Tests
+        run: bun test services/api/src/products/tests/
+        env:
+          NODE_ENV: test
+
+  test-orders:
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.orders == 'true' || needs.detect-changes.outputs.common == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run Orders Service Tests
+        run: bun test services/api/src/orders/tests/
+        env:
+          NODE_ENV: test
+
+  test-payments:
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.payments == 'true' || needs.detect-changes.outputs.common == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run Payments Service Tests
+        run: bun test services/api/src/payments/tests/
+        env:
+          NODE_ENV: test
+
+  test-users:
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.users == 'true' || needs.detect-changes.outputs.common == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run Users Service Tests
+        run: bun test services/api/src/users/tests/
+        env:
+          NODE_ENV: test
+
+  # Summary job that requires all test jobs to pass
+  test-summary:
+    needs: [detect-changes, test-products, test-orders, test-payments, test-users]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check test results
+        run: |
+          echo "Products tests: ${{ needs.test-products.result }}"
+          echo "Orders tests: ${{ needs.test-orders.result }}"
+          echo "Payments tests: ${{ needs.test-payments.result }}"
+          echo "Users tests: ${{ needs.test-users.result }}"
+
+          # Fail if any required test failed
+          if [[ "${{ needs.test-products.result }}" == "failure" ]] || \
+             [[ "${{ needs.test-orders.result }}" == "failure" ]] || \
+             [[ "${{ needs.test-payments.result }}" == "failure" ]] || \
+             [[ "${{ needs.test-users.result }}" == "failure" ]]; then
+            echo "One or more test jobs failed!"
+            exit 1
+          fi
+
+          echo "All affected service tests passed!"

@@ -88,7 +88,7 @@ export const productsPlugin = async (dependencies: { productService: ProductServ
 			});
 		})
 
-		.group('/products', (app) =>
+		.group('/v1/products', (app) =>
 			app
 				// ====================================================================================================
 				// GROUP 1: PUBLIC ROUTES

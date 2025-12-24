@@ -1,5 +1,10 @@
 import { desc, eq } from 'drizzle-orm';
-import { BadRequestError, InternalServerError, NotFoundError } from '../common/errors/httpErrors';
+import {
+	BadRequestError,
+	HttpError,
+	InternalServerError,
+	NotFoundError,
+} from '../common/errors/httpErrors';
 import type { db } from './db';
 import { ordersTable } from './order.model';
 import { orderItemsTable } from './order_item.model';
@@ -62,7 +67,9 @@ export class OrderService {
 	// Helper: Send order expiry message to queue with 15-minute delay
 	private sendOrderExpiryMessage(orderId: string): boolean {
 		if (!this.rabbitChannel) {
-			console.warn(`RabbitMQ channel not available. Order expiry timer not set for order ${orderId}`);
+			console.warn(
+				`RabbitMQ channel not available. Order expiry timer not set for order ${orderId}`,
+			);
 			return false;
 		}
 
@@ -80,7 +87,9 @@ export class OrderService {
 			);
 
 			if (sent) {
-				console.log(`Sent order expiry message for order ${orderId} (will be delivered after 15 minutes)`);
+				console.log(
+					`Sent order expiry message for order ${orderId} (will be delivered after 15 minutes)`,
+				);
 			} else {
 				console.error(`Failed to queue order expiry message for order ${orderId}`);
 			}
@@ -97,16 +106,16 @@ export class OrderService {
 		try {
 			const orderData = { ...data };
 			const shipping_address = data.shipping_address;
-			
+
 			// Validate address (works for both string and object)
 			const addressErrors = validateAddress(shipping_address);
 			if (Object.keys(addressErrors).length > 0) {
 				throw new BadRequestError(String(JSON.stringify(addressErrors)));
 			}
-			
+
 			// Convert to storage format (string)
 			orderData.shipping_address = this.serializeShippingAddress(shipping_address);
-			
+
 			orderData.id = randomUUIDv7();
 			const [newOrder] = await this.database.insert(ordersTable).values(orderData).returning();
 			if (!newOrder) {
@@ -120,7 +129,7 @@ export class OrderService {
 
 			return newOrder;
 		} catch (error) {
-			if (error instanceof Error && error.name === 'HttpError') throw error;
+			if (error instanceof HttpError) throw error;
 			console.error('Create Order Error:', error);
 			throw new InternalServerError('Lỗi hệ thống khi tạo đơn hàng.');
 		}

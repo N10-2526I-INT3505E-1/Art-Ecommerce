@@ -1,12 +1,14 @@
 import type { RequestEvent } from '@sveltejs/kit';
 import ky, { type KyInstance, type Options } from 'ky';
-import { env } from '$env/dynamic/private'; // ⚠️ SERVER-ONLY IMPORT
-import { dev } from '$app/environment'; // ✅ SvelteKit standard for dev/prod check
+import { env } from '$env/dynamic/private';
+import { dev } from '$app/environment';
 
-export function api(
-	{ fetch }: Pick<RequestEvent, 'fetch'>, // 'request' wasn't used, removed it
-	options: Options = {},
-): KyInstance {
+// const headers = new Headers(options.headers);
+// if (env.INTERNAL_API_SECRET) {
+// 	headers.set('X-Internal-Secret', env.INTERNAL_API_SECRET);
+// }
+
+export function api({ fetch }: Pick<RequestEvent, 'fetch'>, options: Options = {}): KyInstance {
 	const DEFAULT_PROD_API = 'https://api.novus.io.vn/';
 
 	// 1. Determine Base URL
@@ -22,7 +24,7 @@ export function api(
 
 	const defaultOptions: Options = {
 		prefixUrl: defaultPrefix,
-		credentials: 'include', // Important: Passes cookies from SvelteKit server to API
+		credentials: 'include',
 		fetch: fetch as typeof globalThis.fetch,
 		timeout: 10000,
 		retry: { limit: 2 },

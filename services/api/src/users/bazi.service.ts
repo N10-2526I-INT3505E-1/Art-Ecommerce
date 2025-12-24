@@ -2,7 +2,6 @@
  * src/users/bazi.service.ts
  *
  * BAZI QUANTITATIVE ENGINE (VULONG METHOD & TRICH THIEN TUY)
- * FULL VERSION - DO NOT SIMPLIFY
  */
 
 import { SolarDate } from '@nghiavuive/lunar_date_vi';
@@ -14,7 +13,6 @@ import type {
 	EnergyNode,
 	HeavenlyStem,
 	EarthlyBranch,
-	LifeCycleStage,
 	FiveElement,
 	TenGod,
 	CenterZoneAnalysis,
@@ -38,160 +36,13 @@ import {
 	SOLAR_TERM_TO_BRANCH_INDEX,
 	STEM_POLARITY,
 	MONTH_COMMANDER_RULES,
+	LIFE_CYCLE_SCORES,
+	PHYSICS, // Import cấu hình vật lý chuẩn hóa
 } from './bazi.constants';
 
-// =============================================================================
-// 1. CẤU HÌNH HỆ SỐ VẬT LÝ (PHYSICS CONFIGURATION) - THEO VULONG
-// =============================================================================
-
-// Điểm số thực nghiệm từ sách Giải Mã Tứ Trụ (Ảnh 21)
-export const LIFE_CYCLE_SCORES: Record<LifeCycleStage, number> = {
-	DeVuong: 10.0,
-	LamQuan: 9.0,
-	QuanDoi: 8.0,
-	MocDuc: 7.0, // VuLong: 7đv
-	TruongSinh: 6.0, // VuLong: 6đv
-	Suy: 5.1, // VuLong: Max 5.1đv
-	Benh: 4.8, // VuLong: Max 4.83đv
-	Tu: 3.0, // VuLong: 3đv
-	Mo: 3.0, // VuLong: 3đv
-	Tuyet: 3.1, // VuLong: 3.1đv
-	Thai: 4.1, // VuLong: 4.1đv
-	Duong: 4.2, // VuLong: 4.2đv
-};
-
-const DECAY = {
-	// Tương tác
-	TRANSFORM_BONUS: 1.5, // Hóa cục thành công
-	COMBINE_BINDING: 0.2, // Hợp trói (không hóa)
-	CLASH_WINNER: 0.7, // Thắng xung
-	CLASH_LOSER: 0.2, // Thua xung
-	CLASH_DRAW: 0.4, // Xung hòa
-
-	// Dòng chảy & Vị trí (VuLong - Chương 9)
-	ENTER_CENTER_FACTOR: 0.6, // Đi vào vùng tâm bị giảm 2/5 (còn lại 0.6)
-	INTRA_CENTER_FACTOR: 1.0, // Trong vùng tâm giữ nguyên
-
-	// Hao hụt khi khắc/sinh giữa các trụ
-	FLOW_GENERATE_LOSS: 0.3, // Sinh cho người khác mất 30% lực
-	FLOW_OVERCOME_LOSS: 0.2, // Khắc người khác mất 20% lực
-};
-
-const LIMIT_SCORES = {
-	DUNG_THAN: -1.0,
-	HY_THAN: -0.5,
-	KY_THAN: 0.5,
-	HUNG_THAN: 1.0,
-	NHAN_THAN: 0.1,
-};
-
 export class BaziService {
-	/**
-	 * API PUBLIC: Tính toán Bát Tự
-	 */
-	public async calculateBazi(input: Omit<BaziInput, 'user_id' | 'id'>) {
-		// 0. Tạo đối tượng Date chuẩn từ input
-		const birthDate = new Date(
-			input.birth_year,
-			input.birth_month - 1,
-			input.birth_day,
-			input.birth_hour,
-			input.birth_minute,
-		);
-
-		// 1. Lập Trụ (Thiên văn)
-		const chart = this.calculatePillars(birthDate);
-
-		// 2. Phân tích Năng lượng (Truyền birthDate vào để tính Lệnh tháng chính xác)
-		const analysis = this.analyzeChart(chart, birthDate);
-
-		// 3. Mapping dữ liệu trả về
-		return {
-			...input,
-			year_stem: chart.year.stem,
-			year_branch: chart.year.branch,
-			month_stem: chart.month.stem,
-			month_branch: chart.month.branch,
-			day_stem: chart.day.stem,
-			day_branch: chart.day.branch,
-			hour_stem: chart.hour.stem,
-			hour_branch: chart.hour.branch,
-
-			structure_name: analysis.structure,
-			structure_type: analysis.structureType,
-			day_master_status: analysis.centerZone.isVwang ? 'Vượng' : 'Nhược',
-
-			analysis_reason: analysis.auditLogs.join('\n'),
-
-			// Dữ liệu chi tiết cho Frontend vẽ biểu đồ
-			center_analysis: analysis.centerZone,
-			energy_flow: analysis.energyFlow,
-			limit_score: analysis.limitScore,
-
-			favorable_elements: analysis.limitScore.dungThan,
-			party_score: analysis.centerZone.partyScore,
-			enemy_score: analysis.centerZone.enemyScore,
-
-			// Các trường phụ
-			percentage_self: 0,
-			luck_start_age: 0,
-			element_scores: {},
-			god_scores: {},
-			interactions: analysis.interactions,
-			score_details: [],
-			shen_sha: [],
-		};
-	}
-
-	/**
-	 * CORE PIPELINE: Thực hiện 5 bước phân tích VuLong
-	 */
-	private analyzeChart(chart: BaziChart, inputDate: Date): BaziResult {
-		const auditLogs: string[] = [];
-		auditLogs.push(`--- BẮT ĐẦU PHÂN TÍCH ---`);
-		auditLogs.push(
-			`Nhật chủ: ${chart.day.stem} (${this.getStemElement(chart.day.stem)}) sinh tháng ${chart.month.branch}.`,
-		);
-
-		// BƯỚC 1: KHỞI TẠO (Tính điểm gốc theo Lệnh tháng & Tư lệnh)
-		let nodes = this.initializeEnergyGraph(chart, inputDate, auditLogs);
-
-		// BƯỚC 2: XỬ LÝ TƯƠNG TÁC (Hợp/Xung/Hóa)
-		const interactionResult = this.processInteractions(nodes, chart.month.branch, auditLogs);
-		nodes = interactionResult.nodes;
-
-		// BƯỚC 3: DÒNG CHẢY & VÙNG TÂM (Updated Logic VuLong)
-		nodes = this.calculateFlowAndCenter(nodes, chart, auditLogs);
-
-		// BƯỚC 4: CƯỜNG NHƯỢC
-		const analysis = this.determineStructureAndStrength(nodes, chart.day.stem, auditLogs);
-
-		// BƯỚC 5: ĐIỂM HẠN
-		const limitProfile = this.calculateLimitScoreProfile(
-			analysis.centerZone,
-			analysis.godScores,
-			analysis.dmElement,
-			analysis.structureType,
-			auditLogs,
-		);
-
-		auditLogs.push(
-			`=== KẾT LUẬN: ${analysis.structure} (${analysis.centerZone.isVwang ? 'Thân Vượng' : 'Thân Nhược'}) ===`,
-		);
-
-		return {
-			pillars: chart,
-			energyFlow: nodes,
-			interactions: interactionResult.interactions,
-			centerZone: analysis.centerZone,
-			structure: analysis.structure,
-			limitScore: limitProfile,
-			auditLogs: auditLogs,
-		};
-	}
-
 	// ====================================================================
-	// 1. LẬP TRỤ (ASTRONOMY)
+	// 0. LẬP TRỤ (ASTRONOMY)
 	// ====================================================================
 
 	private calculatePillars(birthDate: Date): BaziChart {
@@ -219,320 +70,597 @@ export class BaziService {
 		return { year: yearPillar, month: monthPillar, day: dayPillar, hour: hourPillar };
 	}
 
-	// ====================================================================
-	// 2. KHỞI TẠO NĂNG LƯỢNG (Fix: InputDate & Commander Logic)
-	// ====================================================================
-
-	private initializeEnergyGraph(chart: BaziChart, inputDate: Date, logs: string[]): EnergyNode[] {
-		const nodes: EnergyNode[] = [];
-		const pillars: Pillar[] = [chart.year, chart.month, chart.day, chart.hour];
-		const monthBranch = chart.month.branch;
-
-		// 1. Tính số ngày từ Tiết khí gần nhất -> Xác định Nhân Nguyên Tư Lệnh
-		const daysSinceTerm = this.calculateDaysSinceSolarTerm(inputDate);
-		const commanderStem = this.getCommanderStem(monthBranch, daysSinceTerm);
-
-		logs.push(
-			`>> Lệnh tháng ${monthBranch}, sinh sau tiết ${daysSinceTerm} ngày. Tư lệnh: ${commanderStem}.`,
+	public async calculateBazi(input: Omit<BaziInput, 'user_id' | 'id'>) {
+		const rawBirthDate = new Date(
+			input.birth_year,
+			input.birth_month - 1,
+			input.birth_day,
+			input.birth_hour,
+			input.birth_minute,
 		);
 
-		pillars.forEach((pillar) => {
-			// A. Thiên Can
-			const stemInfo = this.calculateStemPower(pillar.stem, monthBranch);
-			let stemScore = stemInfo.score;
+		// Mặc định kinh độ Hà Nội (105.85) nếu không có input.longitude
+		const birthDate = this.getRealSolarTime(rawBirthDate, input.longitude || 105.85);
 
-			// Bonus: Nếu Can lộ trùng với Can Tư Lệnh (Đắc Lệnh)
-			if (pillar.stem === commanderStem) {
-				stemScore *= 1.2;
-				logs.push(`> Can ${pillar.stem} đắc lệnh (Tư lệnh).`);
-			}
+		// 1. Lập Trụ (Sử dụng giờ thực)
+		const chart = this.calculatePillars(birthDate);
 
-			nodes.push({
-				id: `${pillar.position}_Stem`,
-				source: pillar.position,
-				type: 'Stem',
-				name: pillar.stem,
-				element: pillar.stemElement,
-				lifeCycleStage: stemInfo.stage,
-				baseScore: stemScore,
-				currentScore: stemScore,
-				isBlocked: false,
-				isCombined: false,
-				modifications: [],
-			});
+		// 2. Phân tích Năng lượng
+		const analysis = this.analyzeChart(chart, birthDate);
 
-			// B. Địa Chi (Logic Tư Lệnh cho Tháng, Tĩnh cho các trụ khác)
-			if (pillar.position === 'Month') {
-				this.createMonthBranchNodes(nodes, pillar, commanderStem, monthBranch);
-			} else {
-				this.createStaticBranchNodes(nodes, pillar, monthBranch);
-			}
-		});
+		return {
+			...input,
+			year_stem: chart.year.stem,
+			year_branch: chart.year.branch,
+			month_stem: chart.month.stem,
+			month_branch: chart.month.branch,
+			day_stem: chart.day.stem,
+			day_branch: chart.day.branch,
+			hour_stem: chart.hour.stem,
+			hour_branch: chart.hour.branch,
 
-		return nodes;
+			structure_name: analysis.structure,
+			structure_type: analysis.structureType,
+			day_master_status: analysis.centerZone.isVwang ? 'Vượng' : 'Nhược',
+			analysis_reason: analysis.auditLogs.join('\n'),
+
+			center_analysis: analysis.centerZone,
+			energy_flow: analysis.energyFlow,
+			limit_score: analysis.limitScore,
+			interactions: analysis.interactions,
+
+			favorable_elements: analysis.limitScore.dungThan,
+			party_score: analysis.centerZone.partyScore,
+			enemy_score: analysis.centerZone.enemyScore,
+
+			// Legacy
+			percentage_self: 0,
+			luck_start_age: 0,
+			element_scores: {},
+			god_scores: {},
+			score_details: [],
+			shen_sha: [],
+		};
 	}
 
 	/**
-	 * Tính số ngày từ Tiết khí (Jie Qi) đến ngày sinh.
-	 * Logic: Quét ngược tối đa 35 ngày để tìm ngày bắt đầu Tiết.
+	 * CORE PIPELINE: Quy trình phân tích định lượng Vũ Long
 	 */
-	private calculateDaysSinceSolarTerm(inputDate: Date): number {
-		// Danh sách 12 Tiết lệnh tháng (Jie) - Không tính Trung Khí (Qi)
-		const MONTH_STARTERS = [
-			'Lập xuân',
-			'Kinh trập',
-			'Thanh minh',
-			'Lập hạ',
-			'Mang chủng',
-			'Tiểu thử',
-			'Lập thu',
-			'Bạch lộ',
-			'Hàn lộ',
-			'Lập đông',
-			'Đại tuyết',
-			'Tiểu hàn',
-		];
+	private analyzeChart(chart: BaziChart, inputDate: Date): BaziResult {
+		const auditLogs: string[] = [];
+		auditLogs.push(`--- BẮT ĐẦU PHÂN TÍCH (VULONG METHOD v3) ---`);
 
-		let checkDate = new Date(inputDate);
-		checkDate.setHours(12, 0, 0, 0); // Tránh lỗi giờ
+		// BƯỚC 1: KHỞI TẠO (INITIALIZATION)
+		// Tính điểm gốc dựa trên Lệnh tháng (Quan trọng nhất theo TTT Chương 15)
+		let nodes = this.initializeEnergyGraph(chart, inputDate, auditLogs);
 
-		// Lùi lại tối đa 35 ngày
-		for (let daysBack = 0; daysBack < 35; daysBack++) {
-			const sDate = new SolarDate(checkDate);
-			const lDate = sDate.toLunarDate();
-			lDate.init();
+		// BƯỚC 2: VẬT LÝ KHOẢNG CÁCH (DISTANCE PHYSICS)
+		// Áp dụng suy hao do Khắc gần/xa TRƯỚC khi xét hợp hóa.
+		// TTT Chương 18: "Địa chiến gấp như hỏa", xung khắc làm giảm lực.
+		this.applyDistancePhysics(nodes, auditLogs);
 
-			const currentTerm = lDate.getSolarTerm();
+		// BƯỚC 3: TƯƠNG TÁC HÓA HỌC (INTERACTIONS)
+		// Xử lý Hợp/Hóa/Xung. Chỉ những thần còn lực (chưa Blocked) mới tham gia.
+		const interactionResult = this.processInteractions(nodes, chart.month.branch, auditLogs);
+		nodes = interactionResult.nodes;
 
-			// Lấy ngày hôm trước để check thời điểm chuyển tiết
-			const prevDate = new Date(checkDate);
-			prevDate.setDate(prevDate.getDate() - 1);
-			const sPrev = new SolarDate(prevDate);
-			const lPrev = sPrev.toLunarDate();
-			lPrev.init();
-			const prevTerm = lPrev.getSolarTerm();
+		// BƯỚC 4: VÙNG TÂM & DÒNG CHẢY (CENTER ZONE FLOW)
+		// Tính toán lực tụ về Nhật chủ theo định nghĩa Vũ Long (Can Tháng, Can Giờ, Chi Ngày)
+		// TTT Chương 19 (Nguyên Lưu): Dòng chảy phải được tính toán.
+		const centerAnalysis = this.calculateCenterZoneStrength(nodes, chart, auditLogs);
 
-			// Nếu hôm nay có Tiết và hôm qua chưa có (hoặc khác) -> Đây là ngày bắt đầu Tiết
-			if (MONTH_STARTERS.includes(currentTerm) && currentTerm !== prevTerm) {
-				return daysBack;
-			}
+		// BƯỚC 5: KẾT LUẬN CƯỜNG NHƯỢC
+		const strengthResult = this.finalizeStructure(centerAnalysis, auditLogs);
 
-			checkDate.setDate(checkDate.getDate() - 1);
-		}
+		// BƯỚC 6: ĐIỂM HẠN (LIMIT SCORES)
+		// Xác định Dụng/Hỷ/Kỵ/Hung thần
+		const limitProfile = this.calculateLimitScoreProfile(
+			strengthResult.centerZone,
+			strengthResult.godScores,
+			strengthResult.dmElement,
+			strengthResult.structureType,
+			auditLogs,
+		);
 
-		return 15; // Fallback an toàn (giữa tháng)
+		return {
+			pillars: chart,
+			energyFlow: nodes,
+			interactions: interactionResult.interactions,
+			centerZone: strengthResult.centerZone,
+			structure: strengthResult.structure,
+			structureType: strengthResult.structureType,
+			limitScore: limitProfile,
+			auditLogs: auditLogs,
+		};
 	}
 
 	// ====================================================================
-	// 3. XỬ LÝ TƯƠNG TÁC (INTERACTION PHYSICS)
+	// 2. VẬT LÝ KHOẢNG CÁCH (DISTANCE PHYSICS)
 	// ====================================================================
 
-	private processInteractions(
-		nodes: EnergyNode[],
-		monthBranch: EarthlyBranch,
-		logs: string[],
-	): { nodes: EnergyNode[]; interactions: Interaction[] } {
+	private applyDistancePhysics(nodes: EnergyNode[], logs: string[]) {
+		logs.push(`\n--- VẬT LÝ KHOẢNG CÁCH (KHẮC GẦN/XA) ---`);
+
+		const stems = [
+			nodes.find((n) => n.source === 'Year' && n.type === 'Stem'),
+			nodes.find((n) => n.source === 'Month' && n.type === 'Stem'),
+			nodes.find((n) => n.source === 'Day' && n.type === 'Stem'),
+			nodes.find((n) => n.source === 'Hour' && n.type === 'Stem'),
+		];
+
+		// 1. Duyệt j > i để tránh lặp lại cặp (Double Count)
+		for (let i = 0; i < stems.length; i++) {
+			for (let j = i + 1; j < stems.length; j++) {
+				const nodeA = stems[i];
+				const nodeB = stems[j];
+
+				if (!nodeA || !nodeB || nodeA.isBlocked || nodeB.isBlocked) continue;
+
+				const distance = Math.abs(i - j);
+				// getRelation(A, B): Trả về quan hệ của A đối với B
+				const relation = this.getRelation(nodeA.element, nodeB.element);
+
+				let attacker: EnergyNode | null = null;
+				let defender: EnergyNode | null = null;
+
+				// Xác định ai khắc ai
+				if (relation === 'Khac') {
+					attacker = nodeA;
+					defender = nodeB;
+				} else if (relation === 'BiKhac') {
+					attacker = nodeB;
+					defender = nodeA;
+				}
+
+				if (attacker && defender) {
+					let distDesc = '';
+					let decayRate = 0; // Tỉ lệ suy giảm cho Defender (Bị khắc)
+
+					if (distance === 1) {
+						decayRate = PHYSICS.LOSS_CLASH_NEAR;
+						distDesc = 'Khắc gần';
+					} else if (distance === 2) {
+						decayRate = PHYSICS.LOSS_CLASH_GAP_1;
+						distDesc = 'Khắc cách 1 ngôi';
+					} else if (distance === 3) {
+						decayRate = PHYSICS.LOSS_CLASH_GAP_2;
+						distDesc = 'Khắc cách 2 ngôi';
+					}
+
+					// Tính toán tổn thất
+					// Attacker (Khắc xuất): Mất lực ít (hao tổn khí) * (1/distance)
+					const drainAttacker =
+						attacker.currentScore * PHYSICS.LOSS_OVERCOME_SOURCE * (1 / distance);
+
+					// Defender (Khắc nhập): Mất lực nhiều (bị thương) * decayRate
+					const damageDefender = defender.currentScore * decayRate;
+
+					this.applyNodeModification(
+						attacker,
+						-drainAttacker,
+						`Khắc xuất ${defender.name} (${distDesc})`,
+						PHYSICS.LOSS_OVERCOME_SOURCE,
+					);
+					this.applyNodeModification(
+						defender,
+						-damageDefender,
+						`Bị ${attacker.name} khắc (${distDesc})`,
+						decayRate,
+					);
+
+					logs.push(
+						`> ${attacker.name} khắc ${defender.name} (${distDesc}): ${attacker.name} hao ${drainAttacker.toFixed(2)}, ${defender.name} mất ${damageDefender.toFixed(2)}`,
+					);
+				}
+			}
+		}
+	}
+
+	// ====================================================================
+	// 3. TƯƠNG TÁC HÓA HỌC (INTERACTIONS)
+	// ====================================================================
+
+	private processInteractions(nodes: EnergyNode[], monthBranch: EarthlyBranch, logs: string[]) {
 		let currentNodes = [...nodes];
-		const interactions: Interaction[] = [];
+		const interactions: Interaction[] = []; // Thu thập kết quả tương tác
 
 		// 1. Tam Hội (Seasonal) - Lực mạnh nhất
 		const seasonalRes = this.processBranchGroup(currentNodes, 'TamHoi', monthBranch, logs);
 		currentNodes = seasonalRes.nodes;
+		interactions.push(...seasonalRes.interactions);
 
-		// 2. Tam Hợp (Triple) - Lực mạnh nhì
+		// 2. Tam Hợp (Tri-Harmony)
 		const tripleRes = this.processBranchGroup(currentNodes, 'TamHop', monthBranch, logs);
 		currentNodes = tripleRes.nodes;
+		interactions.push(...tripleRes.interactions);
 
-		// 3. Lục Hợp
+		// 3. Lục Hợp (Six-Harmony)
 		const sixRes = this.processAdjacency(currentNodes, 'LucHop', monthBranch, logs);
 		currentNodes = sixRes.nodes;
+		interactions.push(...sixRes.interactions);
 
-		// 4. Lục Xung
+		// 4. Lục Xung (Six-Clash) - TTT: "Địa chiến gấp như hỏa"
 		const clashRes = this.processAdjacency(currentNodes, 'LucXung', monthBranch, logs);
 		currentNodes = clashRes.nodes;
+		interactions.push(...clashRes.interactions);
 
-		// 5. Ngũ Hợp Can
+		// 5. Ngũ Hợp Can (Stem Combination) - TTT Chương 13: Hóa Tượng
 		const stemRes = this.processStemCombinations(currentNodes, monthBranch, logs);
 		currentNodes = stemRes.nodes;
+		interactions.push(...stemRes.interactions);
 
 		return { nodes: currentNodes, interactions };
 	}
 
 	// ====================================================================
-	// 4. DÒNG CHẢY & VÙNG TÂM (Core Logic VuLong)
+	// 4. VÙNG TÂM & DÒNG CHẢY (CENTER ZONE)
 	// ====================================================================
 
-	private calculateFlowAndCenter(
-		nodes: EnergyNode[],
-		chart: BaziChart,
-		logs: string[],
-	): EnergyNode[] {
-		// Dòng chảy giữa các trụ (Năm -> Tháng, Giờ -> Ngày)
-		this.processPillarToPillarFlow(nodes, 'Year', 'Month', logs);
-		this.processPillarToPillarFlow(nodes, 'Hour', 'Day', logs);
+	private calculateCenterZoneStrength(nodes: EnergyNode[], chart: BaziChart, logs: string[]) {
+		logs.push(`\n--- PHÂN TÍCH VÙNG TÂM (NGUYÊN LƯU) ---`);
 
-		// Tính điểm Nhật Chủ tại Vùng Tâm
-		this.calculateCenterAccumulation(nodes, chart.day.stem, logs);
-
-		return nodes;
-	}
-
-	/**
-	 * TÍNH ĐIỂM NHẬT CHỦ THEO VÙNG TÂM (V-SHAPE)
-	 * Logic: Can Tháng, Can Giờ, Chi Ngày thuộc Vùng Tâm (hệ số 1.0).
-	 * Các vị trí khác thuộc Vùng Ngoài (hệ số 0.6 - giảm 2/5).
-	 */
-	private calculateCenterAccumulation(
-		nodes: EnergyNode[],
-		dmStemOriginal: HeavenlyStem,
-		logs: string[],
-	) {
 		const dmNode = nodes.find((n) => n.source === 'Day' && n.type === 'Stem');
-		if (!dmNode) return;
-
+		if (!dmNode) throw new Error('Day Master missing');
 		const dmElement = dmNode.transformTo || dmNode.element;
 
-		logs.push(`\n--- TỤ KHÍ VÙNG TÂM (NHẬT CHỦ: ${dmElement}) ---`);
-		logs.push(`Điểm gốc (theo Lệnh tháng): ${dmNode.baseScore.toFixed(2)}`);
+		// 1. Dòng chảy Nội bộ (Gốc dưỡng Ngọn)
+		// Đặc biệt quan trọng cho Trụ Ngày (Nhật Chủ ngồi trên Chi)
+		(['Year', 'Month', 'Day', 'Hour'] as PillarPosition[]).forEach((pos) => {
+			this.processRootToStemFlow(nodes, pos, logs);
+		});
 
-		// Định nghĩa Vùng Tâm: Can Tháng, Can Giờ, Chi Ngày
-		const isCenterZone = (n: EnergyNode): boolean => {
-			if (n.source === 'Month' && n.type === 'Stem') return true;
-			if (n.source === 'Hour' && n.type === 'Stem') return true;
-			if (n.source === 'Day' && n.type === 'HiddenStem') return true;
-			return false;
+		// 2. Dòng chảy giữa các trụ (Thiên can)
+		// Năm -> Tháng (Suy hao do xa)
+		this.processPillarToPillarFlow(nodes, 'Year', 'Month', logs, PHYSICS.FACTOR_FLOW_INTO_CENTER);
+		// Tháng -> Ngày (Lực mạnh)
+		this.processPillarToPillarFlow(nodes, 'Month', 'Day', logs, 1.0);
+		// Giờ -> Ngày (Lực mạnh)
+		this.processPillarToPillarFlow(nodes, 'Hour', 'Day', logs, 1.0);
+
+		// 3. Tổng hợp lực lượng Vùng Tâm
+		let partyScore = 0;
+		let enemyScore = 0;
+
+		// Cập nhật lại điểm Nhật chủ sau khi được sinh/khắc (Quan trọng!)
+		const dmCurrentScore = dmNode.currentScore;
+		partyScore += dmCurrentScore;
+
+		// Duyệt qua TẤT CẢ các node để tính điểm, áp dụng Trọng Số (Weighting)
+		// Thay vì filter hạn chế, ta duyệt hết và gán trọng số
+		nodes.forEach((node) => {
+			if (node.isBlocked) return;
+			if (node.id === dmNode.id) return; // Bỏ qua Nhật chủ đã tính
+
+			// A. Xác định Trọng số vị trí (Weighting)
+			let weight = 1.0;
+			let positionNote = '';
+
+			if (node.source === 'Month') {
+				if (node.type === 'HiddenStem') {
+					// Chi Tháng: Nếu là Bản khí (Main) hoặc Hóa cục -> Trọng số cao nhất
+					if (node.isCombined || node.id.includes('_0')) {
+						weight = PHYSICS.WEIGHT_MONTH_BRANCH; // 2.5
+						positionNote = ' [Lệnh Tháng x2.5]';
+					} else {
+						weight = 0.5; // Tạp khí tháng tính thấp
+					}
+				} else {
+					weight = PHYSICS.WEIGHT_MONTH_HOUR_STEM; // 1.2
+				}
+			} else if (node.source === 'Hour') {
+				if (node.type === 'HiddenStem') {
+					// Chi Giờ: Bản khí tính hệ số
+					if (node.id.includes('_0'))
+						weight = PHYSICS.WEIGHT_HOUR_BRANCH; // 1.2
+					else weight = 0.3;
+				} else {
+					weight = PHYSICS.WEIGHT_MONTH_HOUR_STEM; // 1.2
+				}
+			} else if (node.source === 'Day') {
+				if (node.type === 'HiddenStem') {
+					weight = PHYSICS.WEIGHT_DAY_BRANCH; // 1.5 (Cung phu thê)
+					positionNote = ' [Chi Ngày x1.5]';
+				}
+			} else if (node.source === 'Year') {
+				// Trụ năm xa, lực tác động vào vùng tâm giảm
+				weight = PHYSICS.WEIGHT_YEAR; // 0.8
+				// Nếu là tàng can trụ năm thì giảm nữa
+				if (node.type === 'HiddenStem') weight *= 0.5;
+			}
+
+			// B. Tính điểm cuối cùng
+			const el = node.transformTo || node.element;
+			const finalScore = node.currentScore * weight;
+			const relation = this.getRelation(el, dmElement);
+
+			// C. Phân loại Phe
+			switch (relation) {
+				case 'Hoa': // Tỷ Kiếp (Bạn)
+				case 'Sinh': // Ấn (Mẹ)
+					partyScore += finalScore;
+					break;
+
+				case 'Khac': // Quan Sát (Kẻ thù)
+				case 'DuocSinh': // Thực Thương (Con - Xì hơi)
+					enemyScore += finalScore;
+					break;
+
+				case 'BiKhac': // Tài (Vợ/Cha - Hao sức quản lý)
+					// Tài làm hao tổn khí lực. Tính vào phe địch.
+					// Vũ Long: Hệ số hao tài nhẹ hơn khắc quan.
+					const wealthDrain = finalScore * PHYSICS.LOSS_WEALTH_EXHAUSTION * weight;
+					// Lưu ý: wealthDrain là phần Nhật chủ mất đi, nên cộng vào EnemyScore (sức cản trở)
+					enemyScore += wealthDrain;
+					break;
+			}
+
+			// Log chi tiết các thành phần quan trọng (> 1.0 điểm)
+			if (finalScore > 1.0) {
+				const side = relation === 'Hoa' || relation === 'Sinh' ? '(+Ta)' : '(-Địch)';
+				logs.push(
+					`   - ${node.name} (${node.source}): ${node.currentScore.toFixed(2)} x ${weight} = ${finalScore.toFixed(2)} ${side} ${positionNote}`,
+				);
+			}
+		});
+
+		const diff = partyScore - enemyScore;
+		const isVwang = diff >= PHYSICS.THRESHOLD_VWANG;
+
+		logs.push(`\n>> KẾT QUẢ CÂN BẰNG LỰC LƯỢNG:`);
+		logs.push(`   Phe Ta (Thân + Ấn + Tỷ): ${partyScore.toFixed(2)}`);
+		logs.push(`   Phe Địch (Thực + Tài + Quan): ${enemyScore.toFixed(2)}`);
+		logs.push(`   Hiệu số (Ta - Địch): ${diff.toFixed(2)}`);
+		logs.push(`   => KẾT LUẬN: ${isVwang ? 'THÂN VƯỢNG' : 'THÂN NHƯỢC'}`);
+
+		return {
+			centerZone: {
+				dayMasterScore: dmCurrentScore,
+				partyScore,
+				enemyScore,
+				diffScore: diff,
+				isVwang,
+				isStrongVwang: diff >= 15.0,
+				isWeakVwang: diff <= -15.0,
+			},
+			dmElement,
+			godScores: this.calculateGodScores(nodes, dmElement, chart.day.stem),
+		};
+	}
+
+	/**
+	 * Xử lý Dòng chảy Nội bộ Trụ (Internal Flow): Gốc (Chi) tác động lên Ngọn (Can).
+	 * Đây là bước quyết định Can có "Thông căn" (Rooted) hay "Hư phù" (Floating).
+	 */
+	private processRootToStemFlow(nodes: EnergyNode[], position: PillarPosition, logs: string[]) {
+		// 1. Lấy Node Thiên Can
+		const stemNode = nodes.find((n) => n.source === position && n.type === 'Stem' && !n.isBlocked);
+		if (!stemNode) return;
+
+		// 2. Lấy danh sách Tàng Can
+		const branchNodes = nodes.filter(
+			(n) => n.source === position && n.type === 'HiddenStem' && !n.isBlocked,
+		);
+		if (branchNodes.length === 0) return;
+
+		// 3. Xác định Hành của Chi (Dùng Bản Khí Tĩnh - Static Main Qi)
+		// Lấy branchOwner từ node đầu tiên tìm thấy để tra cứu bản khí
+		const branchName = branchNodes[0].branchOwner;
+		if (!branchName) return;
+
+		// Hàm này (xem bên dưới) sẽ trả về hành của bản khí (VD: Sửu -> Thổ) bất kể điểm số
+		const branchMainEl = this.getBranchMainElement(branchName);
+		const branchTotalScore = this.getPillarTotalScore(branchNodes); // Tổng lực của chi
+
+		// Hành của Can (Xét cả trường hợp đã hóa)
+		const stemEl = stemNode.transformTo || stemNode.element;
+
+		// 4. Xác định mối quan hệ
+		const rel = this.getRelation(branchMainEl, stemEl);
+		const posName = { Year: 'Năm', Month: 'Tháng', Day: 'Ngày', Hour: 'Giờ' }[position];
+
+		switch (rel) {
+			case 'Hoa':
+				// [TỶ HÒA] - Can Chi đồng khí (VD: Kỷ Sửu -> Thổ Thổ)
+				// Cộng hưởng: Can được cường hóa
+				const resonance = branchTotalScore * 0.2;
+				this.applyNodeModification(stemNode, resonance, `Thông căn chi ${posName} (Đồng khí)`);
+
+				// Cộng điểm cho các tàng can cùng hành (Cộng hưởng ngược)
+				branchNodes.forEach((b) => {
+					if (b.element === stemEl) {
+						this.applyNodeModification(b, resonance * 0.5, `Cộng hưởng với Can`);
+					}
+				});
+				logs.push(`   + Nội bộ trụ ${posName}: Can Chi đồng khí (+${resonance.toFixed(2)})`);
+				break;
+
+			case 'Sinh':
+				// [CHI SINH CAN] - Đắc Địa (VD: Giáp Tý -> Thủy sinh Mộc)
+				const gain = branchTotalScore * PHYSICS.GAIN_GENERATE_TARGET;
+				this.applyNodeModification(stemNode, gain, `Được chi ${posName} sinh`);
+
+				// Chi bị tiết khí
+				branchNodes.forEach((b) => {
+					// Chỉ trừ điểm các tàng can sinh ra Can hoặc là bản khí
+					if (this.getRelation(b.element, stemEl) === 'Sinh' || b.element === branchMainEl) {
+						const loss = b.currentScore * PHYSICS.LOSS_GENERATE_SOURCE;
+						this.applyNodeModification(b, -loss, `Sinh xuất cho Can`);
+					}
+				});
+				logs.push(`   + Nội bộ trụ ${posName}: Chi sinh Can (+${gain.toFixed(2)})`);
+				break;
+
+			case 'Khac':
+				// [CHI KHẮC CAN] - Tiệt Cước (VD: Giáp Thân -> Kim khắc Mộc)
+				const damage = stemNode.currentScore * PHYSICS.LOSS_OVERCOME_TARGET;
+				this.applyNodeModification(stemNode, -damage, `Bị chi ${posName} khắc (Tiệt cước)`);
+				logs.push(`   - Nội bộ trụ ${posName}: Chi khắc Can (Tiệt cước) (-${damage.toFixed(2)})`);
+				break;
+
+			case 'DuocSinh':
+				// [CAN SINH CHI] - Tiết Khí (VD: Giáp Ngọ -> Mộc sinh Hỏa)
+				const drain = stemNode.currentScore * PHYSICS.LOSS_GENERATE_SOURCE;
+				this.applyNodeModification(stemNode, -drain, `Sinh xuất cho chi ${posName}`);
+
+				// Chi được sinh
+				branchNodes.forEach((b) => {
+					if (this.getRelation(stemEl, b.element) === 'Sinh') {
+						this.applyNodeModification(b, drain * 0.8, `Được Can sinh`);
+					}
+				});
+				logs.push(`   - Nội bộ trụ ${posName}: Can sinh Chi (Tiết khí) (-${drain.toFixed(2)})`);
+				break;
+
+			case 'BiKhac':
+				// [CAN KHẮC CHI] - Cái Đầu (VD: Giáp Tuất -> Mộc khắc Thổ)
+				const exertion = stemNode.currentScore * PHYSICS.LOSS_OVERCOME_SOURCE;
+				this.applyNodeModification(stemNode, -exertion, `Khắc chi ${posName} (Cái đầu)`);
+
+				branchNodes.forEach((b) => {
+					if (this.getRelation(stemEl, b.element) === 'Khac') {
+						const injury = b.currentScore * PHYSICS.LOSS_OVERCOME_TARGET * 0.5;
+						this.applyNodeModification(b, -injury, `Bị Can khắc`);
+					}
+				});
+				logs.push(`   - Nội bộ trụ ${posName}: Can khắc Chi (Cái đầu) (-${exertion.toFixed(2)})`);
+				break;
+		}
+	}
+
+	/**
+	 * Dòng chảy giữa 2 trụ (Năm -> Tháng)
+	 */
+	private processPillarToPillarFlow(
+		nodes: EnergyNode[],
+		src: PillarPosition,
+		target: PillarPosition,
+		logs: string[],
+		flowFactor: number,
+	) {
+		// Lấy Node Can của nguồn và đích
+		const sStem = nodes.find((n) => n.source === src && n.type === 'Stem' && !n.isBlocked);
+		const tStem = nodes.find((n) => n.source === target && n.type === 'Stem' && !n.isBlocked);
+
+		if (!sStem || !tStem) return;
+
+		const sEl = sStem.transformTo || sStem.element;
+		const tEl = tStem.transformTo || tStem.element;
+		const rel = this.getRelation(sEl, tEl);
+
+		const posName: Record<string, string> = {
+			Year: 'Năm',
+			Month: 'Tháng',
+			Day: 'Ngày',
+			Hour: 'Giờ',
 		};
 
-		let totalSupport = 0;
-		let totalDrain = 0;
+		// Lực tác động dựa trên điểm hiện tại của Can nguồn
+		const effectiveForce = sStem.currentScore * flowFactor;
 
-		nodes.forEach((node) => {
-			if (node === dmNode || node.isBlocked || node.currentScore <= 0.1) return;
+		if (rel === 'Sinh') {
+			// Nguồn sinh Đích (VD: Giáp Mộc -> Đinh Hỏa)
+			const gain = effectiveForce * PHYSICS.GAIN_GENERATE_TARGET;
+			const loss = sStem.currentScore * PHYSICS.LOSS_GENERATE_SOURCE * flowFactor; // Hao lực nguồn
 
-			const nodeElement = node.transformTo || node.element;
+			this.applyNodeModification(sStem, -loss, `Sinh xuất cho ${posName[target]}`);
+			this.applyNodeModification(tStem, gain, `Được ${posName[src]} sinh nhập`);
 
-			// Hệ số vị trí: Vùng Tâm giữ nguyên, Vùng Ngoài giảm 2/5
-			const positionFactor = isCenterZone(node)
-				? DECAY.INTRA_CENTER_FACTOR
-				: DECAY.ENTER_CENTER_FACTOR;
-			const zoneName = isCenterZone(node) ? 'Vùng Tâm' : 'Vùng Ngoài';
+			logs.push(`${posName[src]} -> ${posName[target]}: Sinh nhập (+${gain.toFixed(2)})`);
+		} else if (rel === 'Khac') {
+			// Nguồn khắc Đích
+			const damage = effectiveForce * PHYSICS.LOSS_OVERCOME_TARGET;
+			const exertion = sStem.currentScore * PHYSICS.LOSS_OVERCOME_SOURCE * flowFactor;
 
-			// Tính lực thực tế sau khi đi vào vùng tâm
-			const effectiveScore = node.currentScore * positionFactor;
+			this.applyNodeModification(sStem, -exertion, `Khắc xuất ${posName[target]}`);
+			this.applyNodeModification(tStem, -damage, `Bị ${posName[src]} khắc nhập`);
 
-			const relation = this.getRelation(nodeElement, dmElement);
-
-			switch (relation) {
-				case 'Hoa': // Tỷ Kiếp (Cùng hành)
-					totalSupport += effectiveScore;
-					logs.push(`> [+] ${node.name} (${zoneName}): +${effectiveScore.toFixed(2)} (Tỷ hòa)`);
-					break;
-				case 'Sinh': // Ấn Kiêu (Sinh ta)
-					totalSupport += effectiveScore;
-					logs.push(`> [+] ${node.name} (${zoneName}): +${effectiveScore.toFixed(2)} (Sinh nhập)`);
-					break;
-				case 'Khac': // Quan Sát (Khắc ta)
-					totalDrain += effectiveScore;
-					logs.push(`> [-] ${node.name} (${zoneName}): -${effectiveScore.toFixed(2)} (Khắc thân)`);
-					break;
-				case 'DuocSinh': // Thực Thương (Ta sinh) - Hao khí
-					totalDrain += effectiveScore;
-					logs.push(`> [-] ${node.name} (${zoneName}): -${effectiveScore.toFixed(2)} (Sinh xuất)`);
-					break;
-				case 'BiKhac': // Tài Tinh (Ta khắc) - Hao lực
-					// Khắc xuất cũng tốn sức, nhưng ít hơn bị khắc
-					const wealthDrain = effectiveScore * DECAY.FLOW_OVERCOME_LOSS;
-					totalDrain += wealthDrain;
-					logs.push(`> [-] ${node.name} (${zoneName}): -${wealthDrain.toFixed(2)} (Khắc xuất/Tài)`);
-					break;
-			}
-		});
-
-		let finalScore = dmNode.baseScore + totalSupport - totalDrain;
-		if (finalScore < 0) finalScore = 0;
-		dmNode.currentScore = finalScore;
-
-		logs.push(`\n=== TỔNG KẾT NHẬT CHỦ ===`);
-		logs.push(`   (+) Gốc: ${dmNode.baseScore.toFixed(2)}`);
-		logs.push(`   (+) Được Sinh/Trợ: ${totalSupport.toFixed(2)}`);
-		logs.push(`   (-) Bị Khắc/Tiết: ${totalDrain.toFixed(2)}`);
-		logs.push(`   (=) ĐIỂM VƯỢNG CUỐI CÙNG: ${finalScore.toFixed(2)}`);
+			logs.push(`${posName[src]} -> ${posName[target]}: Khắc nhập (-${damage.toFixed(2)})`);
+		}
+		// Các trường hợp Tỷ hòa hoặc Được sinh thường không tính là dòng chảy chính trong mô hình này
 	}
 
 	// ====================================================================
-	// CÁC HÀM HELPER CHI TIẾT (KHÔNG RÚT GỌN)
+	// 5. KẾT LUẬN CẤU TRÚC (STRUCTURE FINALIZATION)
 	// ====================================================================
 
 	/**
-	 * Tạo Nodes cho Chi Tháng (Logic Tư Lệnh)
+	 * Tổng hợp kết quả phân tích Vùng Tâm để đưa ra kết luận Thân Vượng/Nhược.
+	 * @param analysisResult Kết quả trả về từ calculateCenterZoneStrength
+	 * @param logs Mảng log để ghi chú
 	 */
-	private createMonthBranchNodes(
-		nodes: EnergyNode[],
-		pillar: Pillar,
-		commander: HeavenlyStem,
-		monthCmd: EarthlyBranch,
+	private finalizeStructure(
+		analysisResult: {
+			centerZone: CenterZoneAnalysis;
+			dmElement: FiveElement;
+			godScores: Record<TenGod, number>;
+		},
+		logs: string[],
 	) {
-		const hiddens = HIDDEN_STEMS[pillar.branch];
-		hiddens.forEach((h, idx) => {
-			let ratio = h.ratio;
-			let note = '';
-			// Logic VuLong: Can tư lệnh được ưu tiên
-			if (h.stem === commander) {
-				if (h.isMain) {
-					ratio = 1.0;
-					note = ' (Bản khí nắm lệnh)';
-				} else {
-					ratio = 0.5; // Tăng lực cho Tạp khí nắm lệnh
-					note = ' (Tạp khí nắm lệnh)';
-				}
-			} else {
-				if (!h.isMain) ratio = 0.1; // Tạp khí thất lệnh rất yếu
-			}
+		const { centerZone, dmElement, godScores } = analysisResult;
+		const { partyScore, enemyScore, diffScore, isVwang } = centerZone;
 
-			const info = this.calculateStemPower(h.stem, monthCmd);
-			const score = info.score * ratio;
+		logs.push(`\n>> TỔNG KẾT CƯỜNG NHƯỢC (VÙNG TÂM):`);
+		logs.push(`   Phe Ta (Ấn + Tỷ): ${partyScore.toFixed(2)}`);
+		logs.push(`   Phe Địch (Tài + Quan + Thực): ${enemyScore.toFixed(2)}`);
+		logs.push(`   Chênh lệch (Ta - Địch): ${diffScore.toFixed(2)}`);
 
-			nodes.push({
-				id: `${pillar.position}_Branch_${idx}`,
-				source: pillar.position,
-				type: 'HiddenStem',
-				name: h.stem,
-				element: this.getStemElement(h.stem),
-				branchOwner: pillar.branch,
-				lifeCycleStage: info.stage,
-				baseScore: score,
-				currentScore: score,
-				isBlocked: false,
-				isCombined: false,
-				modifications: [{ reason: `Lệnh tháng${note}`, valueChange: 0, factor: ratio }],
-			});
-		});
+		// Logic Vũ Long:
+		// Nếu chênh lệch >= 1.0 (ngưỡng an toàn) -> Vượng/Nhược rõ ràng.
+		// Nếu chênh lệch nhỏ (vùng xám), cần xét thêm Tiết khí (đã được tính trong điểm gốc)
+		// và xu hướng dòng chảy. Ở đây ta dùng kết quả isVwang đã tính ở bước trước.
+
+		const structureName = isVwang ? 'Thân Vượng' : 'Thân Nhược';
+		logs.push(`   => KẾT LUẬN: ${structureName}`);
+
+		// Xác định loại cách cục (Nội cách vs Ngoại cách)
+		// Mặc định là Nội cách. Ngoại cách (Tòng) xảy ra khi một phe cực yếu (< mức chết) và phe kia cực mạnh.
+		// Tạm thời giữ logic cơ bản, có thể mở rộng logic Tòng cách tại đây.
+		const structureType = 'Nội Cách';
+
+		return {
+			centerZone,
+			structure: structureName,
+			structureType,
+			godScores,
+			dmElement,
+		};
 	}
+
+	// ====================================================================
+	// HELPER: QUẢN LÝ STATE & LOGGING
+	// ====================================================================
 
 	/**
-	 * Tạo Nodes cho Chi Tĩnh (Năm/Ngày/Giờ)
+	 * Hàm trung tâm quản lý thay đổi điểm số.
+	 * Đảm bảo mọi thay đổi đều được ghi log và kiểm tra ngưỡng Blocked.
 	 */
-	private createStaticBranchNodes(nodes: EnergyNode[], pillar: Pillar, monthCmd: EarthlyBranch) {
-		const hiddens = HIDDEN_STEMS[pillar.branch];
-		hiddens.forEach((h, idx) => {
-			const info = this.calculateStemPower(h.stem, monthCmd);
-			const score = info.score * h.ratio; // Dùng tỷ lệ tĩnh chuẩn
-			nodes.push({
-				id: `${pillar.position}_Branch_${idx}`,
-				source: pillar.position,
-				type: 'HiddenStem',
-				name: h.stem,
-				element: this.getStemElement(h.stem),
-				branchOwner: pillar.branch,
-				lifeCycleStage: info.stage,
-				baseScore: score,
-				currentScore: score,
-				isBlocked: false,
-				isCombined: false,
-				modifications: [{ reason: `Tàng can tĩnh`, valueChange: 0, factor: h.ratio }],
-			});
+	private applyNodeModification(
+		node: EnergyNode,
+		delta: number,
+		reason: string,
+		factor: number = 0,
+	) {
+		if (node.isBlocked) return;
+
+		node.currentScore += delta;
+		if (node.currentScore < 0) node.currentScore = 0;
+
+		node.modifications.push({
+			reason: reason,
+			valueChange: delta,
+			factor: factor,
 		});
+
+		if (node.currentScore < PHYSICS.THRESHOLD_BLOCK) {
+			node.currentScore = 0;
+			node.isBlocked = true;
+			node.modifications.push({ reason: 'Blocked (Khí tuyệt)', valueChange: 0, factor: 0 });
+		}
 	}
+
+	// ====================================================================
+	// CÁC HÀM XỬ LÝ NHÓM CHI TIẾT (BRANCH GROUPS)
+	// ====================================================================
 
 	private processBranchGroup(
 		nodes: EnergyNode[],
@@ -544,6 +672,7 @@ export class BaziService {
 		const activeNodes = nodes.filter(
 			(n) => n.type === 'HiddenStem' && n.id.endsWith('_0') && !n.isBlocked,
 		);
+		const interactions: Interaction[] = [];
 		const checkedGroups = new Set<string>();
 
 		Object.values(dictionary).forEach((config) => {
@@ -551,7 +680,6 @@ export class BaziService {
 			if (checkedGroups.has(groupKey)) return;
 			checkedGroups.add(groupKey);
 
-			// Tìm các node khớp với nhóm
 			const matchedNodesMap = new Map<EarthlyBranch, EnergyNode[]>();
 			activeNodes.forEach((node) => {
 				if (config.group.includes(node.branchOwner!)) {
@@ -562,46 +690,92 @@ export class BaziService {
 
 			if (matchedNodesMap.size === 3) {
 				const resultEl = config.result;
-				// Điều kiện hóa: Có Thần dẫn (Can lộ) hoặc Lệnh tháng ủng hộ
-				const hasLead = nodes.some(
-					(n) => n.type === 'Stem' && !n.isBlocked && n.element === resultEl,
+
+				// 1. Dẫn thần là Lệnh tháng (Chi tháng) phải cùng hành với Hóa cục
+				const monthMainEl = this.getBranchMainElement(monthBranch);
+				const isMonthSupport = monthMainEl === resultEl;
+
+				// 2. Dẫn thần là Can thấu lộ: Phải là Can cùng hành hóa cục, KHÔNG bị khắc, và phải có lực (không Blocked)
+				// Ưu tiên Can Năm hoặc Can Tháng, Can Giờ
+				const hasStemLead = nodes.some(
+					(n) =>
+						n.type === 'Stem' && !n.isBlocked && n.element === resultEl && n.currentScore > 2.0,
 				);
-				const monthEl = this.getBranchMainElement(monthBranch);
-				const isSupport = monthEl === resultEl || ELEMENT_RELATIONS[monthEl].generate === resultEl;
 
-				if (hasLead || isSupport) {
-					logs.push(`>> ${type}: ${config.group.join('-')} HÓA THÀNH CÔNG khí ${resultEl}.`);
+				// 3. Logic Vũ Long: Tam Hội lực rất mạnh, Tam Hợp cần dẫn thần rõ ràng
+				let allowTransform = false;
+				if (type === 'TamHoi') {
+					// Tam hội quá mạnh, chỉ cần có khí dẫn hoặc lệnh tháng ủng hộ là hóa
+					allowTransform = isMonthSupport || hasStemLead;
+				} else {
+					// Tam hợp cần điều kiện khắt khe hơn: Lệnh tháng hoặc Can dẫn phải mạnh
+					allowTransform =
+						isMonthSupport || (hasStemLead && monthMainEl !== this.getCounterElement(resultEl));
+				}
 
-					// Gom điểm
+				// Vũ Long: Tam hợp/Tam hội lực rất mạnh, đôi khi không cần lệnh tháng vẫn hóa nếu có Can dẫn vượng
+				if (allowTransform) {
+					logs.push(
+						`>> ${type}: ${config.group.join('-')} HÓA ${resultEl} thành công (Dẫn thần: ${isMonthSupport ? 'Lệnh tháng' : 'Can thấu'}).`,
+					);
+
 					const participants = [
 						matchedNodesMap.get(config.group[0])![0],
 						matchedNodesMap.get(config.group[1])![0],
 						matchedNodesMap.get(config.group[2])![0],
 					];
+
+					// Tính tổng điểm gốc
 					const totalScore = participants.reduce((sum, n) => sum + n.currentScore, 0);
 
+					// Tạo Node Hóa Cục Mới
 					nodes.push({
-						id: `${type}_${resultEl}_${Date.now()}`,
-						source: 'Month',
-						type: 'HiddenStem',
-						name: `${type} ${resultEl} Cục`,
+						id: `${type}_${resultEl}_${Date.now()}`, // Unique ID
+						source: 'Month', // Hóa cục thường quy về lệnh tháng
+						type: 'HiddenStem', // Coi như một tàng can cực mạnh
+						name: `${type} ${resultEl}`,
 						element: resultEl,
-						lifeCycleStage: 'DeVuong',
+						lifeCycleStage: 'DeVuong', // Hóa cục luôn Vượng
 						baseScore: totalScore,
-						currentScore: totalScore * DECAY.TRANSFORM_BONUS,
+						currentScore: totalScore * PHYSICS.FACTOR_TRANSFORM_BONUS,
 						isBlocked: false,
 						isCombined: true,
-						modifications: [{ reason: 'Hóa cục', valueChange: 0, factor: DECAY.TRANSFORM_BONUS }],
+						modifications: [
+							{
+								reason: 'Hóa cục thành công',
+								valueChange: 0,
+								factor: PHYSICS.FACTOR_TRANSFORM_BONUS,
+							},
+						],
 					});
 
-					// Block nodes cũ
+					// Vô hiệu hóa các chi cũ (đã tham gia hợp)
 					participants.forEach((p) => {
-						this.blockPillarBranch(nodes, p.source, `Tham gia ${type}`);
+						const originalScore = p.currentScore;
+						p.currentScore = 0;
+						p.isBlocked = true;
+						p.modifications.push({
+							reason: `Tham gia ${type}`,
+							valueChange: -originalScore,
+							factor: 0,
+						});
 					});
+
+					interactions.push({
+						type: type,
+						participants: config.group,
+						result: resultEl,
+						score: totalScore * PHYSICS.FACTOR_TRANSFORM_BONUS,
+					});
+				} else {
+					logs.push(
+						`>> ${type}: ${config.group.join('-')} tụ khí nhưng KHÔNG HÓA (Thiếu dẫn thần).`,
+					);
+					// Có thể thêm logic "Hợp trói" nhẹ ở đây nếu muốn, nhưng Tam hợp thường không hóa vẫn trợ lực nhau
 				}
 			}
 		});
-		return { nodes, interactions: [] };
+		return { nodes, interactions };
 	}
 
 	private processAdjacency(
@@ -619,6 +793,7 @@ export class BaziService {
 			{ p1: 'Month', p2: 'Day' },
 			{ p1: 'Day', p2: 'Hour' },
 		];
+		const interactions: Interaction[] = [];
 
 		pairs.forEach((pair) => {
 			const n1 = getMain(pair.p1);
@@ -628,18 +803,59 @@ export class BaziService {
 			if (type === 'LucXung' && BRANCH_CLASHES[n1.branchOwner] === n2.branchOwner) {
 				const s1 = n1.currentScore;
 				const s2 = n2.currentScore;
-				// Logic Xung: Mạnh thắng Yếu (Gấp 1.5 lần thì thắng)
+
+				// Logic Vũ Long: Mạnh thắng Yếu (Gấp 1.5 lần)
 				if (s1 > s2 * 1.5) {
-					this.applyDecay(n1, DECAY.CLASH_WINNER, `Thắng xung ${n2.branchOwner}`);
-					this.applyDecay(n2, DECAY.CLASH_LOSER, `Thua xung ${n1.branchOwner}`);
+					// N1 Thắng: Mất ít (30%)
+					// N2 Thua: Mất nhiều (70%)
+					this.applyNodeModification(
+						n1,
+						-s1 * PHYSICS.LOSS_CLASH_WIN,
+						`Thắng xung ${n2.branchOwner}`,
+						PHYSICS.LOSS_CLASH_WIN,
+					);
+					this.applyNodeModification(
+						n2,
+						-s2 * PHYSICS.LOSS_CLASH_LOSE,
+						`Thua xung ${n1.branchOwner}`,
+						PHYSICS.LOSS_CLASH_LOSE,
+					);
+					logs.push(`>> Lục Xung: ${n1.branchOwner} (Thắng) >> ${n2.branchOwner} (Thua)`);
 				} else if (s2 > s1 * 1.5) {
-					this.applyDecay(n1, DECAY.CLASH_LOSER, `Thua xung ${n2.branchOwner}`);
-					this.applyDecay(n2, DECAY.CLASH_WINNER, `Thắng xung ${n1.branchOwner}`);
+					this.applyNodeModification(
+						n1,
+						-s1 * PHYSICS.LOSS_CLASH_LOSE,
+						`Thua xung ${n2.branchOwner}`,
+						PHYSICS.LOSS_CLASH_LOSE,
+					);
+					this.applyNodeModification(
+						n2,
+						-s2 * PHYSICS.LOSS_CLASH_WIN,
+						`Thắng xung ${n1.branchOwner}`,
+						PHYSICS.LOSS_CLASH_WIN,
+					);
+					logs.push(`>> Lục Xung: ${n1.branchOwner} (Thua) << ${n2.branchOwner} (Thắng)`);
 				} else {
-					this.applyDecay(n1, DECAY.CLASH_DRAW, `Xung hòa ${n2.branchOwner}`);
-					this.applyDecay(n2, DECAY.CLASH_DRAW, `Xung hòa ${n1.branchOwner}`);
+					// Hòa: Cả hai cùng tổn thất trung bình (50%)
+					this.applyNodeModification(
+						n1,
+						-s1 * PHYSICS.LOSS_CLASH_DRAW,
+						`Xung hòa ${n2.branchOwner}`,
+						PHYSICS.LOSS_CLASH_DRAW,
+					);
+					this.applyNodeModification(
+						n2,
+						-s2 * PHYSICS.LOSS_CLASH_DRAW,
+						`Xung hòa ${n1.branchOwner}`,
+						PHYSICS.LOSS_CLASH_DRAW,
+					);
+					logs.push(`>> Lục Xung: ${n1.branchOwner} == ${n2.branchOwner} (Lưỡng bại)`);
 				}
-				logs.push(`>> Lục Xung: ${n1.branchOwner} <> ${n2.branchOwner}`);
+				interactions.push({
+					type: 'LucXung',
+					participants: [n1.branchOwner, n2.branchOwner],
+					result: 'Clash',
+				});
 			} else if (type === 'LucHop') {
 				const combo = BRANCH_SIX_COMBINATIONS[n1.branchOwner];
 				if (combo && combo.target === n2.branchOwner) {
@@ -649,23 +865,53 @@ export class BaziService {
 						(n) => n.type === 'Stem' && !n.isBlocked && n.element === resEl,
 					);
 
-					// Hóa hay Trói?
 					if (hasLead || monthEl === resEl) {
 						logs.push(`>> Lục Hợp: ${n1.branchOwner}-${n2.branchOwner} HÓA ${resEl}`);
 						n1.element = resEl;
-						n1.name = `${n1.branchOwner}-${n2.branchOwner} Hóa ${resEl}`;
-						n1.currentScore = (n1.currentScore + n2.currentScore) * DECAY.TRANSFORM_BONUS;
-						n2.isBlocked = true;
+						n1.name = `Hợp Hóa ${resEl}`;
+						// Gom điểm n2 vào n1 và bonus
+						const total = n1.currentScore + n2.currentScore;
+						const newScore = total * PHYSICS.FACTOR_TRANSFORM_BONUS;
+						const delta = newScore - n1.currentScore;
+
+						this.applyNodeModification(
+							n1,
+							delta,
+							'Hợp hóa (Gom & Bonus)',
+							PHYSICS.FACTOR_TRANSFORM_BONUS,
+						);
+
+						// Block n2
+						const originalN2Score = n2.currentScore; // Save before modifying
 						n2.currentScore = 0;
+						n2.isBlocked = true;
+						n2.modifications.push({
+							reason: `Hợp nhập vào ${n1.branchOwner}`,
+							valueChange: -originalN2Score, // ✅ Use saved value
+							factor: 0,
+						});
+
+						interactions.push({
+							type: 'LucHop',
+							participants: [n1.branchOwner, n2.branchOwner],
+							result: resEl,
+						});
 					} else {
-						logs.push(`>> Lục Hợp: ${n1.branchOwner}-${n2.branchOwner} TRÓI (Không hóa)`);
-						this.applyDecay(n1, DECAY.COMBINE_BINDING, 'Hợp trói');
-						this.applyDecay(n2, DECAY.COMBINE_BINDING, 'Hợp trói');
+						// Hợp trói
+						const loss1 = -n1.currentScore * PHYSICS.LOSS_COMBINE_BINDING;
+						const loss2 = -n2.currentScore * PHYSICS.LOSS_COMBINE_BINDING;
+						this.applyNodeModification(n1, loss1, 'Hợp trói', PHYSICS.LOSS_COMBINE_BINDING);
+						this.applyNodeModification(n2, loss2, 'Hợp trói', PHYSICS.LOSS_COMBINE_BINDING);
+						interactions.push({
+							type: 'LucHop',
+							participants: [n1.branchOwner, n2.branchOwner],
+							result: 'Bind',
+						});
 					}
 				}
 			}
 		});
-		return { nodes, interactions: [] };
+		return { nodes, interactions };
 	}
 
 	private processStemCombinations(nodes: EnergyNode[], monthBranch: EarthlyBranch, logs: string[]) {
@@ -676,6 +922,7 @@ export class BaziService {
 			{ p1: 'Month', p2: 'Day' },
 			{ p1: 'Day', p2: 'Hour' },
 		];
+		const interactions: Interaction[] = [];
 
 		pairs.forEach((pair) => {
 			const s1 = getStem(pair.p1);
@@ -684,108 +931,66 @@ export class BaziService {
 				const combo = STEM_COMBINATIONS[s1.name as HeavenlyStem];
 				if (combo && combo.target === s2.name) {
 					const resEl = combo.result;
-					// Check Lệnh tháng (bao gồm cả Hóa cục ở chi tháng nếu có)
-					const monthEl = this.getBranchMainElement(monthBranch);
-					const monthTamNode = nodes.find((n) => n.source === 'Month' && n.isCombined);
-					const realMonthEl = monthTamNode ? monthTamNode.element : monthEl;
 
+					// Vũ Long: Can hợp hóa cần Chi Tháng (Lệnh) làm dẫn thần.
+					// Hoặc Chi tháng đã hóa cục thành hành đó.
+
+					// Lấy hành thực tế của Chi tháng (check xem chi tháng có bị hóa cục trước đó không)
+					const monthTamNode = nodes.find(
+						(n) => n.source === 'Month' && n.isCombined && !n.isBlocked,
+					);
+					const realMonthEl = monthTamNode
+						? monthTamNode.element
+						: this.getBranchMainElement(monthBranch);
+
+					// Điều kiện hóa: Lệnh tháng phải cùng hành với Hóa khí
 					if (realMonthEl === resEl) {
-						logs.push(`>> Can Hợp: ${s1.name}-${s2.name} HÓA ${resEl}`);
+						logs.push(`>> Can Hợp: ${s1.name}-${s2.name} HÓA ${resEl} (Đắc lệnh tháng).`);
+
+						// Cập nhật hành mới cho cả 2 can
 						s1.transformTo = resEl;
-						s1.currentScore *= DECAY.TRANSFORM_BONUS;
 						s2.transformTo = resEl;
-						s2.currentScore *= DECAY.TRANSFORM_BONUS;
+
+						// Tăng điểm do hóa khí thành công
+						const bonus1 = s1.currentScore * (PHYSICS.FACTOR_TRANSFORM_BONUS - 1);
+						const bonus2 = s2.currentScore * (PHYSICS.FACTOR_TRANSFORM_BONUS - 1);
+
+						this.applyNodeModification(
+							s1,
+							bonus1,
+							'Hóa cục (Bonus)',
+							PHYSICS.FACTOR_TRANSFORM_BONUS,
+						);
+						this.applyNodeModification(
+							s2,
+							bonus2,
+							'Hóa cục (Bonus)',
+							PHYSICS.FACTOR_TRANSFORM_BONUS,
+						);
+
+						interactions.push({ type: 'CanHop', participants: [s1.name, s2.name], result: resEl });
 					} else {
-						logs.push(`>> Can Hợp: ${s1.name}-${s2.name} TRÓI`);
-						this.applyDecay(s1, DECAY.COMBINE_BINDING, `Trói ${s2.name}`);
-						this.applyDecay(s2, DECAY.COMBINE_BINDING, `Trói ${s1.name}`);
+						logs.push(`>> Can Hợp: ${s1.name}-${s2.name} BỊ TRÓI (Không hóa, mất lệnh).`);
+
+						// Hợp mà không hóa thì cả 2 đều mất lực (tham hợp quên sinh/khắc)
+						// Giảm 80% lực (PHYSICS.LOSS_COMBINE_BINDING)
+						const loss1 = -s1.currentScore * PHYSICS.LOSS_COMBINE_BINDING;
+						const loss2 = -s2.currentScore * PHYSICS.LOSS_COMBINE_BINDING;
+
+						this.applyNodeModification(s1, loss1, 'Hợp trói', PHYSICS.LOSS_COMBINE_BINDING);
+						this.applyNodeModification(s2, loss2, 'Hợp trói', PHYSICS.LOSS_COMBINE_BINDING);
+
+						interactions.push({ type: 'CanHop', participants: [s1.name, s2.name], result: 'Bind' });
 					}
 				}
 			}
 		});
-		return { nodes, interactions: [] };
+		return { nodes, interactions };
 	}
 
-	private processPillarToPillarFlow(
-		nodes: EnergyNode[],
-		src: PillarPosition,
-		target: PillarPosition,
-		logs: string[],
-	) {
-		const sNodes = nodes.filter((n) => n.source === src && !n.isBlocked);
-		const tNodes = nodes.filter((n) => n.source === target && !n.isBlocked);
-		if (!sNodes.length || !tNodes.length) return;
-
-		const sEl = this.getPillarDominantElement(sNodes);
-		const tEl = this.getPillarDominantElement(tNodes);
-		const sScore = this.getPillarTotalScore(sNodes);
-		const rel = this.getRelation(sEl, tEl);
-
-		// Mapping tên tiếng Việt cho Log
-		const posName: Record<string, string> = {
-			Year: 'Năm',
-			Month: 'Tháng',
-			Day: 'Ngày',
-			Hour: 'Giờ',
-		};
-
-		if (rel === 'Sinh') {
-			// Nguồn sinh Đích -> Nguồn mất lực, Đích được lợi
-			this.decayPillarScore(sNodes, DECAY.FLOW_GENERATE_LOSS, `Sinh xuất cho ${posName[target]}`);
-			const gain = sScore * 0.3; // Hiệu suất sinh
-			this.boostPillarScore(tNodes, gain, tEl, `Được ${posName[src]} sinh nhập`);
-			logs.push(
-				`Dòng chảy ${posName[src]} -> ${posName[target]}: Tương sinh (+${gain.toFixed(2)}đ)`,
-			);
-		} else if (rel === 'Khac') {
-			// Nguồn khắc Đích -> Nguồn hao lực, Đích bị thương
-			this.decayPillarScore(sNodes, DECAY.FLOW_OVERCOME_LOSS, `Khắc xuất ${posName[target]}`);
-			this.decayPillarScore(tNodes, 0.4, `Bị ${posName[src]} khắc nhập`);
-			logs.push(`Dòng chảy ${posName[src]} -> ${posName[target]}: Tương khắc (Tổn hao)`);
-		} else if (rel === 'Hoa') {
-			const boost = sScore * 0.1;
-			this.boostPillarScore(tNodes, boost, tEl, `Tỷ hòa với ${posName[src]}`);
-			logs.push(`Dòng chảy ${posName[src]} -> ${posName[target]}: Tỷ hòa (+${boost.toFixed(2)}đ)`);
-		}
-	}
-
-	private determineStructureAndStrength(nodes: EnergyNode[], dmStem: HeavenlyStem, logs: string[]) {
-		const dmNode = nodes.find((n) => n.source === 'Day' && n.type === 'Stem');
-		const dmEl = dmNode?.transformTo || dmNode?.element || this.getStemElement(dmStem);
-		const dmScore = dmNode?.currentScore || 0;
-
-		const elScores = this.aggregateScores(nodes);
-		const godScores = this.calculateGodScores(nodes, dmEl, dmStem);
-
-		const party = godScores.TyKien + godScores.KiepTai + godScores.ChinhAn + godScores.ThienAn;
-		const total = Object.values(elScores).reduce((a, b) => a + b, 0);
-		const enemy = total - party;
-
-		// Logic VuLong: So sánh điểm Nhật chủ với Địch mạnh nhất
-		// Nếu Nhật chủ > Địch + 1 -> Vượng
-		const isVwang = dmScore >= 5.0; // Đây là ngưỡng ước lượng, có thể cần tinh chỉnh thêm theo thực tế
-
-		logs.push(`\n>> Phân tích Cường Nhược:`);
-		logs.push(`   Phe Ta (Ấn+Tỷ): ${party.toFixed(1)}`);
-		logs.push(`   Phe Địch (Tài+Quan+Thực): ${enemy.toFixed(1)}`);
-		logs.push(`   => Kết luận: ${isVwang ? 'Thân Vượng' : 'Thân Nhược'}`);
-
-		return {
-			centerZone: {
-				dayMasterScore: dmScore,
-				partyScore: party,
-				enemyScore: enemy,
-				diffScore: party - enemy,
-				isVwang,
-				isStrongVwang: false,
-				isWeakVwang: false,
-			},
-			structure: isVwang ? 'Thân Vượng' : 'Thân Nhược',
-			structureType: 'Nội Cách',
-			godScores,
-			dmElement: dmEl,
-		};
-	}
+	// ====================================================================
+	// HELPER FUNCTIONS (UTILS)
+	// ====================================================================
 
 	private calculateLimitScoreProfile(
 		center: CenterZoneAnalysis,
@@ -800,105 +1005,66 @@ export class BaziService {
 			hung: FiveElement[] = [];
 		const map = TEN_GODS_MAPPING[dmEl];
 		const getEl = (g: string) => (map as any)[g] as FiveElement;
+		const scoreIndource = godScores.ChinhAn + godScores.ThienAn;
+		const scoreSelf = godScores.TyKien + godScores.KiepTai;
 
-		// Tính điểm phe Ta
-		const scoreIndource = godScores.ChinhAn + godScores.ThienAn; // Ấn
-		const scoreSelf = godScores.TyKien + godScores.KiepTai; // Tỷ
-
-		if (structType.includes('Ngoại')) {
-			// Logic Ngoại cách (Tòng/Hóa) - Giữ nguyên như cũ hoặc tinh chỉnh sau
-			if (center.isWeakVwang) {
-				// Tòng
-				dung.push(
-					getEl('ChinhTai'),
-					getEl('ThienTai'),
-					getEl('ChinhQuan'),
-					getEl('ThatSat'),
-					getEl('ThucThan'),
-					getEl('ThuongQuan'),
-				);
-				ky.push(getEl('ChinhAn'), getEl('ThienAn'), getEl('TyKien'), getEl('KiepTai'));
+		// TTT Chương 18: "Trung hòa là quý". Vượng thì ức, Nhược thì phù.
+		if (center.isVwang) {
+			logs.push('>> Định Dụng Thần: Thân Vượng -> Cần Khắc/Tiết.');
+			if (scoreIndource > scoreSelf) {
+				// Vượng do Ấn (Mẹ sinh) -> Dụng Tài phá Ấn
+				dung.push(getEl('ChinhTai'), getEl('ThienTai'));
+				hy.push(getEl('ThucThan'), getEl('ThuongQuan'));
 			} else {
-				// Độc vượng
-				dung.push(getEl('TyKien'), getEl('KiepTai'), getEl('ChinhAn'), getEl('ThienAn'));
-				ky.push(getEl('ChinhTai'), getEl('ThienTai'), getEl('ChinhQuan'), getEl('ThatSat'));
+				// Vượng do Tỷ Kiếp -> Dụng Quan Sát
+				dung.push(getEl('ChinhQuan'), getEl('ThatSat'));
+				hy.push(getEl('ChinhTai'), getEl('ThienTai'));
 			}
+			ky.push(getEl('ChinhAn'), getEl('ThienAn'), getEl('TyKien'), getEl('KiepTai'));
 		} else {
-			// NỘI CÁCH (CHÍNH CÁCH)
-			if (center.isVwang) {
-				// --- THÂN VƯỢNG ---
-				logs.push('>> Thân Vượng: Cần Khắc/Tiết/Hao.');
-				// Nếu Vượng do Ấn nhiều -> Dụng Tài phá Ấn (Ưu tiên 1), Hỷ Thực Thương.
-				if (scoreIndource > scoreSelf) {
-					dung.push(getEl('ChinhTai'), getEl('ThienTai'));
-					hy.push(getEl('ThucThan'), getEl('ThuongQuan'), getEl('ChinhQuan'), getEl('ThatSat'));
-				} else {
-					// Vượng do Tỷ Kiếp -> Dụng Quan Sát (Ưu tiên 1), Hỷ Tài/Thực.
-					dung.push(getEl('ChinhQuan'), getEl('ThatSat'));
-					hy.push(getEl('ThucThan'), getEl('ThuongQuan'), getEl('ChinhTai'), getEl('ThienTai'));
-				}
-
-				ky.push(getEl('ChinhAn'), getEl('ThienAn'), getEl('TyKien'), getEl('KiepTai'));
-
-				// Hung thần (Khắc dụng thần)
-				if (dung.includes(getEl('ChinhTai'))) hung.push(getEl('KiepTai')); // Kiếp tài
-				if (dung.includes(getEl('ChinhQuan'))) hung.push(getEl('ThuongQuan')); // Thương quan
-			} else {
-				// --- THÂN NHƯỢC ---
-				logs.push('>> Thân Nhược: Cần Sinh/Trợ.');
-
-				// Logic VuLong: Chọn hành cứu giải mạnh nhất làm Dụng, hành hỗ trợ làm Hỷ.
-				// Thường lấy Ấn làm Dụng thần đầu tiên cho thân nhược.
-				dung.push(getEl('ChinhAn'), getEl('ThienAn'));
-				hy.push(getEl('TyKien'), getEl('KiepTai'));
-
-				ky.push(
-					getEl('ChinhQuan'),
-					getEl('ThatSat'),
-					getEl('ThucThan'),
-					getEl('ThuongQuan'),
-					getEl('ChinhTai'),
-					getEl('ThienTai'),
-				);
-
-				// Hung thần nguy hiểm nhất cho thân nhược là Tài (vì Tài phá Ấn - Phá dụng thần)
-				hung.push(getEl('ChinhTai'), getEl('ThienTai'));
-			}
+			logs.push('>> Định Dụng Thần: Thân Nhược -> Cần Sinh/Trợ.');
+			dung.push(getEl('ChinhAn'), getEl('ThienAn'));
+			hy.push(getEl('TyKien'), getEl('KiepTai'));
+			ky.push(
+				getEl('ThucThan'),
+				getEl('ThuongQuan'),
+				getEl('ChinhTai'),
+				getEl('ThienTai'),
+				getEl('ChinhQuan'),
+				getEl('ThatSat'),
+			);
 		}
 
-		// --- LỌC TRÙNG LẶP (FIX LỖI UI) ---
+		// Hung thần là cái khắc Dụng thần
+		dung.forEach((dEl) => {
+			hung.push(ELEMENT_RELATIONS[dEl].overcome);
+		});
+
 		const unique = (arr: FiveElement[]) => [...new Set(arr)];
 		dung = unique(dung);
 		hy = unique(hy);
 		ky = unique(ky);
 		hung = unique(hung);
+		hy = hy.filter((e) => !dung.includes(e));
+		ky = ky.filter((e) => !hung.includes(e));
 
-		// Loại bỏ Hỷ thần nếu nó trùng với Dụng thần (để Dụng thần ưu tiên hiển thị)
-		hy = hy.filter((el) => !dung.includes(el));
-		// Loại bỏ Kỵ thần nếu trùng Hung thần
-		ky = ky.filter((el) => !hung.includes(el));
-
-		// Mapping điểm số
 		const scores: Record<string, number> = { Kim: 0, Mộc: 0, Thủy: 0, Hỏa: 0, Thổ: 0 };
-
-		// Gán điểm theo thứ tự ưu tiên: Hung > Dụng > Kỵ > Hỷ
-		// (Lưu ý: Logic đè điểm để đảm bảo một hành chỉ có 1 điểm số duy nhất)
 		const allElements: FiveElement[] = ['Kim', 'Mộc', 'Thủy', 'Hỏa', 'Thổ'];
+
+		const SCORES = { DUNG: -1.0, HY: -0.5, KY: 0.5, HUNG: 1.0, NHAN: 0.1 };
+
 		allElements.forEach((el) => {
-			if (hung.includes(el)) scores[el] = LIMIT_SCORES.HUNG_THAN;
-			else if (dung.includes(el)) scores[el] = LIMIT_SCORES.DUNG_THAN;
-			else if (ky.includes(el)) scores[el] = LIMIT_SCORES.KY_THAN;
-			else if (hy.includes(el)) scores[el] = LIMIT_SCORES.HY_THAN;
-			else scores[el] = LIMIT_SCORES.NHAN_THAN;
+			if (hung.includes(el)) scores[el] = SCORES.HUNG;
+			else if (dung.includes(el)) scores[el] = SCORES.DUNG;
+			else if (ky.includes(el)) scores[el] = SCORES.KY;
+			else if (hy.includes(el)) scores[el] = SCORES.HY;
+			else scores[el] = SCORES.NHAN;
 		});
 
 		return { dungThan: dung, hyThan: hy, kyThan: ky, hungThan: hung, scores };
 	}
 
-	// ---------------------------------------------------------------------
-	// UTILITIES & DATA ACCESS
-	// ---------------------------------------------------------------------
-
+	// --- Basic Utils & Initializers ---
 	private createPillarFromLunarName(name: string, pos: PillarPosition): any {
 		const parts = name.trim().split(' ');
 		return this.createPillarFromIndex(
@@ -927,9 +1093,7 @@ export class BaziService {
 	}
 	private getYearPillar(lunar: any, term: string) {
 		let { canIndex, chiIndex } = this.createPillarFromLunarName(lunar.getYearName(), 'Year');
-		// Logic chuyển năm theo Lập Xuân (Tháng 12 chưa lập xuân thì vẫn năm cũ, tháng 1 chưa lập xuân thì lùi năm)
-		const month = lunar.get().month;
-		if (month === 12 && ['Lập xuân', 'Vũ thủy'].includes(term)) {
+		if (lunar.get().month === 12 && ['Lập xuân', 'Vũ thủy'].includes(term)) {
 			canIndex = (canIndex + 1) % 10;
 			chiIndex = (chiIndex + 1) % 12;
 		}
@@ -942,6 +1106,165 @@ export class BaziService {
 		const can = ((yIdx % 5) * 2 + 2 + mOff) % 10;
 		return this.createPillarFromIndex(can, chi, 'Month');
 	}
+	private initializeEnergyGraph(chart: BaziChart, inputDate: Date, logs: string[]): EnergyNode[] {
+		const nodes: EnergyNode[] = [];
+		const pillars: Pillar[] = [chart.year, chart.month, chart.day, chart.hour];
+		const monthBranch = chart.month.branch;
+		const daysSinceTerm = this.calculateDaysSinceSolarTerm(inputDate);
+		const commanderStem = this.getCommanderStem(monthBranch, daysSinceTerm);
+
+		logs.push(
+			`>> Lệnh tháng ${monthBranch}, Tư lệnh: ${commanderStem} (Ngày thứ ${daysSinceTerm}).`,
+		);
+
+		pillars.forEach((pillar) => {
+			const stemInfo = this.calculateStemPower(pillar.stem, monthBranch);
+			let stemScore = stemInfo.score;
+			if (pillar.stem === commanderStem) {
+				stemScore *= 1.2;
+				logs.push(`> Can ${pillar.stem} đắc lệnh (Tư lệnh).`);
+			}
+			// ID deterministic: Position_Type
+			nodes.push({
+				id: `${pillar.position}_Stem`,
+				source: pillar.position,
+				type: 'Stem',
+				name: pillar.stem,
+				element: pillar.stemElement,
+				lifeCycleStage: stemInfo.stage,
+				baseScore: stemScore,
+				currentScore: stemScore,
+				isBlocked: false,
+				isCombined: false,
+				modifications: [],
+			});
+
+			if (pillar.position === 'Month') {
+				this.createMonthBranchNodes(nodes, pillar, commanderStem, monthBranch);
+			} else {
+				this.createStaticBranchNodes(nodes, pillar, monthBranch);
+			}
+		});
+		return nodes;
+	}
+
+	private createMonthBranchNodes(
+		nodes: EnergyNode[],
+		pillar: Pillar,
+		commander: HeavenlyStem,
+		monthCmd: EarthlyBranch,
+	) {
+		const hiddens = HIDDEN_STEMS[pillar.branch];
+		hiddens.forEach((h, idx) => {
+			let ratio = h.ratio;
+			let note = '';
+			if (h.stem === commander) {
+				ratio = h.isMain ? 1.0 : 0.5;
+				note = h.isMain ? ' (Bản khí)' : ' (Tạp khí)';
+			} else {
+				if (!h.isMain) ratio = 0.1;
+			}
+			const info = this.calculateStemPower(h.stem, monthCmd);
+			const score = info.score * ratio;
+			nodes.push({
+				id: `${pillar.position}_Branch_${idx}`,
+				source: pillar.position,
+				type: 'HiddenStem',
+				name: h.stem,
+				element: this.getStemElement(h.stem),
+				branchOwner: pillar.branch,
+				lifeCycleStage: info.stage,
+				baseScore: score,
+				currentScore: score,
+				isBlocked: false,
+				isCombined: false,
+				modifications: [{ reason: `Lệnh tháng${note}`, valueChange: 0, factor: ratio }],
+			});
+		});
+	}
+
+	private createStaticBranchNodes(nodes: EnergyNode[], pillar: Pillar, monthCmd: EarthlyBranch) {
+		const hiddens = HIDDEN_STEMS[pillar.branch];
+		hiddens.forEach((h, idx) => {
+			const info = this.calculateStemPower(h.stem, monthCmd);
+			const score = info.score * h.ratio;
+			nodes.push({
+				id: `${pillar.position}_Branch_${idx}`,
+				source: pillar.position,
+				type: 'HiddenStem',
+				name: h.stem,
+				element: this.getStemElement(h.stem),
+				branchOwner: pillar.branch,
+				lifeCycleStage: info.stage,
+				baseScore: score,
+				currentScore: score,
+				isBlocked: false,
+				isCombined: false,
+				modifications: [{ reason: `Tàng can tĩnh`, valueChange: 0, factor: h.ratio }],
+			});
+		});
+	}
+
+	/**
+	 * Tính số ngày từ Tiết Lệnh (Jie Qi) gần nhất đến ngày sinh.
+	 * QUAN TRỌNG: Phải phân biệt Tiết (Jie - Đầu tháng) và Khí (Qi - Giữa tháng).
+	 * Tư lệnh được tính từ ngày Giao Tiết đầu tháng.
+	 */
+	private calculateDaysSinceSolarTerm(inputDate: Date): number {
+		const JIE_TERMS = [
+			'Lập xuân',
+			'Kinh trập',
+			'Thanh minh',
+			'Lập hạ',
+			'Mang chủng',
+			'Tiểu thử',
+			'Lập thu',
+			'Bạch lộ',
+			'Hàn lộ',
+			'Lập đông',
+			'Đại tuyết',
+			'Tiểu hàn',
+		];
+
+		let currentDate = new Date(inputDate);
+		currentDate.setHours(12, 0, 0, 0);
+
+		for (let daysAgo = 0; daysAgo < 40; daysAgo++) {
+			const sDate = new SolarDate(currentDate);
+			const lDate = sDate.toLunarDate();
+			lDate.init();
+
+			const termName = lDate.getSolarTerm();
+
+			if (JIE_TERMS.includes(termName)) {
+				// Kiểm tra xem ngày hôm qua có phải tiết khác không (để xác định đúng điểm giao)
+				const prevDate = new Date(currentDate);
+				prevDate.setDate(prevDate.getDate() - 1);
+				const sPrev = new SolarDate(prevDate);
+				const lPrev = sPrev.toLunarDate();
+				lPrev.init();
+
+				if (termName !== lPrev.getSolarTerm()) {
+					return daysAgo;
+				}
+			}
+			currentDate.setDate(currentDate.getDate() - 1);
+		}
+		return 1; // Fallback
+	}
+
+	private getCounterElement(el: FiveElement): FiveElement {
+		// Trả về hành khắc hành đầu vào (dùng để check Dẫn thần)
+		const map: Record<FiveElement, FiveElement> = {
+			Kim: 'Hỏa',
+			Mộc: 'Kim',
+			Thủy: 'Thổ',
+			Hỏa: 'Thủy',
+			Thổ: 'Mộc',
+		};
+		return map[el];
+	}
+
 	private getCommanderStem(chi: EarthlyBranch, days: number): HeavenlyStem {
 		const rules = MONTH_COMMANDER_RULES[chi];
 		let sum = 0;
@@ -959,7 +1282,10 @@ export class BaziService {
 		return 'Thủy';
 	}
 	private getBranchMainElement(b: EarthlyBranch): FiveElement {
-		return this.getStemElement(HIDDEN_STEMS[b].find((h) => h.isMain)!.stem);
+		// Tìm tàng can chính (isMain = true) trong cấu hình HIDDEN_STEMS
+		const mainStemObj = HIDDEN_STEMS[b].find((h) => h.isMain);
+		if (!mainStemObj) throw new Error(`Invalid branch config for ${b}`);
+		return this.getStemElement(mainStemObj.stem);
 	}
 	private calculateStemPower(stem: HeavenlyStem, branch: EarthlyBranch) {
 		const stage = LIFE_CYCLE_TABLE[stem][branch];
@@ -972,40 +1298,26 @@ export class BaziService {
 		if (ELEMENT_RELATIONS[e1].overcome === e2) return 'Khac';
 		return 'BiKhac';
 	}
-	private aggregateScores(nodes: EnergyNode[]) {
-		const s = { Kim: 0, Mộc: 0, Thủy: 0, Hỏa: 0, Thổ: 0 };
-		nodes.forEach((n) => {
-			if (!n.isBlocked) s[n.element] += n.currentScore;
-		});
-		return s;
-	}
 	private getPillarDominantElement(nodes: EnergyNode[]) {
 		return nodes.reduce((a, b) => (a.currentScore > b.currentScore ? a : b)).element;
 	}
 	private getPillarTotalScore(nodes: EnergyNode[]) {
 		return nodes.reduce((a, b) => a + b.currentScore, 0);
 	}
-
-	private applyDecay(n: EnergyNode, f: number, r: string) {
-		const loss = n.currentScore * (1 - f);
-		n.currentScore *= f;
-		n.modifications.push({ reason: r, valueChange: -loss, factor: f });
-		if (n.currentScore < 0.5) {
-			n.isBlocked = true;
-			n.currentScore = 0;
-		}
-	}
-	private decayPillarScore(nodes: EnergyNode[], rate: number, r: string) {
-		nodes.forEach((n) => {
-			const loss = n.currentScore * rate;
-			n.currentScore -= loss;
-			n.modifications.push({ reason: r, valueChange: -loss, factor: 1 - rate });
-		});
-	}
 	private boostPillarScore(nodes: EnergyNode[], amt: number, el: FiveElement, r: string) {
 		const targets = nodes.filter((n) => n.element === el);
-		if (targets.length) targets.forEach((n) => (n.currentScore += amt / targets.length));
-		else if (nodes[0]) nodes[0].currentScore += amt;
+		if (targets.length)
+			targets.forEach((n) => this.applyNodeModification(n, amt / targets.length, r));
+		else if (nodes[0]) this.applyNodeModification(nodes[0], amt, r);
+	}
+	private blockPillarBranch(nodes: EnergyNode[], position: string, reason: string) {
+		nodes.forEach((n) => {
+			if (n.source === position && n.type === 'HiddenStem') {
+				n.isBlocked = true;
+				n.currentScore = 0;
+				n.modifications.push({ reason, valueChange: 0, factor: 0 });
+			}
+		});
 	}
 	private isValidStem(s: string): boolean {
 		return HEAVENLY_STEMS.includes(s as any);
@@ -1033,7 +1345,7 @@ export class BaziService {
 			let nodePolarity: 'Yang' | 'Yin';
 			if (this.isValidStem(node.name)) nodePolarity = STEM_POLARITY[node.name as HeavenlyStem];
 			else {
-				// Fallback cho tàng can hoặc hóa khí không rõ can
+				// Fallback cho tàng can hoặc hóa khí không rõ tên can
 				godScores[this.determineTenGod(dmElement, dmPolarity, node.element, 'Yang')] +=
 					node.currentScore / 2;
 				godScores[this.determineTenGod(dmElement, dmPolarity, node.element, 'Yin')] +=
@@ -1067,24 +1379,30 @@ export class BaziService {
 		}
 		return 'TyKien';
 	}
-	private blockPillarBranch(nodes: EnergyNode[], position: string, reason: string) {
-		nodes.forEach((n) => {
-			if (n.source === position && n.type === 'HiddenStem') {
-				n.isBlocked = true;
-				n.currentScore = 0;
-				n.modifications.push({ reason, valueChange: 0, factor: 0 });
-			}
-		});
-	}
-	private getMaxGod(scores: Record<TenGod, number>, exclude: string[] = []): string | null {
-		let max = -1,
-			key = null;
-		for (const [k, v] of Object.entries(scores)) {
-			if (!exclude.includes(k) && v > max) {
-				max = v;
-				key = k;
-			}
-		}
-		return key;
+
+	/**
+	 * Helper: Tính giờ mặt trời chân (Real Solar Time)
+	 * Công thức: Giờ đồng hồ + (Kinh độ nơi sinh - Kinh độ múi giờ) * 4 phút + EoT
+	 * @param date Giờ trên đồng hồ
+	 * @param longitude Kinh độ nơi sinh (VD: Hà Nội = 105.85)
+	 * @param timezone Múi giờ (VD: 7)
+	 */
+	private getRealSolarTime(date: Date, longitude: number = 105.85, timezone: number = 7): Date {
+		const dayOfYear = Math.floor(
+			(date.getTime() - new Date(date.getFullYear(), 0, 0).getTime()) / 86400000,
+		);
+
+		// Công thức gần đúng Equation of Time (EoT) - đơn vị phút
+		const b = (2 * Math.PI * (dayOfYear - 81)) / 365;
+		const eot = 9.87 * Math.sin(2 * b) - 7.53 * Math.cos(b) - 1.5 * Math.sin(b);
+
+		// Chênh lệch kinh độ (4 phút cho mỗi độ)
+		// 15 độ = 1 giờ. Múi giờ 7 = 105 độ đông.
+		const standardMeridian = timezone * 15;
+		const longitudeCorrection = (longitude - standardMeridian) * 4;
+
+		const totalCorrectionMinutes = longitudeCorrection + eot;
+
+		return new Date(date.getTime() + totalCorrectionMinutes * 60000);
 	}
 }

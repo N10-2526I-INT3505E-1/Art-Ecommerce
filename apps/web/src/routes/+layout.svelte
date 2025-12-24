@@ -181,6 +181,7 @@
 
 	// Derived State
 	const isAuthPage = $derived(['/login', '/register'].includes(page.url.pathname));
+	const isManagePage = $derived(page.url.pathname.startsWith('/manage'));
 </script>
 
 <svelte:head>
@@ -218,7 +219,9 @@
 
 	<div class="flex-1 snap-y snap-proximity overflow-x-hidden overflow-y-auto scroll-smooth">
 		{@render children()}
-		<Footer />
+		{#if !isManagePage}
+			<Footer />
+		{/if}
 	</div>
 </main>
 

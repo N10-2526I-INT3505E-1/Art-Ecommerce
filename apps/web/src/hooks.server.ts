@@ -7,10 +7,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 /**
  * Helper function to refresh access token and update cookies
  */
-async function refreshAccessToken(
-	event: Parameters<Handle>[0]['event'],
-	client: ReturnType<typeof api>,
-): Promise<string | null> {
+async function refreshAccessToken(event: Parameters<Handle>[0]['event']): Promise<string | null> {
 	const refreshToken = event.cookies.get('refresh_token');
 
 	if (!refreshToken) {
@@ -18,6 +15,7 @@ async function refreshAccessToken(
 	}
 
 	try {
+		const client = api(event);
 		const response = await client
 			.post('sessions/refresh', {
 				json: { refreshToken },
@@ -27,7 +25,7 @@ async function refreshAccessToken(
 		const newAccessToken = response.accessToken;
 		console.log('Refreshed access token:', newAccessToken);
 
-		const cookieDomain = isProduction ? '.novus.io.vn' : undefined;
+		const cookieDomain = isProduction ? '.novus.io.vn' : 'localhost';
 
 		event.cookies.set('auth', newAccessToken, {
 			path: '/',
@@ -42,7 +40,7 @@ async function refreshAccessToken(
 	} catch (error) {
 		console.error('Token refresh failed:', error);
 
-		const cookieDomain = isProduction ? '.novus.io.vn' : undefined;
+		const cookieDomain = isProduction ? '.novus.io.vn' : 'localhost';
 		const clearOptions = { path: '/', domain: cookieDomain };
 
 		event.cookies.delete('auth', clearOptions);
@@ -53,12 +51,12 @@ async function refreshAccessToken(
 
 /**
  * Fetch and set user from /profile endpoint
+ * @param token - Explicit token to use (overrides cookie)
  */
-async function fetchUser(
-	event: Parameters<Handle>[0]['event'],
-	client: ReturnType<typeof api>,
-): Promise<boolean> {
+async function fetchUser(event: Parameters<Handle>[0]['event'], token?: string): Promise<boolean> {
 	try {
+		// Create client with explicit token if provided
+		const client = api(event, { token });
 		const responseData: unknown = await client.get('users/profile').json();
 
 		if (
@@ -83,30 +81,29 @@ async function fetchUser(
 }
 
 export const handle: Handle = async ({ event, resolve }) => {
-	const client = api(event);
 	let token = event.cookies.get('auth');
 
 	// --- AUTHENTICATION FLOW ---
 
 	// Step 1: If no access token exists, try to refresh proactively
 	if (!token) {
-		token = await refreshAccessToken(event, client);
+		token = await refreshAccessToken(event);
 		if (!token) {
 			event.locals.user = null;
 		}
 	}
 
 	// Step 2: If we have a token (existing or just refreshed), try to fetch user
-	// We use an 'if' here because Step 1 might have failed to get a token.
 	if (token) {
-		const success = await fetchUser(event, client);
+		// Pass the token explicitly to ensure we use the current token
+		const success = await fetchUser(event, token);
 
 		// Step 3: If unauthorized (success is false), try to refresh and retry once
 		if (!success) {
-			const refreshedToken = await refreshAccessToken(event, client);
+			const refreshedToken = await refreshAccessToken(event);
 
 			if (refreshedToken) {
-				const retrySuccess = await fetchUser(event, client);
+				const retrySuccess = await fetchUser(event, refreshedToken);
 				if (!retrySuccess) {
 					event.locals.user = null;
 				}

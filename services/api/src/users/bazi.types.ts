@@ -64,7 +64,6 @@ export type PillarPosition = 'Year' | 'Month' | 'Day' | 'Hour';
 
 // --- CORE STRUCTURES ---
 
-// Một Trụ (Cột)
 export interface Pillar {
 	position: PillarPosition;
 	stem: HeavenlyStem;
@@ -73,7 +72,6 @@ export interface Pillar {
 	branchElement: FiveElement;
 }
 
-// Bảng Bát Tự (Input cho Service)
 export interface BaziChart {
 	year: Pillar;
 	month: Pillar;
@@ -83,78 +81,70 @@ export interface BaziChart {
 
 // --- ENERGY PHYSICS MODEL (VULONG) ---
 
-// Thông tin Can tàng (để tra cứu)
-export interface HiddenStemInfo {
-	stem: HeavenlyStem;
-	ratio: number;
-	isMain: boolean;
-}
-
-// Nhật ký biến đổi điểm (để giải thích cho user)
-export interface ScoreModification {
+// Nhật ký biến đổi điểm (Cần thiết cho Debugging)
+export interface NodeModification {
 	reason: string;
-	valueChange: number;
-	factor: number;
+	valueChange: number; // Điểm số thay đổi (+/-)
+	factor: number; // Hệ số tác động (nếu có, để tham khảo)
 }
 
-// Node năng lượng (Đại diện cho Can hoặc Tàng Can)
+// Node năng lượng
 export interface EnergyNode {
-	id: string;
+	id: string; // Deterministic ID: Pos_Type_Name
 	source: PillarPosition;
 	type: 'Stem' | 'HiddenStem';
 	name: string;
 	element: FiveElement;
-	branchOwner?: EarthlyBranch; // Thuộc chi nào (nếu là tàng can)
+	branchOwner?: EarthlyBranch;
 
 	lifeCycleStage: LifeCycleStage;
-	baseScore: number; // Điểm gốc theo lệnh tháng
-	currentScore: number; // Điểm thực tế sau tương tác/dòng chảy
+	baseScore: number;
+	currentScore: number;
 
-	isBlocked: boolean; // Bị vô hiệu hóa?
-	isCombined: boolean; // Đang hợp?
-	transformTo?: FiveElement; // Hóa khí thành hành gì?
+	isBlocked: boolean; // True nếu năng lượng quá yếu hoặc bị khắc chết
+	isCombined: boolean; // True nếu đã tham gia hợp hóa
+	transformTo?: FiveElement; // Hành sau khi hóa
 
-	modifications: ScoreModification[];
+	modifications: NodeModification[]; // Lịch sử thay đổi điểm
 }
 
-// Tương tác (Hợp/Xung)
-export type InteractionType = 'TamHoi' | 'TamHop' | 'LucHop' | 'LucXung' | 'NguHop';
+export type InteractionType = 'TamHoi' | 'TamHop' | 'LucHop' | 'LucXung' | 'CanHop';
 
 export interface Interaction {
-	// Phần này có thể mở rộng để lưu chi tiết ai tương tác với ai
 	type: InteractionType;
+	participants: string[]; // VD: ['Tý', 'Ngọ'] hoặc ['Giáp', 'Kỷ']
+	result: string; // VD: 'Hỏa', 'Clash' (Xung), 'Bind' (Trói)
+	score?: number; // Điểm số tạo ra (nếu là Hóa cục)
 	description?: string;
 }
 
 // --- ANALYSIS RESULTS ---
 
-// Phân tích Vùng Tâm
 export interface CenterZoneAnalysis {
 	dayMasterScore: number;
-	partyScore: number; // Phe Ta
-	enemyScore: number; // Phe Địch
-	diffScore: number; // Hiệu số (Ta - Địch)
+	partyScore: number;
+	enemyScore: number;
+	diffScore: number;
 	isVwang: boolean;
 	isStrongVwang: boolean;
 	isWeakVwang: boolean;
 }
 
-// Hồ sơ Điểm Hạn (Output quan trọng nhất)
 export interface LimitScoreProfile {
 	dungThan: FiveElement[];
 	hyThan: FiveElement[];
 	kyThan: FiveElement[];
 	hungThan: FiveElement[];
-	scores: Record<FiveElement, number>; // Mapping: Kim -> -1.0, Mộc -> 0.5...
+	scores: Record<string, number>;
 }
 
-// Kết quả trả về cuối cùng của Service
 export interface BaziResult {
 	pillars: BaziChart;
-	energyFlow: EnergyNode[]; // Sơ đồ dòng chảy (Frontend vẽ cái này)
+	energyFlow: EnergyNode[];
 	interactions: Interaction[];
-	centerZone: CenterZoneAnalysis; // Số liệu cường nhược
-	structure: string; // Tên cách cục (VD: Chính Quan)
-	limitScore: LimitScoreProfile; // Điểm hạn dùng để dự đoán năm
-	auditLogs: string[]; // Nhật ký các sự kiện quan trọng trong tính toán
+	centerZone: CenterZoneAnalysis;
+	structure: string;
+	structureType: string; // 'Nội Cách' | 'Ngoại Cách'
+	limitScore: LimitScoreProfile;
+	auditLogs: string[];
 }

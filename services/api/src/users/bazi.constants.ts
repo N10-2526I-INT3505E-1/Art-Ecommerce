@@ -1,8 +1,97 @@
+// src/bazi/bazi.constants.ts
+
 import type { EarthlyBranch, FiveElement, HeavenlyStem, LifeCycleStage } from './bazi.types';
 
 // =============================================================================
-// 1. QUAN HỆ NGŨ HÀNH (SINH / KHẮC)
+// 1. CẤU HÌNH VẬT LÝ (PHYSICS CONFIGURATION) - VULONG METHOD
 // =============================================================================
+
+export const LIFE_CYCLE_SCORES: Record<LifeCycleStage, number> = {
+	DeVuong: 10.0,
+	LamQuan: 9.0,
+	QuanDoi: 8.0,
+	MocDuc: 7.0,
+	TruongSinh: 6.0,
+	Suy: 5.1,
+	Benh: 4.8,
+	Tu: 3.0,
+	Mo: 3.0,
+	Tuyet: 3.1,
+	Thai: 4.1,
+	Duong: 4.2,
+};
+
+export const PHYSICS = {
+	// --- TRỌNG SỐ VỊ TRÍ (WEIGHTING) ---
+	// Lệnh tháng (Chi tháng) là Quan Trọng Nhất (x2.5 lần)
+	WEIGHT_MONTH_BRANCH: 2.5,
+	// Can tháng và Can giờ (Sát sườn Nhật chủ)
+	WEIGHT_MONTH_HOUR_STEM: 1.2,
+	// Chi ngày (Cung phu thê - Đế của Nhật chủ)
+	WEIGHT_DAY_BRANCH: 1.5,
+	// Chi giờ (Cung con cái)
+	WEIGHT_HOUR_BRANCH: 1.2,
+	// Trụ năm (Xa nhất)
+	WEIGHT_YEAR: 0.8,
+
+	// --- TƯƠNG TÁC HÓA HỌC ---
+	FACTOR_TRANSFORM_BONUS: 1.5,
+	LOSS_COMBINE_BINDING: 0.8, // Hợp không hóa mất 80% lực
+
+	// --- VẬT LÝ KHOẢNG CÁCH ---
+	LOSS_CLASH_NEAR: 0.3,
+	LOSS_CLASH_GAP_1: 0.2,
+	LOSS_CLASH_GAP_2: 0.1,
+
+	// --- DÒNG CHẢY ---
+	LOSS_GENERATE_SOURCE: 0.3, // Sinh xuất mất 30%
+	GAIN_GENERATE_TARGET: 0.3, // Được sinh nhận 30%
+	LOSS_OVERCOME_SOURCE: 0.2, // Khắc xuất mất 20%
+	LOSS_OVERCOME_TARGET: 0.6, // Bị khắc mất 60% (Tăng mức sát thương để phản ánh thực tế)
+
+	FACTOR_FLOW_INTO_CENTER: 0.6,
+	FACTOR_INTRA_CENTER: 1.0,
+	THRESHOLD_BLOCK: 0.5,
+	THRESHOLD_VWANG: 1.0,
+
+	LOSS_CLASH_WIN: 0.3,
+	LOSS_CLASH_LOSE: 0.7,
+	LOSS_CLASH_DRAW: 0.5,
+	LOSS_WEALTH_EXHAUSTION: 0.2,
+};
+
+// =============================================================================
+// 2. CÁC BẢNG TRA CỨU CƠ BẢN (Lookup Tables)
+// =============================================================================
+
+export const HEAVENLY_STEMS: HeavenlyStem[] = [
+	'Giáp',
+	'Ất',
+	'Bính',
+	'Đinh',
+	'Mậu',
+	'Kỷ',
+	'Canh',
+	'Tân',
+	'Nhâm',
+	'Quý',
+];
+export const EARTHLY_BRANCHES: EarthlyBranch[] = [
+	'Tý',
+	'Sửu',
+	'Dần',
+	'Mão',
+	'Thìn',
+	'Tỵ',
+	'Ngọ',
+	'Mùi',
+	'Thân',
+	'Dậu',
+	'Tuất',
+	'Hợi',
+];
+export const FIVE_ELEMENTS: FiveElement[] = ['Kim', 'Mộc', 'Thủy', 'Hỏa', 'Thổ'];
+
 export const ELEMENT_RELATIONS: Record<
 	FiveElement,
 	{ generate: FiveElement; overcome: FiveElement }
@@ -70,7 +159,7 @@ export const MONTH_COMMANDER_RULES: Record<
 		{ stem: 'Mậu', days: 7 },
 		{ stem: 'Giáp', days: 5 },
 		{ stem: 'Nhâm', days: 18 },
-	], // Mậu ở Hợi là khí thế, một số phái bỏ qua
+	],
 	Tý: [
 		{ stem: 'Nhâm', days: 10 },
 		{ stem: 'Quý', days: 20 },
@@ -82,17 +171,13 @@ export const MONTH_COMMANDER_RULES: Record<
 	],
 };
 
-// =============================================================================
-// 2. TÀNG CAN (HIDDEN STEMS)
-// Tỷ lệ (ratio) được ước lượng để dùng cho tính toán định lượng của VuLong.
-// =============================================================================
 export const HIDDEN_STEMS: Record<
 	EarthlyBranch,
 	Array<{ stem: HeavenlyStem; ratio: number; isMain: boolean; nature?: 'Dry' | 'Wet' }>
 > = {
 	Tý: [{ stem: 'Quý', ratio: 1.0, isMain: true }],
 	Sửu: [
-		{ stem: 'Kỷ', ratio: 0.6, isMain: true, nature: 'Wet' }, // Thấp Thổ
+		{ stem: 'Kỷ', ratio: 0.6, isMain: true, nature: 'Wet' },
 		{ stem: 'Quý', ratio: 0.3, isMain: false },
 		{ stem: 'Tân', ratio: 0.1, isMain: false },
 	],
@@ -103,21 +188,21 @@ export const HIDDEN_STEMS: Record<
 	],
 	Mão: [{ stem: 'Ất', ratio: 1.0, isMain: true }],
 	Thìn: [
-		{ stem: 'Mậu', ratio: 0.6, isMain: true, nature: 'Wet' }, // Thấp Thổ
+		{ stem: 'Mậu', ratio: 0.6, isMain: true, nature: 'Wet' },
 		{ stem: 'Ất', ratio: 0.3, isMain: false },
 		{ stem: 'Quý', ratio: 0.1, isMain: false },
 	],
 	Tỵ: [
 		{ stem: 'Bính', ratio: 0.6, isMain: true },
-		{ stem: 'Mậu', ratio: 0.3, isMain: false, nature: 'Dry' }, // Táo Thổ (Theo VuLong/Manh phái)
+		{ stem: 'Mậu', ratio: 0.3, isMain: false, nature: 'Dry' },
 		{ stem: 'Canh', ratio: 0.1, isMain: false },
 	],
 	Ngọ: [
 		{ stem: 'Đinh', ratio: 0.7, isMain: true },
-		{ stem: 'Kỷ', ratio: 0.3, isMain: false, nature: 'Dry' }, // Táo Thổ
+		{ stem: 'Kỷ', ratio: 0.3, isMain: false, nature: 'Dry' },
 	],
 	Mùi: [
-		{ stem: 'Kỷ', ratio: 0.6, isMain: true, nature: 'Dry' }, // Táo Thổ
+		{ stem: 'Kỷ', ratio: 0.6, isMain: true, nature: 'Dry' },
 		{ stem: 'Đinh', ratio: 0.3, isMain: false },
 		{ stem: 'Ất', ratio: 0.1, isMain: false },
 	],
@@ -128,7 +213,7 @@ export const HIDDEN_STEMS: Record<
 	],
 	Dậu: [{ stem: 'Tân', ratio: 1.0, isMain: true }],
 	Tuất: [
-		{ stem: 'Mậu', ratio: 0.6, isMain: true, nature: 'Dry' }, // Táo Thổ
+		{ stem: 'Mậu', ratio: 0.6, isMain: true, nature: 'Dry' },
 		{ stem: 'Tân', ratio: 0.3, isMain: false },
 		{ stem: 'Đinh', ratio: 0.1, isMain: false },
 	],
@@ -144,7 +229,6 @@ export const HIDDEN_STEMS: Record<
 // =============================================================================
 export const LIFE_CYCLE_TABLE: Record<HeavenlyStem, Record<EarthlyBranch, LifeCycleStage>> = {
 	Giáp: {
-		// Dương Mộc: Sinh Hợi, Vượng Mão, Tử Ngọ
 		Hợi: 'TruongSinh',
 		Tý: 'MocDuc',
 		Sửu: 'QuanDoi',
@@ -159,7 +243,6 @@ export const LIFE_CYCLE_TABLE: Record<HeavenlyStem, Record<EarthlyBranch, LifeCy
 		Tuất: 'Duong',
 	},
 	Ất: {
-		// Âm Mộc: Sinh Ngọ, Vượng Dần, Tử Hợi (Nghịch hành)
 		Ngọ: 'TruongSinh',
 		Tỵ: 'MocDuc',
 		Thìn: 'QuanDoi',
@@ -174,7 +257,6 @@ export const LIFE_CYCLE_TABLE: Record<HeavenlyStem, Record<EarthlyBranch, LifeCy
 		Mùi: 'Duong',
 	},
 	Bính: {
-		// Dương Hỏa: Sinh Dần, Vượng Ngọ, Tử Dậu
 		Dần: 'TruongSinh',
 		Mão: 'MocDuc',
 		Thìn: 'QuanDoi',
@@ -189,7 +271,6 @@ export const LIFE_CYCLE_TABLE: Record<HeavenlyStem, Record<EarthlyBranch, LifeCy
 		Sửu: 'Duong',
 	},
 	Đinh: {
-		// Âm Hỏa: Sinh Dậu, Vượng Tỵ, Tử Dần (Nghịch hành)
 		Dậu: 'TruongSinh',
 		Thân: 'MocDuc',
 		Mùi: 'QuanDoi',
@@ -203,8 +284,8 @@ export const LIFE_CYCLE_TABLE: Record<HeavenlyStem, Record<EarthlyBranch, LifeCy
 		Hợi: 'Thai',
 		Tuất: 'Duong',
 	},
+	// Mậu Thổ: Hỏa Thổ đồng cung
 	Mậu: {
-		// Dương Thổ (Hỏa Thổ đồng cung): Giống Bính
 		Dần: 'TruongSinh',
 		Mão: 'MocDuc',
 		Thìn: 'QuanDoi',
@@ -218,8 +299,8 @@ export const LIFE_CYCLE_TABLE: Record<HeavenlyStem, Record<EarthlyBranch, LifeCy
 		Tý: 'Thai',
 		Sửu: 'Duong',
 	},
+	// Kỷ Thổ: Hỏa Thổ đồng cung
 	Kỷ: {
-		// Âm Thổ (Hỏa Thổ đồng cung): Giống Đinh
 		Dậu: 'TruongSinh',
 		Thân: 'MocDuc',
 		Mùi: 'QuanDoi',
@@ -234,7 +315,6 @@ export const LIFE_CYCLE_TABLE: Record<HeavenlyStem, Record<EarthlyBranch, LifeCy
 		Tuất: 'Duong',
 	},
 	Canh: {
-		// Dương Kim: Sinh Tỵ, Vượng Dậu, Tử Tý
 		Tỵ: 'TruongSinh',
 		Ngọ: 'MocDuc',
 		Mùi: 'QuanDoi',
@@ -249,7 +329,6 @@ export const LIFE_CYCLE_TABLE: Record<HeavenlyStem, Record<EarthlyBranch, LifeCy
 		Thìn: 'Duong',
 	},
 	Tân: {
-		// Âm Kim: Sinh Tý, Vượng Thân, Tử Tỵ (Nghịch hành)
 		Tý: 'TruongSinh',
 		Hợi: 'MocDuc',
 		Tuất: 'QuanDoi',
@@ -264,7 +343,6 @@ export const LIFE_CYCLE_TABLE: Record<HeavenlyStem, Record<EarthlyBranch, LifeCy
 		Sửu: 'Duong',
 	},
 	Nhâm: {
-		// Dương Thủy: Sinh Thân, Vượng Tý, Tử Mão
 		Thân: 'TruongSinh',
 		Dậu: 'MocDuc',
 		Tuất: 'QuanDoi',
@@ -279,7 +357,6 @@ export const LIFE_CYCLE_TABLE: Record<HeavenlyStem, Record<EarthlyBranch, LifeCy
 		Mùi: 'Duong',
 	},
 	Quý: {
-		// Âm Thủy: Sinh Mão, Vượng Hợi, Tử Thân (Nghịch hành)
 		Mão: 'TruongSinh',
 		Dần: 'MocDuc',
 		Sửu: 'QuanDoi',
@@ -331,7 +408,7 @@ export const BRANCH_SIX_COMBINATIONS: Record<
 	Dậu: { target: 'Thìn', result: 'Kim' },
 	Tỵ: { target: 'Thân', result: 'Thủy' },
 	Thân: { target: 'Tỵ', result: 'Thủy' },
-	Ngọ: { target: 'Mùi', result: 'Thổ' }, // Một số sách nói hóa Hỏa, nhưng Trích Thiên Tủy thường coi Mùi là Thổ燥
+	Ngọ: { target: 'Mùi', result: 'Thổ' },
 	Mùi: { target: 'Ngọ', result: 'Thổ' },
 };
 
@@ -346,15 +423,12 @@ export const BRANCH_TRI_COMBINATIONS: Record<
 	Thân: { group: ['Thân', 'Tý', 'Thìn'], result: 'Thủy' },
 	Tý: { group: ['Thân', 'Tý', 'Thìn'], result: 'Thủy' },
 	Thìn: { group: ['Thân', 'Tý', 'Thìn'], result: 'Thủy' },
-
 	Dần: { group: ['Dần', 'Ngọ', 'Tuất'], result: 'Hỏa' },
 	Ngọ: { group: ['Dần', 'Ngọ', 'Tuất'], result: 'Hỏa' },
 	Tuất: { group: ['Dần', 'Ngọ', 'Tuất'], result: 'Hỏa' },
-
 	Tỵ: { group: ['Tỵ', 'Dậu', 'Sửu'], result: 'Kim' },
 	Dậu: { group: ['Tỵ', 'Dậu', 'Sửu'], result: 'Kim' },
 	Sửu: { group: ['Tỵ', 'Dậu', 'Sửu'], result: 'Kim' },
-
 	Hợi: { group: ['Hợi', 'Mão', 'Mùi'], result: 'Mộc' },
 	Mão: { group: ['Hợi', 'Mão', 'Mùi'], result: 'Mộc' },
 	Mùi: { group: ['Hợi', 'Mão', 'Mùi'], result: 'Mộc' },
@@ -370,15 +444,12 @@ export const BRANCH_SEASONAL_COMBINATIONS: Record<
 	Hợi: { group: ['Hợi', 'Tý', 'Sửu'], result: 'Thủy' },
 	Tý: { group: ['Hợi', 'Tý', 'Sửu'], result: 'Thủy' },
 	Sửu: { group: ['Hợi', 'Tý', 'Sửu'], result: 'Thủy' },
-
 	Dần: { group: ['Dần', 'Mão', 'Thìn'], result: 'Mộc' },
 	Mão: { group: ['Dần', 'Mão', 'Thìn'], result: 'Mộc' },
 	Thìn: { group: ['Dần', 'Mão', 'Thìn'], result: 'Mộc' },
-
 	Tỵ: { group: ['Tỵ', 'Ngọ', 'Mùi'], result: 'Hỏa' },
 	Ngọ: { group: ['Tỵ', 'Ngọ', 'Mùi'], result: 'Hỏa' },
 	Mùi: { group: ['Tỵ', 'Ngọ', 'Mùi'], result: 'Hỏa' },
-
 	Thân: { group: ['Thân', 'Dậu', 'Tuất'], result: 'Kim' },
 	Dậu: { group: ['Thân', 'Dậu', 'Tuất'], result: 'Kim' },
 	Tuất: { group: ['Thân', 'Dậu', 'Tuất'], result: 'Kim' },
@@ -465,7 +536,6 @@ export const TEN_GODS_MAPPING: Record<FiveElement, Record<string, FiveElement>> 
 	},
 };
 
-// Map Can Dương/Âm
 export const STEM_POLARITY: Record<HeavenlyStem, 'Yang' | 'Yin'> = {
 	Giáp: 'Yang',
 	Ất: 'Yin',
@@ -479,97 +549,29 @@ export const STEM_POLARITY: Record<HeavenlyStem, 'Yang' | 'Yin'> = {
 	Quý: 'Yin',
 };
 
-// Map ngược từ Hành -> Can Dương/Âm (Dùng để xử lý các Node Hóa cục không có tên Can cụ thể)
-export const ELEMENT_TO_STEMS: Record<FiveElement, { yang: HeavenlyStem; yin: HeavenlyStem }> = {
-	Mộc: { yang: 'Giáp', yin: 'Ất' },
-	Hỏa: { yang: 'Bính', yin: 'Đinh' },
-	Thổ: { yang: 'Mậu', yin: 'Kỷ' },
-	Kim: { yang: 'Canh', yin: 'Tân' },
-	Thủy: { yang: 'Nhâm', yin: 'Quý' },
-};
-
-export const HEAVENLY_STEMS: HeavenlyStem[] = [
-	'Giáp',
-	'Ất',
-	'Bính',
-	'Đinh',
-	'Mậu',
-	'Kỷ',
-	'Canh',
-	'Tân',
-	'Nhâm',
-	'Quý',
-];
-
-export const EARTHLY_BRANCHES: EarthlyBranch[] = [
-	'Tý',
-	'Sửu',
-	'Dần',
-	'Mão',
-	'Thìn',
-	'Tỵ',
-	'Ngọ',
-	'Mùi',
-	'Thân',
-	'Dậu',
-	'Tuất',
-	'Hợi',
-];
-
 export const SOLAR_TERM_TO_BRANCH_INDEX: Record<string, number> = {
 	'Lập xuân': 2,
-	'Vũ thủy': 2, // Dần (Tháng 1) - Index 2
+	'Vũ thủy': 2,
 	'Kinh trập': 3,
-	'Xuân phân': 3, // Mão (Tháng 2) - Index 3
+	'Xuân phân': 3,
 	'Thanh minh': 4,
-	'Cốc vũ': 4, // Thìn (Tháng 3) - Index 4
+	'Cốc vũ': 4,
 	'Lập hạ': 5,
-	'Tiểu mãn': 5, // Tỵ (Tháng 4) - Index 5
+	'Tiểu mãn': 5,
 	'Mang chủng': 6,
-	'Hạ chí': 6, // Ngọ (Tháng 5) - Index 6
+	'Hạ chí': 6,
 	'Tiểu thử': 7,
-	'Đại thử': 7, // Mùi (Tháng 6) - Index 7
+	'Đại thử': 7,
 	'Lập thu': 8,
-	'Xử thử': 8, // Thân (Tháng 7) - Index 8
+	'Xử thử': 8,
 	'Bạch lộ': 9,
-	'Thu phân': 9, // Dậu (Tháng 8) - Index 9
+	'Thu phân': 9,
 	'Hàn lộ': 10,
-	'Sương giáng': 10, // Tuất (Tháng 9) - Index 10
+	'Sương giáng': 10,
 	'Lập đông': 11,
-	'Tiểu tuyết': 11, // Hợi (Tháng 10) - Index 11
+	'Tiểu tuyết': 11,
 	'Đại tuyết': 0,
-	'Đông chí': 0, // Tý (Tháng 11) - Index 0
+	'Đông chí': 0,
 	'Tiểu hàn': 1,
-	'Đại hàn': 1, // Sửu (Tháng 12) - Index 1
-};
-
-export const FLOW_PHYSICS = {
-	// 1. SINH (Generate): A sinh B
-	// A mất khí để sinh B. B nhận được năng lượng.
-	GENERATE_SOURCE_LOSS: 0.3, // Nguồn mất 30% lực
-	GENERATE_TARGET_GAIN: 0.3, // Đích nhận 30% lực (Giả sử hiệu suất 100%)
-
-	// 2. KHẮC (Overcome): A khắc B
-	// A tốn lực để khắc B. B bị tổn thương nặng.
-	OVERCOME_SOURCE_LOSS: 0.2, // Nguồn mất 20% lực do ma sát/phản lực
-	OVERCOME_TARGET_LOSS: 0.4, // Đích mất 40% lực do bị khắc
-
-	// 3. TỶ HÒA (Same): A cùng hành B
-	// Cộng hưởng năng lượng.
-	SAME_RESONANCE: 0.1, // Cả hai cùng tăng 10% khí thế
-
-	// 4. BỊ KHẮC (Inverse): A bị B khắc (ngược dòng)
-	// Dòng chảy bị chặn, năng lượng không truyền qua được.
-	BLOCKED_FLOW: 0.0,
-
-	// 5. KHOẢNG CÁCH (Distance Decay)
-	// Tác động trực tiếp vào Nhật chủ
-	DISTANCE_NEAR: 1.0, // Chi Ngày, Can Tháng, Can Giờ
-	DISTANCE_FAR: 0.6, // Chi Tháng, Chi Giờ
-	DISTANCE_REMOTE: 0.2, // Trụ Năm (Rất xa, phải qua Tháng mới tới được)
-
-	DISTANCE_DECAY_RATE: 2 / 5, // Đi vào vùng tâm bị giảm 2/5 (còn lại 0.6)
-	CLASH_NEAR_LOSS: 1 / 3, // Khắc gần mất 1/3
-	CLASH_1GAP_LOSS: 1 / 5, // Khắc cách 1 ngôi mất 1/5
-	CLASH_2GAP_LOSS: 1 / 10, // Khắc cách 2 ngôi mất 1/10
+	'Đại hàn': 1,
 };

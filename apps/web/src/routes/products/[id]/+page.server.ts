@@ -8,6 +8,7 @@ export const load: PageServerLoad = async ({ params, fetch, request }) => {
 
 	try {
 		// Fetch product details
+		console.log('Fetching product with ID:', id);
 		const productData = await client.get(`products/${id}`).json();
 
 		// Transform API response to match UI requirements

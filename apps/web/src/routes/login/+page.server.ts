@@ -96,4 +96,27 @@ export const actions = {
 			return fail(400, { message: 'Google login failed on server', type: 'error' });
 		}
 	},
+	logout: async (event) => {
+		const client = api(event);
+		const refreshToken = event.cookies.get('refresh_token');
+
+		if (refreshToken) {
+			try {
+				await client.delete('sessions', { json: { refreshToken } });
+			} catch (e) {
+				console.error('Logout failed', e);
+			}
+		}
+
+		const isProduction = !dev;
+		const deleteOpts = {
+			path: '/',
+			domain: isProduction ? '.novus.io.vn' : undefined,
+		};
+
+		event.cookies.delete('auth', deleteOpts);
+		event.cookies.delete('refresh_token', deleteOpts);
+
+		throw redirect(303, '/login');
+	},
 } satisfies Actions;

@@ -2,7 +2,7 @@
 	import { Lock, type Icon as LucideIcon, Mail, User } from 'lucide-svelte';
 	import { onMount } from 'svelte';
 	import { enhance } from '$app/forms';
-	import { goto } from '$app/navigation';
+	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { PUBLIC_GOOGLE_CLIENT_ID } from '$env/static/public';
 	import { showToast } from '$lib/toastStore';
@@ -86,18 +86,18 @@
 </script>
 
 {#snippet inputField(
-    id: string,
-    label: string,
-    value: string,
-    oninput: (e: Event) => void,
-    Icon: typeof User,
-    type: string = 'text',
-    required = true,
-    readonly = false,
-    pattern: string | undefined = undefined,
-    minLength: number | undefined = undefined,
-    maxLength: number | undefined = undefined,
-    hint: string | undefined = undefined
+	id: string,
+	label: string,
+	value: string,
+	oninput: (e: Event) => void,
+	Icon: typeof User,
+	type: string = 'text',
+	required = true,
+	readonly = false,
+	pattern: string | undefined = undefined,
+	minLength: number | undefined = undefined,
+	maxLength: number | undefined = undefined,
+	hint: string | undefined = undefined,
 )}
 	<div class="form-control" style:view-transition-name={`auth-${id}`}>
 		<div class="relative w-full">

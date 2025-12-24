@@ -66,13 +66,36 @@
 		isWeakVwang: boolean;
 	}
 
+	type InteractionType = 'TamHoi' | 'TamHop' | 'LucHop' | 'LucXung' | 'CanHop';
+
+	type TenGod =
+		| 'TyKien'
+		| 'KiepTai'
+		| 'ThucThan'
+		| 'ThuongQuan'
+		| 'ChinhTai'
+		| 'ThienTai'
+		| 'ChinhQuan'
+		| 'ThatSat'
+		| 'ChinhAn'
+		| 'ThienAn';
+
+	interface Interaction {
+		type: InteractionType;
+		participants: string[];
+		result: string;
+		score?: number;
+		description?: string;
+	}
+
 	interface BaziProfileUI extends Omit<
 		App.BaziProfile,
-		'center_analysis' | 'energy_flow' | 'limit_score'
+		'center_analysis' | 'energy_flow' | 'limit_score' | 'interactions'
 	> {
 		center_analysis?: CenterAnalysis;
 		energy_flow?: EnergyNode[];
 		limit_score?: LimitScoreProfile;
+		interactions?: Interaction[];
 		analysis_reason?: string;
 		year_stem?: string;
 		year_branch?: string;
@@ -157,6 +180,61 @@
 		Hour: 'Giờ',
 	} as const;
 
+	const PILLAR_ORDER: Array<'Hour' | 'Day' | 'Month' | 'Year'> = ['Hour', 'Day', 'Month', 'Year'];
+
+	const TEN_GOD_NAMES: Record<TenGod, { name: string; short: string; color: string }> = {
+		TyKien: { name: 'Tỷ Kiên', short: 'Tỷ', color: 'text-blue-600' },
+		KiepTai: { name: 'Kiếp Tài', short: 'Kiếp', color: 'text-blue-500' },
+		ThucThan: { name: 'Thực Thần', short: 'Thực', color: 'text-orange-600' },
+		ThuongQuan: { name: 'Thương Quan', short: 'Thương', color: 'text-orange-500' },
+		ChinhTai: { name: 'Chính Tài', short: 'Tài', color: 'text-yellow-600' },
+		ThienTai: { name: 'Thiên Tài', short: 'Thiên Tài', color: 'text-yellow-500' },
+		ChinhQuan: { name: 'Chính Quan', short: 'Quan', color: 'text-purple-600' },
+		ThatSat: { name: 'Thất Sát', short: 'Sát', color: 'text-purple-500' },
+		ChinhAn: { name: 'Chính Ấn', short: 'Ấn', color: 'text-green-600' },
+		ThienAn: { name: 'Thiên Ấn', short: 'Thiên Ấn', color: 'text-green-500' },
+	} as const;
+
+	const LIFE_CYCLE_NAMES: Record<string, { name: string; strength: number }> = {
+		TruongSinh: { name: 'Trường Sinh', strength: 6 },
+		MocDuc: { name: 'Mộc Dục', strength: 7 },
+		QuanDoi: { name: 'Quan Đới', strength: 8 },
+		LamQuan: { name: 'Lâm Quan', strength: 9 },
+		DeVuong: { name: 'Đế Vượng', strength: 10 },
+		Suy: { name: 'Suy', strength: 5 },
+		Benh: { name: 'Bệnh', strength: 4 },
+		Tu: { name: 'Tử', strength: 3 },
+		Mo: { name: 'Mộ', strength: 3 },
+		Tuyet: { name: 'Tuyệt', strength: 3 },
+		Thai: { name: 'Thai', strength: 4 },
+		Duong: { name: 'Dưỡng', strength: 4 },
+	} as const;
+
+	const INTERACTION_TYPE_LABELS: Record<
+		InteractionType,
+		{ name: string; desc: string; color: string }
+	> = {
+		TamHoi: { name: 'Tam Hội', desc: 'Phương hội cục', color: 'badge-primary' },
+		TamHop: { name: 'Tam Hợp', desc: 'Tam hợp cục', color: 'badge-secondary' },
+		LucHop: { name: 'Lục Hợp', desc: 'Lục hợp', color: 'badge-accent' },
+		LucXung: { name: 'Lục Xung', desc: 'Xung khắc', color: 'badge-error' },
+		CanHop: { name: 'Can Hợp', desc: 'Thiên can hợp', color: 'badge-info' },
+	} as const;
+
+	function getInteractionResultDisplay(interaction: Interaction): {
+		text: string;
+		variant: string;
+	} {
+		if (interaction.result === 'Clash') {
+			return { text: 'Xung', variant: 'text-error' };
+		}
+		if (interaction.result === 'Bind') {
+			return { text: 'Trói', variant: 'text-warning' };
+		}
+		// It's an element transformation
+		return { text: `Hóa ${interaction.result}`, variant: 'text-success' };
+	}
+
 	// ============================================================
 	// UTILITY FUNCTIONS
 	// ============================================================
@@ -234,6 +312,71 @@
 	const todayISO = $derived(new Date().toISOString().split('T')[0]);
 
 	const visibleEnergyNodes = $derived(baziProfile?.energy_flow?.filter(shouldShowNode) ?? []);
+
+	// Group energy nodes by pillar position for the new chart
+	const pillarEnergyData = $derived.by(() => {
+		if (!baziProfile?.energy_flow) return null;
+
+		const nodes = baziProfile.energy_flow;
+		const pillars: Record<
+			string,
+			{
+				stem: EnergyNode | null;
+				hiddenStems: EnergyNode[];
+				stemName: string;
+				branchName: string;
+			}
+		> = {};
+
+		for (const pos of PILLAR_ORDER) {
+			const stem = nodes.find((n) => n.source === pos && n.type === 'Stem') || null;
+			const hiddenStems = nodes
+				.filter((n) => n.source === pos && n.type === 'HiddenStem')
+				.sort((a, b) => b.baseScore - a.baseScore);
+
+			// Get stem and branch names from profile
+			const stemName =
+				pos === 'Year'
+					? baziProfile.year_stem
+					: pos === 'Month'
+						? baziProfile.month_stem
+						: pos === 'Day'
+							? baziProfile.day_stem
+							: baziProfile.hour_stem;
+			const branchName =
+				pos === 'Year'
+					? baziProfile.year_branch
+					: pos === 'Month'
+						? baziProfile.month_branch
+						: pos === 'Day'
+							? baziProfile.day_branch
+							: baziProfile.hour_branch;
+
+			pillars[pos] = {
+				stem,
+				hiddenStems,
+				stemName: stemName ?? '',
+				branchName: branchName ?? '',
+			};
+		}
+
+		return pillars;
+	});
+
+	function getLifeCycleDisplay(stage: string): { name: string; strength: number } {
+		return LIFE_CYCLE_NAMES[stage] ?? { name: stage, strength: 5 };
+	}
+
+	function getStrengthColor(strength: number): string {
+		if (strength >= 9) return 'text-success';
+		if (strength >= 7) return 'text-info';
+		if (strength >= 5) return 'text-warning';
+		return 'text-error';
+	}
+
+	function getScoreBarWidth(score: number, maxScore: number = 10): number {
+		return Math.min((score / maxScore) * 100, 100);
+	}
 
 	const balancePercentages = $derived.by(() => {
 		const ca = baziProfile?.center_analysis;
@@ -609,6 +752,61 @@
 						</section>
 					{/if}
 
+					<!-- Interactions (Combinations & Clashes) -->
+					{#if baziProfile.interactions && baziProfile.interactions.length > 0}
+						<section
+							class="card border-base-200 bg-base-100 border shadow-sm"
+							aria-labelledby="interactions-heading"
+						>
+							<div class="card-body p-5">
+								<h3
+									id="interactions-heading"
+									class="mb-4 flex items-center gap-2 text-base font-bold"
+								>
+									<Share2 class="text-secondary h-4 w-4" aria-hidden="true" />
+									Tương Tác Hợp/Xung ({baziProfile.interactions.length})
+								</h3>
+
+								<div class="grid gap-3 sm:grid-cols-2">
+									{#each baziProfile.interactions as interaction}
+										{@const typeInfo = INTERACTION_TYPE_LABELS[interaction.type]}
+										{@const resultDisplay = getInteractionResultDisplay(interaction)}
+										<div
+											class="border-base-200 bg-base-50 flex items-center justify-between rounded-lg border p-3 transition-all hover:shadow-sm"
+										>
+											<div class="flex items-center gap-3">
+												<span class="badge {typeInfo.color} badge-sm font-bold">
+													{typeInfo.name}
+												</span>
+												<div>
+													<div class="text-sm font-bold">
+														{interaction.participants.join(' - ')}
+													</div>
+													<div class="text-[10px] opacity-60">{typeInfo.desc}</div>
+												</div>
+											</div>
+											<div class="text-right">
+												<div class="text-sm font-bold {resultDisplay.variant}">
+													{resultDisplay.text}
+												</div>
+												{#if interaction.score}
+													<div class="text-[10px] opacity-60">
+														+{formatScore(interaction.score)} điểm
+													</div>
+												{/if}
+											</div>
+										</div>
+									{/each}
+								</div>
+
+								<p class="mt-3 text-[11px] italic opacity-60">
+									* Hợp Hóa tạo thêm năng lượng ngũ hành mới. Xung làm suy giảm lực lượng hai bên.
+									Trói giảm lực nhưng không hóa.
+								</p>
+							</div>
+						</section>
+					{/if}
+
 					<!-- Center Analysis Balance -->
 					{#if baziProfile.center_analysis}
 						{@const ca = baziProfile.center_analysis}
@@ -683,118 +881,235 @@
 							class="card border-base-200 bg-base-100 overflow-hidden border shadow-sm"
 							aria-labelledby="energy-heading"
 						>
-							<header
-								class="border-base-200 bg-base-200/80 sticky top-[72px] z-10 flex items-center justify-between border-b px-5 py-3 backdrop-blur-sm"
-							>
-								<h3 id="energy-heading" class="flex items-center gap-2 text-sm font-bold">
-									<Activity class="text-secondary h-4 w-4" aria-hidden="true" />
-									Dòng Chảy & Biến Động Năng Lượng
-								</h3>
-								<div class="flex items-center gap-2">
-									<span class="badge badge-ghost badge-sm">
-										{visibleEnergyNodes.length} nodes
-									</span>
-									<button
-										class="btn btn-ghost btn-xs print:hidden"
-										onclick={() => (showEnergyTable = !showEnergyTable)}
-										aria-expanded={showEnergyTable}
-										aria-controls="energy-table"
-									>
-										{#if showEnergyTable}
-											<ChevronUp class="h-3 w-3" aria-hidden="true" />
-											<span class="sr-only">Thu gọn</span>
-										{:else}
-											<ChevronDown class="h-3 w-3" aria-hidden="true" />
-											<span class="sr-only">Mở rộng</span>
-										{/if}
-									</button>
-								</div>
-							</header>
+							<div class="card-body p-0">
+								<!-- Card Header -->
+								<header
+									class="border-base-200 bg-base-100 flex items-center justify-between border-b px-5 py-4"
+								>
+									<h3 id="energy-heading" class="flex items-center gap-2 text-base font-bold">
+										<Activity class="text-secondary h-5 w-5" aria-hidden="true" />
+										Dòng Chảy Năng Lượng
+									</h3>
+									<div class="flex items-center gap-3">
+										<span class="badge badge-ghost badge-sm font-mono">
+											{visibleEnergyNodes.length} thần
+										</span>
+										<button
+											class="btn btn-ghost btn-sm gap-1 print:hidden"
+											onclick={() => (showEnergyTable = !showEnergyTable)}
+											aria-expanded={showEnergyTable}
+											aria-controls="energy-table"
+										>
+											{#if showEnergyTable}
+												<ChevronUp class="h-4 w-4" aria-hidden="true" />
+												<span class="text-xs">Thu gọn</span>
+											{:else}
+												<ChevronDown class="h-4 w-4" aria-hidden="true" />
+												<span class="text-xs">Mở rộng</span>
+											{/if}
+										</button>
+									</div>
+								</header>
 
-							{#if showEnergyTable}
-								<div id="energy-table" class="overflow-x-auto">
-									<div class="max-h-[500px] overflow-y-auto">
-										<table class="table-xs table w-full">
-											<thead class="bg-base-200/90 sticky top-0 z-[5] backdrop-blur-sm">
-												<tr class="text-base-content/70">
-													<th class="w-20" scope="col">Nguồn</th>
-													<th class="w-32" scope="col">Thần</th>
-													<th class="w-20" scope="col">Hành</th>
-													<th class="w-24 text-right" scope="col">Điểm Gốc</th>
-													<th class="w-24 text-right" scope="col">Thực Tế</th>
-													<th scope="col">Lý Do Biến Động</th>
+								{#if showEnergyTable}
+									<!-- Scrollable Table Container -->
+									<div id="energy-table" class="max-h-[500px] overflow-auto">
+										<table class="table-pin-rows table-sm table w-full">
+											<thead>
+												<tr class="bg-base-200 text-xs">
+													<th class="bg-base-200 w-16 py-3 font-bold">Trụ</th>
+													<th class="bg-base-200 w-24 py-3 font-bold">Thần</th>
+													<th class="bg-base-200 w-16 py-3 font-bold">Hành</th>
+													<th class="bg-base-200 w-20 py-3 font-bold">Vòng Sinh</th>
+													<th class="bg-base-200 w-28 py-3 font-bold">Điểm Lực</th>
+													<th class="bg-base-200 py-3 font-bold">Biến Động</th>
 												</tr>
 											</thead>
 											<tbody>
-												{#each visibleEnergyNodes as node (node.id)}
-													{@const scoreDiff = node.currentScore - node.baseScore}
-													<tr class="hover:bg-base-200/50 group transition-colors">
-														<td class="font-medium opacity-60">{SOURCE_MAP[node.source]}</td>
-														<td class="text-base-content font-bold">
-															<div class="flex items-center gap-2">
-																{node.name}
-																{#if node.source === 'Day' && node.type === 'Stem'}
-																	<span class="badge badge-primary badge-xs">Chủ</span>
-																{/if}
-															</div>
-														</td>
-														<td>{@render elementTag(node.element)}</td>
-														<td class="text-right font-mono opacity-40">
-															{formatScore(node.baseScore)}
-														</td>
-														<td class="text-right font-mono font-bold">
-															<span
-																class={node.currentScore < node.baseScore
-																	? 'text-warning'
-																	: 'text-success'}
-															>
-																{formatScore(node.currentScore)}
-															</span>
-															{#if Math.abs(scoreDiff) > 0.01}
-																<span class="ml-1 text-xs opacity-50">
-																	({formatSign(scoreDiff)})
-																</span>
-															{/if}
-														</td>
-														<td class="space-y-1 py-2 text-[10px]">
-															{#if node.transformTo}
-																<div class="flex items-center gap-1 font-bold text-purple-600">
-																	<Sparkles class="h-3 w-3" aria-hidden="true" />
-																	Hóa {node.transformTo}
-																</div>
-															{/if}
-															{#if node.lifeCycleStage}
-																<div class="badge badge-ghost badge-xs">{node.lifeCycleStage}</div>
-															{/if}
-															{#each node.modifications as mod}
-																{#if Math.abs(mod.valueChange) > 0.01}
-																	<div
-																		class="flex items-center gap-1 {mod.valueChange > 0
-																			? 'text-success'
-																			: 'text-error'}"
-																	>
-																		<span class="w-8 text-right font-mono font-bold">
-																			{formatSign(mod.valueChange)}
+												{#each PILLAR_ORDER as pillarPos}
+													{@const pillarNodes = visibleEnergyNodes.filter(
+														(n) => n.source === pillarPos,
+													)}
+													{#each pillarNodes as node, nodeIdx (node.id)}
+														{@const elStyle = getElementStyle(node.element)}
+														{@const lifeCycle = getLifeCycleDisplay(node.lifeCycleStage)}
+														{@const scoreDiff = node.currentScore - node.baseScore}
+														{@const isFirstInPillar = nodeIdx === 0}
+														{@const isDayMaster = node.source === 'Day' && node.type === 'Stem'}
+														{@const significantMods = node.modifications.filter(
+															(m) => Math.abs(m.valueChange) > 0.01,
+														)}
+														<tr
+															class="group transition-colors
+															{isDayMaster ? 'bg-primary/5 hover:bg-primary/10' : 'hover:bg-base-200/30'}
+															{isFirstInPillar && nodeIdx > 0 ? 'border-base-300 border-t-2' : ''}"
+														>
+															<!-- Pillar Column -->
+															<td class="py-3">
+																{#if isFirstInPillar}
+																	<div class="flex flex-col items-center gap-1">
+																		<span
+																			class="badge badge-sm font-bold
+																			{pillarPos === 'Day' ? 'badge-primary' : 'badge-ghost'}"
+																		>
+																			{SOURCE_MAP[pillarPos]}
 																		</span>
-																		<ArrowRight class="h-3 w-3 opacity-50" aria-hidden="true" />
-																		<span>{mod.reason}</span>
+																		{#if pillarPos === 'Day'}
+																			<span class="text-primary text-[8px] font-medium"
+																				>Nhật Chủ</span
+																			>
+																		{/if}
 																	</div>
 																{/if}
-															{/each}
-															{#if node.isBlocked}
-																<div class="badge badge-error badge-xs gap-1">
-																	<XCircle class="h-3 w-3" aria-hidden="true" />
-																	Vô Hiệu
+															</td>
+
+															<!-- Name Column -->
+															<td class="py-3">
+																<div class="flex items-center gap-2">
+																	<span
+																		class="text-base font-bold {elStyle.text}
+																		{isDayMaster ? 'text-lg' : ''}"
+																	>
+																		{node.name}
+																	</span>
+																	{#if node.type === 'HiddenStem'}
+																		<span class="badge badge-xs badge-outline opacity-60">Tàng</span
+																		>
+																	{/if}
+																	{#if isDayMaster}
+																		<span class="badge badge-primary badge-xs">Chủ</span>
+																	{/if}
+																	{#if node.isBlocked}
+																		<span class="badge badge-error badge-xs gap-0.5">
+																			<XCircle class="h-2.5 w-2.5" />
+																			Tuyệt
+																		</span>
+																	{/if}
 																</div>
-															{/if}
-														</td>
-													</tr>
+															</td>
+
+															<!-- Element Column -->
+															<td class="py-3">
+																<div class="flex items-center gap-1.5">
+																	<span
+																		class="inline-block h-3 w-3 rounded-full {elStyle.color}"
+																		aria-hidden="true"
+																	></span>
+																	<span class="font-medium {elStyle.text}">
+																		{node.transformTo || node.element}
+																	</span>
+																	{#if node.transformTo}
+																		<Sparkles class="h-3 w-3 text-purple-500" />
+																	{/if}
+																</div>
+															</td>
+
+															<!-- Life Cycle Column -->
+															<td class="py-3">
+																<span
+																	class="badge badge-sm {lifeCycle.strength >= 8
+																		? 'badge-success'
+																		: lifeCycle.strength >= 5
+																			? 'badge-warning'
+																			: 'badge-error'}"
+																>
+																	{lifeCycle.name}
+																</span>
+															</td>
+
+															<!-- Score Column -->
+															<td class="py-3">
+																<div class="flex min-w-[100px] flex-col gap-1">
+																	<div class="flex items-center justify-between text-xs">
+																		<span
+																			class="font-mono font-bold {node.currentScore >=
+																			node.baseScore
+																				? 'text-success'
+																				: 'text-warning'}"
+																		>
+																			{formatScore(node.currentScore)}
+																		</span>
+																		{#if Math.abs(scoreDiff) > 0.01}
+																			<span
+																				class="font-mono text-[10px] {scoreDiff > 0
+																					? 'text-success'
+																					: 'text-error'}"
+																			>
+																				({formatSign(scoreDiff)})
+																			</span>
+																		{/if}
+																	</div>
+																	<div class="bg-base-300 h-2 w-full overflow-hidden rounded-full">
+																		<div
+																			class="h-full rounded-full transition-all duration-500
+																			{node.currentScore >= node.baseScore ? 'bg-success' : 'bg-warning'}"
+																			style="width: {getScoreBarWidth(node.currentScore)}%"
+																		></div>
+																	</div>
+																	<div class="flex justify-between text-[9px] opacity-40">
+																		<span>Gốc: {formatScore(node.baseScore)}</span>
+																		<span>{Math.round(getScoreBarWidth(node.currentScore))}%</span>
+																	</div>
+																</div>
+															</td>
+
+															<!-- Modifications Column -->
+															<td class="py-3">
+																{#if significantMods.length > 0}
+																	<div class="flex max-w-[280px] flex-col gap-1">
+																		{#each significantMods.slice(0, 3) as mod}
+																			<div class="flex items-center gap-1.5 text-[11px]">
+																				<span
+																					class="inline-flex w-12 items-center justify-center rounded px-1 py-0.5 font-mono font-bold
+																					{mod.valueChange > 0 ? 'bg-success/10 text-success' : 'bg-error/10 text-error'}"
+																				>
+																					{formatSign(mod.valueChange)}
+																				</span>
+																				<ArrowRight class="h-3 w-3 flex-shrink-0 opacity-30" />
+																				<span class="truncate opacity-70">{mod.reason}</span>
+																			</div>
+																		{/each}
+																		{#if significantMods.length > 3}
+																			<span class="text-[10px] italic opacity-50">
+																				+{significantMods.length - 3} biến động khác...
+																			</span>
+																		{/if}
+																	</div>
+																{:else}
+																	<span class="text-[10px] italic opacity-30">Không đổi</span>
+																{/if}
+															</td>
+														</tr>
+													{/each}
 												{/each}
 											</tbody>
 										</table>
 									</div>
-								</div>
-							{/if}
+
+									<!-- Summary Footer -->
+									<footer class="border-base-200 bg-base-50 border-t px-5 py-3">
+										<div class="flex flex-wrap items-center justify-between gap-4 text-xs">
+											<div class="flex items-center gap-4">
+												<div class="flex items-center gap-2">
+													<span class="bg-success inline-block h-2.5 w-2.5 rounded-full"></span>
+													<span class="opacity-60">Điểm tăng</span>
+												</div>
+												<div class="flex items-center gap-2">
+													<span class="bg-warning inline-block h-2.5 w-2.5 rounded-full"></span>
+													<span class="opacity-60">Điểm giảm</span>
+												</div>
+												<div class="flex items-center gap-2">
+													<span class="badge badge-error badge-xs">Tuyệt</span>
+													<span class="opacity-60">Khí tuyệt</span>
+												</div>
+											</div>
+											<p class="text-[10px] italic opacity-50">
+												Điểm lực thể hiện sức mạnh của mỗi Thần trong lá số.
+											</p>
+										</div>
+									</footer>
+								{/if}
+							</div>
 						</section>
 					{/if}
 				</div>

@@ -13,6 +13,13 @@ on:
       - 'services/api/**'
       - 'package.json'
       - 'bun.lock'
+  workflow_dispatch:
+    inputs:
+      run_all_tests:
+        description: 'Run all service tests regardless of changes'
+        required: false
+        default: 'true'
+        type: boolean
 
 jobs:
   detect-changes:
@@ -50,7 +57,7 @@ jobs:
 
   test-products:
     needs: detect-changes
-    if: ${{ needs.detect-changes.outputs.products == 'true' || needs.detect-changes.outputs.common == 'true' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_all_tests == true || needs.detect-changes.outputs.products == 'true' || needs.detect-changes.outputs.common == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -64,14 +71,33 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Run Products Service Tests
-        run: bun test services/api/src/products/tests/
+      - name: Run Products Service Tests with Coverage and JUnit
+        run: bun test --coverage --coverage-reporter=lcov --reporter=junit --reporter-outfile=junit-products.xml services/api/src/products/tests/
         env:
           NODE_ENV: test
+
+      - name: Upload Products Coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          flags: products
+          name: products-coverage
+          fail_ci_if_error: false
+
+      - name: Upload Products Test Results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: junit-products.xml
+          flags: products
+          name: products-tests
+          report_type: test_results
 
   test-orders:
     needs: detect-changes
-    if: ${{ needs.detect-changes.outputs.orders == 'true' || needs.detect-changes.outputs.common == 'true' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_all_tests == true || needs.detect-changes.outputs.orders == 'true' || needs.detect-changes.outputs.common == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -85,14 +111,33 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Run Orders Service Tests
-        run: bun test services/api/src/orders/tests/
+      - name: Run Orders Service Tests with Coverage and JUnit
+        run: bun test --coverage --coverage-reporter=lcov --reporter=junit --reporter-outfile=junit-orders.xml services/api/src/orders/tests/
         env:
           NODE_ENV: test
+
+      - name: Upload Orders Coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          flags: orders
+          name: orders-coverage
+          fail_ci_if_error: false
+
+      - name: Upload Orders Test Results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: junit-orders.xml
+          flags: orders
+          name: orders-tests
+          report_type: test_results
 
   test-payments:
     needs: detect-changes
-    if: ${{ needs.detect-changes.outputs.payments == 'true' || needs.detect-changes.outputs.common == 'true' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_all_tests == true || needs.detect-changes.outputs.payments == 'true' || needs.detect-changes.outputs.common == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -106,14 +151,33 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Run Payments Service Tests
-        run: bun test services/api/src/payments/tests/
+      - name: Run Payments Service Tests with Coverage and JUnit
+        run: bun test --coverage --coverage-reporter=lcov --reporter=junit --reporter-outfile=junit-payments.xml services/api/src/payments/tests/
         env:
           NODE_ENV: test
+
+      - name: Upload Payments Coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          flags: payments
+          name: payments-coverage
+          fail_ci_if_error: false
+
+      - name: Upload Payments Test Results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: junit-payments.xml
+          flags: payments
+          name: payments-tests
+          report_type: test_results
 
   test-users:
     needs: detect-changes
-    if: ${{ needs.detect-changes.outputs.users == 'true' || needs.detect-changes.outputs.common == 'true' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_all_tests == true || needs.detect-changes.outputs.users == 'true' || needs.detect-changes.outputs.common == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -127,10 +191,29 @@ jobs:
       - name: Install dependencies
         run: bun install
 
-      - name: Run Users Service Tests
-        run: bun test services/api/src/users/tests/
+      - name: Run Users Service Tests with Coverage and JUnit
+        run: bun test --coverage --coverage-reporter=lcov --reporter=junit --reporter-outfile=junit-users.xml services/api/src/users/tests/
         env:
           NODE_ENV: test
+
+      - name: Upload Users Coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./coverage/lcov.info
+          flags: users
+          name: users-coverage
+          fail_ci_if_error: false
+
+      - name: Upload Users Test Results to Codecov
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: junit-users.xml
+          flags: users
+          name: users-tests
+          report_type: test_results
 
   # Summary job that requires all test jobs to pass
   test-summary:

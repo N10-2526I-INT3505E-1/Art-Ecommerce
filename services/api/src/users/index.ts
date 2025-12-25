@@ -192,20 +192,44 @@ export const usersPlugin = (dependencies: { userService: UserService }) =>
 
 							// USER MANAGEMENT
 
-							// GET /users - List all users (admin only)
+							// GET /users - List all users (admin only) with pagination
 							.get(
 								'/',
-								async ({ user, userService }) => {
+								async ({ user, userService, query }) => {
 									if (user.role !== 'manager') throw new ForbiddenError('Admins only');
-									const { users } = await userService.getAllUsers();
-									return { users };
+									const result = await userService.getAllUsers({
+										page: query.page,
+										limit: query.limit,
+										search: query.search,
+										role: query.role,
+									});
+									return result;
 								},
 								{
+									query: t.Object({
+										page: t.Optional(t.Numeric({ default: 1 })),
+										limit: t.Optional(t.Numeric({ default: 10 })),
+										search: t.Optional(t.String()),
+										role: t.Optional(t.String()),
+									}),
 									response: {
-										200: t.Object({ users: t.Array(SafeUserResponseSchema) }),
+										200: t.Object({
+											users: t.Array(SafeUserResponseSchema),
+											pagination: t.Object({
+												page: t.Number(),
+												limit: t.Number(),
+												total: t.Number(),
+												totalPages: t.Number(),
+											}),
+										}),
 										403: ErrorSchema,
 									},
-									detail: { tags: ['Users'], summary: 'Get all users (Admin only)' },
+									detail: {
+										tags: ['Users'],
+										summary: 'Get all users with pagination (Admin only)',
+										description:
+											'Supports pagination, search (by id, email, username, name), and role filtering.',
+									},
 								},
 							)
 

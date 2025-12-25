@@ -229,9 +229,61 @@ export class UserService {
 
 	// SECTION 2: USER MANAGEMENT (Không cần JWT)
 
-	async getAllUsers() {
-		const allUsers = await this.db.select().from(usersTable);
-		return { users: allUsers };
+	async getAllUsers(options?: { page?: number; limit?: number; search?: string; role?: string }) {
+		const page = options?.page || 1;
+		const limit = options?.limit || 10;
+		const offset = (page - 1) * limit;
+		const search = options?.search?.toLowerCase() || '';
+		const role = options?.role || '';
+
+		// Build query with filters
+		let query = this.db.select().from(usersTable);
+
+		// Get all users first for filtering (SQLite doesn't support complex WHERE with OR easily)
+		const allUsers = await query;
+
+		// Apply filters in memory
+		let filteredUsers = allUsers;
+
+		if (search) {
+			filteredUsers = filteredUsers.filter(
+				(u: any) =>
+					u.id.toLowerCase().includes(search) ||
+					u.email.toLowerCase().includes(search) ||
+					u.username.toLowerCase().includes(search) ||
+					u.first_name.toLowerCase().includes(search) ||
+					u.last_name.toLowerCase().includes(search),
+			);
+		}
+
+		if (role) {
+			filteredUsers = filteredUsers.filter((u: any) => u.role === role);
+		}
+
+		// Sort by created_at descending
+		filteredUsers.sort(
+			(a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+		);
+
+		// Calculate pagination
+		const total = filteredUsers.length;
+		const totalPages = Math.ceil(total / limit);
+
+		// Apply pagination
+		const paginatedUsers = filteredUsers.slice(offset, offset + limit);
+
+		// Remove password from response
+		const safeUsers = paginatedUsers.map(({ password, ...user }: any) => user);
+
+		return {
+			users: safeUsers,
+			pagination: {
+				page,
+				limit,
+				total,
+				totalPages,
+			},
+		};
 	}
 
 	async getUserById(id: string) {

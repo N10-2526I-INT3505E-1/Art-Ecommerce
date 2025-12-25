@@ -1,12 +1,47 @@
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 import base64
 import json
+import httpx
 
 from .rag_service import search_paintings_by_image, search_knowledge
 from .llm import chat_stream
+
+async def fetch_image_from_url(url: str) -> Optional[bytes]:
+    """
+    Download image from URL and return as bytes.
+    Returns None if download fails.
+    """
+    if not url:
+        return None
+    
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            response = await client.get(url)
+            if response.status_code == 200:
+                content_type = response.headers.get('content-type', '')
+                if 'image' in content_type:
+                    print(f"✅ Downloaded image from {url[:50]}... ({len(response.content)} bytes)")
+                    return response.content
+                else:
+                    print(f"⚠️ URL is not an image: {content_type}")
+                    return None
+            else:
+                print(f"⚠️ Failed to download image: HTTP {response.status_code}")
+                return None
+    except Exception as e:
+        print(f"⚠️ Error downloading image: {e}")
+        return None
+
+class FengShuiProfile(BaseModel):
+    dung_than: List[str] = []      # Favorable elements (Dụng Thần)
+    hy_than: List[str] = []        # Helpful elements (Hỷ Thần)
+    ky_than: List[str] = []        # Unfavorable elements (Kỵ Thần)
+    hung_than: List[str] = []      # Harmful elements (Hung Thần)
+    day_master_element: Optional[str] = None
+    day_master_status: Optional[str] = None  # Vượng/Nhược
 
 app = FastAPI(title="Art AI Service")
 
@@ -19,26 +54,49 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+class CurrentProduct(BaseModel):
+    id: str
+    name: str
+    price: float
+    description: Optional[str] = None
+    imageUrl: Optional[str] = None
+    categoryName: Optional[str] = None
+    tags: Optional[List[str]] = []
+
 class ChatRequest(BaseModel):
     text: str
+    feng_shui_profile: Optional[FengShuiProfile] = None
+    current_product: Optional[CurrentProduct] = None
 
 # ==========================================
 # 1. API TEST UPLOAD ẢNH (Visual Search)
 # ==========================================
 @app.post("/analyze")
-async def analyze_room(file: UploadFile = File(...)):
+async def analyze_room(
+    file: UploadFile = File(...),
+    feng_shui_profile: Optional[str] = Form(None)
+):
     """
     Endpoint này dùng để Test tính năng Upload ảnh & Tìm tranh.
-    - Input: File ảnh (Multipart/Form-data)
+    - Input: File ảnh (Multipart/Form-data), optional feng_shui_profile JSON
     - Output: JSON chứa lời tư vấn và danh sách tranh tìm được.
     """
     try:
         # 1. Đọc ảnh
         image_bytes = await file.read()
+        
+        # 2. Parse feng shui profile if provided
+        feng_shui_data = None
+        if feng_shui_profile:
+            try:
+                feng_shui_data = json.loads(feng_shui_profile)
+                print(f"📊 Received Feng Shui profile: Dụng Thần={feng_shui_data.get('dung_than', [])}, Kỵ Thần={feng_shui_data.get('ky_than', [])}")
+            except json.JSONDecodeError:
+                print("⚠️ Failed to parse feng_shui_profile JSON")
 
-        # 2. Tìm tranh trong Qdrant (Visual Search)
+        # 3. Tìm tranh trong Qdrant (Visual Search)
         # Logic này nằm trong rag_service.py
-        products_found = search_paintings_by_image(image_bytes, limit=4)
+        products_found = search_paintings_by_image(image_bytes, limit=8)  # Get more products for filtering
 
         if not products_found:
             return {
@@ -47,16 +105,17 @@ async def analyze_room(file: UploadFile = File(...)):
                 "products": []
             }
 
-        # 3. Gọi LLM tư vấn (Non-stream)
+        # 4. Gọi LLM tư vấn (Non-stream)
         # Chúng ta dùng lại hàm chat_stream nhưng gom lại thành 1 chuỗi
         print("🤖 AI đang phân tích ảnh...")
         
         prompt_trigger = "Hãy phân tích căn phòng trong ảnh và gợi ý tranh phù hợp từ danh sách."
         
         generator = chat_stream(
-            user_text=prompt_trigger, 
-            user_image_bytes=image_bytes, 
-            products_context=products_found
+            user_text=prompt_trigger,
+            user_image_bytes=image_bytes,
+            products_context=products_found,
+            feng_shui_profile=feng_shui_data
         )
         
         full_advice = ""
@@ -86,11 +145,15 @@ async def analyze_room(file: UploadFile = File(...)):
 async def chat_http(request: ChatRequest):
     """
     Endpoint này dùng để Test tính năng Hỏi đáp phong thủy (RAG).
-    - Input: JSON { "text": "Mệnh kim hợp màu gì?" }
+    - Input: JSON { "text": "Mệnh kim hợp màu gì?", "feng_shui_profile": {...} }
     - Output: JSON câu trả lời.
     """
     try:
         user_text = request.text
+        feng_shui_data = request.feng_shui_profile.model_dump() if request.feng_shui_profile else None
+        
+        if feng_shui_data:
+            print(f"📊 Hồ sơ bát tự: Dụng Thần={feng_shui_data.get('dung_than', [])}")
         
         # 1. Tìm kiến thức phong thủy (Text RAG)
         # Logic nằm trong rag_service.py (VietnamEmbedding + PhoRanker)
@@ -101,7 +164,8 @@ async def chat_http(request: ChatRequest):
         
         generator = chat_stream(
             user_text=user_text,
-            knowledge_context=knowledge_found
+            knowledge_context=knowledge_found,
+            feng_shui_profile=feng_shui_data
         )
         
         full_response = ""
@@ -110,7 +174,8 @@ async def chat_http(request: ChatRequest):
             
         return {
             "question": user_text,
-            "context_found": bool(knowledge_found), # True nếu tìm thấy tài liệu
+            "context_found": bool(knowledge_found),
+            "has_feng_shui_profile": feng_shui_data is not None,
             "answer": full_response
         }
 
@@ -144,21 +209,28 @@ async def websocket_endpoint(websocket: WebSocket):
             # --- PHASE 1: TÌM KIẾM DỮ LIỆU ---
             products_found = []
             knowledge_found = ""
+            feng_shui_data = data.get("feng_shui_profile")
 
             if user_image_bytes:
-                products_found = search_paintings_by_image(user_image_bytes)
+                products_found = search_paintings_by_image(user_image_bytes, limit=8)
             
             if user_text:
                 knowledge_found = search_knowledge(user_text)
             
             if products_found:
                 await websocket.send_json({
-                    "type": "products", 
+                    "type": "products",
                     "data": products_found
                 })
 
             # --- PHASE 2: TRẢ LỜI STREAM ---
-            generator = chat_stream(user_text, user_image_bytes, products_found, knowledge_found)
+            generator = chat_stream(
+                user_text,
+                user_image_bytes,
+                products_found,
+                knowledge_found,
+                feng_shui_profile=feng_shui_data
+            )
             
             for token in generator:
                 await websocket.send_text(token)

@@ -18,7 +18,10 @@
 	import AIChatWidget from '$lib/components/AIChatWidget.svelte';
 	import type { LayoutProps } from './$types';
 
-	let { children }: LayoutProps = $props();
+	let { children, data }: LayoutProps = $props();
+
+	// Bazi profile for AI chat personalization
+	const baziProfile = $derived(data.baziProfile);
 
 	// Constants
 	const INTERACTIVE_SELECTOR =
@@ -30,7 +33,7 @@
 		{
 			stiffness: 0.15,
 			damping: 0.8,
-			precision: 0.5,
+			precision: 0.1, // Increased precision for smoother stopping
 		},
 	);
 
@@ -66,18 +69,15 @@
 		return cachedResult;
 	}
 
-	// Batched cursor update - runs once per animation frame
+	// Batched cursor update
 	function flushCursorUpdate() {
 		rafId = null;
-
-		// Update spring target
 		mouse.target = { x: pendingX, y: pendingY };
 
 		const now = performance.now();
 		if (now - lastInteractiveCheck >= INTERACTIVE_CHECK_INTERVAL) {
 			lastInteractiveCheck = now;
 			const newInteractive = checkInteractive(pendingTarget);
-			// Only update state if changed
 			if (newInteractive !== overInteractive) {
 				overInteractive = newInteractive;
 			}
@@ -87,7 +87,6 @@
 	// Event Handlers
 	function handleMouseMove(event: MouseEvent) {
 		if (!isPageVisible) return;
-
 		pendingX = event.clientX;
 		pendingY = event.clientY;
 		pendingTarget = event.target;
@@ -95,7 +94,6 @@
 		if (rafId === null) {
 			rafId = requestAnimationFrame(flushCursorUpdate);
 		}
-
 		if (!showCursor) showCursor = true;
 	}
 
@@ -103,7 +101,6 @@
 		showCursor = false;
 		overInteractive = false;
 		cachedElement = null;
-		// Cancel pending RAF
 		if (rafId !== null) {
 			cancelAnimationFrame(rafId);
 			rafId = null;
@@ -132,57 +129,38 @@
 
 	$effect(() => {
 		if (!cursorEl) return;
-
 		const x = mouse.current.x;
 		const y = mouse.current.y;
-
-		// Direct DOM manipulation
-		cursorEl.style.setProperty('--cursor-x', `${x}px`);
-		cursorEl.style.setProperty('--cursor-y', `${y}px`);
+		cursorEl.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`;
 	});
 
-	// Lifecycle
 	onMount(() => {
 		if (!browser) return;
-
-		const setHeaderHeight = () => {
-			const nav = document.querySelector('.navbar');
-			const height = nav ? nav.getBoundingClientRect().height : 0;
-			document.documentElement.style.setProperty('--header-height', `${height}px`);
-		};
-
-		setHeaderHeight();
-		const ro = new ResizeObserver(setHeaderHeight);
-		const navEl = document.querySelector('.navbar');
-		if (navEl) ro.observe(navEl);
 
 		// Platform detection
 		if (navigator.userAgent.includes('Firefox')) {
 			document.documentElement.classList.add('platform-firefox');
 		}
 
-		// Custom cursor detection (pointer: fine = mouse/trackpad)
+		// Custom cursor detection
 		const hasFineCursor = window.matchMedia('(pointer: fine)').matches;
 		if (hasFineCursor) {
 			showCursor = true;
 			document.documentElement.classList.add('has-custom-cursor');
 		}
 
-		// Visibility change listener
 		document.addEventListener('visibilitychange', handleVisibilityChange);
 
 		return () => {
-			ro.disconnect();
 			document.removeEventListener('visibilitychange', handleVisibilityChange);
-			if (rafId !== null) {
-				cancelAnimationFrame(rafId);
-			}
+			if (rafId !== null) cancelAnimationFrame(rafId);
 		};
 	});
 
 	// Derived State
 	const isAuthPage = $derived(['/login', '/register'].includes(page.url.pathname));
 	const isManagePage = $derived(page.url.pathname.startsWith('/manage'));
+	const isHomePage = $derived(page.url.pathname === '/');
 </script>
 
 <svelte:head>
@@ -209,120 +187,123 @@
 	></div>
 {/if}
 
-<main
-	class="flex flex-col overflow-hidden"
-	class:h-dvh={page.url.pathname === '/'}
-	style:padding-top={isAuthPage ? '0px' : 'var(--header-height, 0px)'}
+<!-- 
+    App Shell Structure
+    - h-dvh: Uses dynamic viewport height (mobile friendly)
+    - bg-base-100: Ensures background color matches theme
+    - antialiased: Better font rendering
+-->
+<div
+	class="bg-base-100 text-base-content selection:bg-primary flex min-h-dvh w-full flex-col antialiased selection:text-white"
 >
 	{#if !isAuthPage}
+		<!-- Navbar handles its own positioning (Sticky vs Fixed) -->
 		<NavigationBar />
 	{/if}
 
-	<div class="flex-1 snap-y snap-proximity overflow-x-hidden overflow-y-auto scroll-smooth">
+	<main class="flex-1 snap-y snap-proximity overflow-x-hidden">
 		{@render children()}
-		{#if !isManagePage}
-			<Footer />
-		{/if}
-	</div>
-</main>
-<AIChatWidget />
+	</main>
+
+	{#if !isManagePage && !isAuthPage}
+		<Footer />
+	{/if}
+</div>
+
+<AIChatWidget {baziProfile} />
 
 <style>
-	main {
-		padding-top: var(--header-height, 0px);
+	/* Custom Scrollbar for Webkit */
+	main::-webkit-scrollbar {
+		width: 8px;
 	}
 
+	main::-webkit-scrollbar-track {
+		background: transparent;
+	}
+
+	main::-webkit-scrollbar-thumb {
+		background-color: rgba(156, 163, 175, 0.3); /* gray-400/30 */
+		border-radius: 20px;
+	}
+
+	main::-webkit-scrollbar-thumb:hover {
+		background-color: rgba(156, 163, 175, 0.5);
+	}
+
+	/* Global Cursor Reset */
 	:global(html.has-custom-cursor),
 	:global(html.has-custom-cursor body) {
-		cursor:
-			url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3" fill="white"/></svg>')
-				4 4,
-			auto;
+		cursor: none;
 	}
 
 	:global(html.has-custom-cursor a),
 	:global(html.has-custom-cursor button),
 	:global(html.has-custom-cursor [role='button']),
-	:global(html.has-custom-cursor input[type='button']),
-	:global(html.has-custom-cursor input[type='submit']),
-	:global(html.has-custom-cursor input[type='reset']) {
-		cursor:
-			url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="3" fill="white"/></svg>')
-				4 4,
-			pointer;
+	:global(html.has-custom-cursor input) {
+		cursor: none;
 	}
 
+	/* Scroll Snapping */
 	:global(footer),
 	:global(.footer) {
 		scroll-snap-align: start;
 	}
 
+	/* Optimized Cursor */
 	.circle-cursor {
-		--cursor-x: 0px;
-		--cursor-y: 0px;
-
 		position: fixed;
 		top: 0;
 		left: 0;
 		z-index: 9999;
 
-		transform: translate3d(var(--cursor-x), var(--cursor-y), 0) translate(-50%, -50%);
+		/* Hardware Acceleration */
+		will-change: transform, width, height, border-width;
+		backface-visibility: hidden;
+		transform: translate3d(0, 0, 0); /* Initial state handled by JS */
 
-		/* Size */
-		width: 32px;
-		height: 32px;
-
-		/* Shape */
+		/* Appearance */
+		width: 24px;
+		height: 24px;
 		border-radius: 50%;
-		border: 2px solid white;
+		border: 1.5px solid white;
 		background-color: transparent;
 
 		/* Interaction */
 		pointer-events: none;
 		user-select: none;
-
-		/* Blend mode */
 		mix-blend-mode: difference;
 
-		/* GPU acceleration */
-		will-change: transform;
-		backface-visibility: hidden;
-
-		contain: layout style paint size;
-
-		/* Shadow effect */
-		filter: drop-shadow(0 0 2px rgba(255, 255, 255, 0.5));
-
+		/* Transitions */
 		transition:
-			width 180ms cubic-bezier(0.4, 0, 0.2, 1),
-			height 180ms cubic-bezier(0.4, 0, 0.2, 1),
-			border-width 180ms cubic-bezier(0.4, 0, 0.2, 1),
-			background-color 180ms cubic-bezier(0.4, 0, 0.2, 1),
-			filter 180ms cubic-bezier(0.4, 0, 0.2, 1),
-			opacity 200ms ease-out;
+			width 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+			height 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+			border-width 0.2s ease,
+			background-color 0.2s ease,
+			opacity 0.2s ease;
 	}
 
 	.circle-cursor.is-down {
-		width: 42px;
-		height: 42px;
-		border-width: 2.5px;
-		filter: drop-shadow(0 0 3px rgba(255, 255, 255, 0.6));
+		width: 32px;
+		height: 32px;
+		border-width: 2px;
+		background-color: rgba(255, 255, 255, 0.1);
 	}
 
 	.circle-cursor.is-interactive {
-		width: 40px;
-		height: 40px;
-		border-width: 2.5px;
-		background-color: rgba(255, 255, 255, 0.15);
-		filter: drop-shadow(0 0 2.5px rgba(255, 255, 255, 0.55));
+		width: 48px;
+		height: 48px;
+		border-width: 1px;
+		background-color: rgba(255, 255, 255, 0.1);
+		backdrop-filter: blur(1px); /* Subtle glass effect inside cursor */
+		border-color: rgba(255, 255, 255, 0.8);
 	}
 
 	.circle-cursor.is-interactive.is-down {
-		width: 48px;
-		height: 48px;
-		border-width: 3px;
-		background-color: rgba(255, 255, 255, 0.2);
-		filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.65));
+		width: 40px;
+		height: 40px;
+		border-width: 2px;
+		background-color: rgba(255, 255, 255, 0.3);
 	}
 
 	@media (prefers-reduced-motion: reduce) {

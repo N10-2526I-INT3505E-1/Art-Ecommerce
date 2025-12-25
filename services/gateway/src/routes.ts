@@ -7,6 +7,7 @@ const ORDERS_SERVICE_URL = process.env.ORDERS_SERVICE_URL || 'http://localhost:4
 const PAYMENTS_SERVICE_URL = process.env.PAYMENTS_SERVICE_URL || 'http://localhost:4002';
 const PRODUCTS_SERVICE_URL = process.env.PRODUCTS_SERVICE_URL || 'http://localhost:4003';
 const USERS_SERVICE_URL = process.env.USERS_SERVICE_URL || 'http://localhost:4004';
+const SEARCH_SERVICE_URL = process.env.SEARCH_SERVICE_URL || 'http://localhost:4005';
 
 // Default API version
 const DEFAULT_API_VERSION = 'v1';
@@ -18,6 +19,7 @@ const VERSIONABLE_ROUTES = [
 	'/users',
 	'/sessions',
 	'/vnpay_ipn',
+	'/search',
 ];
 
 // Helper to sanitize and join URLs
@@ -143,6 +145,11 @@ export const routes = new Elysia({ name: 'gateway-routes' })
 			// Products (Public View)
 			.all('/products*', async (ctx) => {
 				return proxyRequest(PRODUCTS_SERVICE_URL, ctx.request);
+			})
+
+			// Search (Public)
+			.all('/search*', async (ctx) => {
+				return proxyRequest(SEARCH_SERVICE_URL, ctx.request);
 			})
 
 			// ==========================================

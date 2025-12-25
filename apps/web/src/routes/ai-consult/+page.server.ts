@@ -1,7 +1,7 @@
-import type { LayoutServerLoad } from './$types';
 import { api } from '$lib/server/http';
+import type { PageServerLoad } from './$types';
 
-export const load: LayoutServerLoad = async ({ locals, fetch, request }) => {
+export const load: PageServerLoad = async ({ locals, fetch, request }) => {
 	let baziProfile = null;
 
 	// Only try to fetch bazi profile if user is logged in
@@ -12,12 +12,12 @@ export const load: LayoutServerLoad = async ({ locals, fetch, request }) => {
 			baziProfile = response.profile;
 		} catch (error) {
 			// Profile doesn't exist yet - this is expected for new users
-			// Silently ignore
+			console.log('No Bazi profile found for AI consult');
 		}
 	}
 
 	return {
-		user: locals.user,
+		user: locals.user ?? null,
 		baziProfile,
 	};
 };

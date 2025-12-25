@@ -1,13 +1,25 @@
 <script lang="ts">
-	import { Upload, Sparkles, Loader2 } from 'lucide-svelte';
+	import { Upload, Sparkles, Loader2, User } from 'lucide-svelte';
 	import ImageUploader from '$lib/components/ImageUploader.svelte';
 	import AnalysisResult from '$lib/components/AnalysisResult.svelte';
+
+	const { data } = $props();
 
 	let imageFile: File | null = $state(null);
 	let imagePreview: string | null = $state(null);
 	let isAnalyzing = $state(false);
 	let analysisData: { analysis: string; products: any[] } | null = $state(null);
 	let error: string | null = $state(null);
+
+	// Bazi profile from server
+	const baziProfile = $derived(data.baziProfile);
+	const user = $derived(data.user);
+
+	// Extract Dụng Thần and Kỵ Thần for AI recommendations
+	const dungThan = $derived(baziProfile?.limit_score?.dungThan ?? []);
+	const hyThan = $derived(baziProfile?.limit_score?.hyThan ?? []);
+	const kyThan = $derived(baziProfile?.limit_score?.kyThan ?? []);
+	const hungThan = $derived(baziProfile?.limit_score?.hungThan ?? []);
 
 	function handleImageSelected(file: File, preview: string) {
 		console.log('🖼️ Image selected:', file.name, preview.substring(0, 50));
@@ -26,6 +38,20 @@
 		try {
 			const formData = new FormData();
 			formData.append('file', imageFile);
+
+			// Include Feng Shui profile if available (Dụng Thần / Kỵ Thần)
+			if (baziProfile && baziProfile.limit_score) {
+				const fengShuiProfile = {
+					dung_than: dungThan, // Favorable elements (Dụng Thần)
+					hy_than: hyThan, // Helpful elements (Hỷ Thần)
+					ky_than: kyThan, // Unfavorable elements (Kỵ Thần)
+					hung_than: hungThan, // Harmful elements (Hung Thần)
+					day_master_element: baziProfile.day_master_element,
+					day_master_status: baziProfile.day_master_status, // Vượng/Nhược
+				};
+				formData.append('feng_shui_profile', JSON.stringify(fengShuiProfile));
+				console.log('📊 Including Feng Shui profile:', fengShuiProfile);
+			}
 
 			console.log('🚀 Sending image to AI service...');
 
@@ -63,7 +89,7 @@
 </script>
 
 <svelte:head>
-	<title>Tư Vấn AI - L'Artelier</title>
+	<title>Tư Vấn AI - Novice</title>
 </svelte:head>
 
 <div class="bg-base-200 min-h-screen py-8">
@@ -72,11 +98,47 @@
 		<div class="mb-8 text-center">
 			<h1 class="mb-2 flex items-center justify-center gap-2 text-4xl font-bold">
 				<Sparkles class="text-primary h-8 w-8" />
-				Tư Vấn AI Phong Thủy
+				Tư Vấn AI
 			</h1>
 			<p class="text-base-content/70">
 				Upload ảnh căn phòng của bạn để nhận gợi ý tranh và đồ trang trí phù hợp
 			</p>
+
+			<!-- Feng Shui Profile Status -->
+			{#if baziProfile && baziProfile.limit_score}
+				<div class="alert alert-success mx-auto mt-4 max-w-lg">
+					<User class="h-5 w-5" />
+					<div class="text-left">
+						<div class="font-semibold">Đã kết nối hồ sơ Phong Thủy</div>
+						<div class="text-sm opacity-80">
+							<span class="font-medium">Dụng Thần:</span>
+							{dungThan.join(', ') || 'Chưa xác định'} •
+							<span class="font-medium">Kỵ Thần:</span>
+							{[...kyThan, ...hungThan].join(', ') || 'Không có'}
+						</div>
+					</div>
+				</div>
+			{:else if user}
+				<div class="alert alert-warning mx-auto mt-4 max-w-lg">
+					<User class="h-5 w-5" />
+					<div class="text-left">
+						<div class="font-semibold">Chưa có hồ sơ Bát Tự</div>
+						<a href="/bazi" class="text-sm underline"
+							>Tạo hồ sơ để AI tư vấn theo Dụng Thần của bạn →</a
+						>
+					</div>
+				</div>
+			{:else}
+				<div class="alert mx-auto mt-4 max-w-lg">
+					<User class="h-5 w-5" />
+					<div class="text-left">
+						<div class="font-semibold">Đăng nhập để cá nhân hóa</div>
+						<a href="/login" class="text-sm underline"
+							>Đăng nhập và tạo hồ sơ Bát Tự để nhận tư vấn theo mệnh →</a
+						>
+					</div>
+				</div>
+			{/if}
 		</div>
 
 		<!-- Main Content -->

@@ -22,9 +22,32 @@
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { cart } from '$lib/stores/cart.svelte';
+	import { currentProductStore, type CurrentProduct } from '$lib/stores/currentProduct.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
+
+	// Set current product for AI Chat context - use data.product directly to track navigation changes
+	$effect(() => {
+		const prod = data.product;
+		if (prod) {
+			console.log('🛍️ Setting current product for AI:', prod.name);
+			currentProductStore.set({
+				id: prod.id,
+				name: prod.name,
+				price: prod.price,
+				description: prod.description,
+				imageUrl: prod.images?.[0],
+				categoryName: prod.category?.name,
+				tags: prod.tags?.map((t: { name: string }) => t.name) ?? [],
+			});
+		}
+
+		// Clear when leaving the page
+		return () => {
+			currentProductStore.clear();
+		};
+	});
 
 	// ============================================
 	// Constants

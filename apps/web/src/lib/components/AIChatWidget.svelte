@@ -1,95 +1,56 @@
 <script lang="ts">
 	import { MessageCircle, X, Send, Loader2 } from 'lucide-svelte';
-	import { onMount, onDestroy } from 'svelte';
 
 	let isOpen = $state(false);
 	let messages = $state<{ role: 'user' | 'ai'; content: string }[]>([]);
 	let inputText = $state('');
-	let isConnected = $state(false);
 	let isTyping = $state(false);
-	let currentMessage = $state(''); // Accumulator for streaming tokens
-	let ws: WebSocket | null = null;
-	let messagesContainer: HTMLDivElement; // ← No $state needed for DOM refs
+	let messagesContainer: HTMLDivElement;
 
-	onMount(() => {
-		connectWebSocket();
-	});
+	const API_URL = 'https://api.novus.io.vn/api/chat';
 
-	onDestroy(() => {
-		if (ws) {
-			ws.close();
-		}
-	});
-
-	function connectWebSocket() {
-		try {
-			ws = new WebSocket('ws://localhost:8000/ws/chat');
-
-			ws.onopen = () => {
-				isConnected = true;
-				console.log('Connected to AI chat');
-			};
-
-			let currentMessage = '';
-			let firstChunkReceived = false;
-
-			ws.onmessage = (event) => {
-				// Backend sends plain text tokens, not JSON
-				const token = event.data;
-
-				// Hide typing indicator on first token
-				if (isTyping) {
-					isTyping = false;
-				}
-
-				// Accumulate tokens
-				currentMessage += token;
-
-				// Update the last AI message in real-time
-				if (messages.length > 0 && messages[messages.length - 1].role === 'ai') {
-					// Update existing AI message
-					messages[messages.length - 1].content = currentMessage;
-					messages = [...messages]; // Trigger reactivity
-				} else {
-					// Create new AI message
-					messages = [...messages, { role: 'ai', content: currentMessage }];
-				}
-
-				scrollToBottom();
-			};
-
-			ws.onerror = (error) => {
-				console.error('WebSocket error:', error);
-				isConnected = false;
-			};
-
-			ws.onclose = () => {
-				isConnected = false;
-				console.log('Disconnected from AI chat');
-			};
-		} catch (error) {
-			console.error('Failed to connect:', error);
-			isConnected = false;
-		}
-	}
-
-	function sendMessage() {
-		if (!inputText.trim() || !ws || ws.readyState !== WebSocket.OPEN) return;
+	async function sendMessage() {
+		if (!inputText.trim() || isTyping) return;
 
 		const userMessage = inputText.trim();
 
 		// Add user message
 		messages = [...messages, { role: 'user', content: userMessage }];
-
-		// Send to server
-		ws.send(JSON.stringify({ text: userMessage }));
-
-		// Clear input and reset for new AI response
 		inputText = '';
-		currentMessage = ''; // Reset accumulator
 		isTyping = true;
 
 		scrollToBottom();
+
+		try {
+			const response = await fetch(API_URL, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify({ text: userMessage }),
+			});
+
+			if (!response.ok) {
+				throw new Error(`HTTP error! status: ${response.status}`);
+			}
+
+			const data = await response.json();
+
+			// Add AI response
+			messages = [
+				...messages,
+				{ role: 'ai', content: data.answer || 'Xin lỗi, tôi không thể trả lời lúc này.' },
+			];
+		} catch (error) {
+			console.error('Error sending message:', error);
+			messages = [
+				...messages,
+				{ role: 'ai', content: 'Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại sau.' },
+			];
+		} finally {
+			isTyping = false;
+			scrollToBottom();
+		}
 	}
 
 	function handleKeyPress(e: KeyboardEvent) {
@@ -148,7 +109,7 @@
 				<div>
 					<h3 class="font-semibold">AI Phong Thủy</h3>
 					<p class="text-xs opacity-80">
-						{isConnected ? '🟢 Đang kết nối' : '🔴 Mất kết nối'}
+						{isTyping ? '⏳ Đang trả lời...' : '🟢 Sẵn sàng'}
 					</p>
 				</div>
 			</div>
@@ -193,19 +154,20 @@
 					onkeypress={handleKeyPress}
 					placeholder="Nhập câu hỏi..."
 					class="input input-bordered flex-1"
-					disabled={!isConnected}
+					disabled={isTyping}
 				/>
 				<button
 					class="btn btn-primary"
 					onclick={sendMessage}
-					disabled={!inputText.trim() || !isConnected}
+					disabled={!inputText.trim() || isTyping}
 				>
-					<Send class="h-4 w-4" />
+					{#if isTyping}
+						<Loader2 class="h-4 w-4 animate-spin" />
+					{:else}
+						<Send class="h-4 w-4" />
+					{/if}
 				</button>
 			</div>
-			{#if !isConnected}
-				<p class="text-error mt-2 text-xs">Đang kết nối lại...</p>
-			{/if}
 		</div>
 	</div>
 {/if}

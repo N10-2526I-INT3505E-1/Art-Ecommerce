@@ -1,6 +1,22 @@
 <script lang="ts">
 	import { MessageCircle, X, Send, Loader2 } from 'lucide-svelte';
 	import { currentProductStore, type CurrentProduct } from '$lib/stores/currentProduct.svelte';
+	import { marked } from 'marked';
+
+	// Configure marked for safe rendering
+	marked.setOptions({
+		breaks: true,
+		gfm: true,
+	});
+
+	// Helper to render markdown to HTML
+	function renderMarkdown(content: string): string {
+		try {
+			return marked.parse(content) as string;
+		} catch {
+			return content;
+		}
+	}
 
 	// Props - feng shui profile for personalized recommendations
 	interface FengShuiProfile {
@@ -231,12 +247,15 @@
 					class:chat-end={message.role === 'user'}
 					class:chat-start={message.role === 'ai'}
 				>
-					<div
-						class="chat-bubble whitespace-pre-wrap"
-						class:chat-bubble-primary={message.role === 'user'}
-					>
-						{message.content}
-					</div>
+					{#if message.role === 'ai'}
+						<div class="chat-bubble prose prose-sm prose-invert max-w-none">
+							{@html renderMarkdown(message.content)}
+						</div>
+					{:else}
+						<div class="chat-bubble chat-bubble-primary whitespace-pre-wrap">
+							{message.content}
+						</div>
+					{/if}
 				</div>
 			{/each}
 

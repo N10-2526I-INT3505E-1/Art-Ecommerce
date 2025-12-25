@@ -1,8 +1,9 @@
 import { api } from '$lib/server/http'; // Adjust path if needed
 import { fail, redirect } from '@sveltejs/kit';
 import type { Actions } from './$types';
+import { dev } from '$app/environment';
 
-const isProduction = process.env.NODE_ENV === 'production';
+const isProduction = !dev;
 
 // Common cookie options to match your hooks.server.ts logic
 const cookieOptions = {

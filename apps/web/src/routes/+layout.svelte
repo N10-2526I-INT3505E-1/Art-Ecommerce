@@ -210,7 +210,9 @@
 	{/if}
 </div>
 
-<AIChatWidget {baziProfile} />
+{#if !isAuthPage}
+	<AIChatWidget {baziProfile} />
+{/if}
 
 <style>
 	/* Custom Scrollbar for Webkit */

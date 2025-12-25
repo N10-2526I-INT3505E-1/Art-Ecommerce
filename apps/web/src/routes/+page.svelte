@@ -4,14 +4,15 @@
 	import {
 		ArrowLeft,
 		ArrowRight,
+		Check,
 		ChevronLeft,
 		ChevronRight,
 		ShoppingCart,
-		Star,
 	} from 'lucide-svelte';
 	import { animate, stagger } from 'motion';
 	import { onDestroy, onMount } from 'svelte';
 	import type { PageData } from './$types';
+	import { cart } from '$lib/stores/cart.svelte';
 
 	// Background Images (Keep these for Hero Section)
 	import LanBg from '$lib/assets/images/Lan.webp';
@@ -28,10 +29,31 @@
 	// Receive data from +page.server.ts
 	let { data }: { data: PageData } = $props();
 
+	// Track which products were just added to cart (for feedback)
+	let addedToCart = $state<Set<string | number>>(new Set());
+
 	// Helper to format currency
 	const formatCurrency = (amount: number) => {
 		return new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(amount);
 	};
+
+	// Quick add to cart handler
+	function handleQuickAdd(e: MouseEvent, product: any) {
+		e.preventDefault();
+		e.stopPropagation();
+
+		cart.addItem(product, 1);
+
+		// Show feedback
+		addedToCart.add(product.id);
+		addedToCart = new Set(addedToCart);
+
+		// Reset after 2 seconds
+		setTimeout(() => {
+			addedToCart.delete(product.id);
+			addedToCart = new Set(addedToCart);
+		}, 2000);
+	}
 
 	// --- MAIN CAROUSEL CONFIG ---
 	const slides = [
@@ -318,62 +340,69 @@
 				<div
 					class="embla__container flex touch-pan-y gap-3 py-3 pl-2 md:gap-4 md:py-4 md:pl-4 lg:gap-5"
 				>
-					{#each data.collection as product}
-						<div
+					{#each data.collection as product, idx}
+						<a
+							href={`/products/${product.id}`}
 							class="product-card min-w-0 flex-[0_0_70%] sm:flex-[0_0_45%] md:flex-[0_0_30%] lg:flex-[0_0_22%] xl:flex-[0_0_18%]"
 						>
 							<article
-								class="group relative h-full overflow-hidden rounded-xl bg-white shadow-sm transition-all hover:shadow-lg md:rounded-2xl"
+								class="group relative h-full cursor-pointer overflow-hidden rounded-xl bg-white shadow-sm transition-all hover:shadow-lg active:scale-[0.98] md:rounded-2xl"
 							>
 								<figure class="relative aspect-[3/4] overflow-hidden bg-gray-100">
 									<img
 										src={product.imageUrl}
 										alt={product.name}
-										class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
-										loading="lazy"
+										class="h-full w-full object-cover transition-transform duration-500 will-change-transform group-hover:scale-105"
+										loading={idx < 4 ? 'eager' : 'lazy'}
+										decoding="async"
+										fetchpriority={idx < 2 ? 'high' : 'auto'}
 									/>
-									<div
-										class="badge badge-sm badge-neutral md:badge-md absolute top-2 left-2 border-none bg-black/70 text-[10px] text-white backdrop-blur-md md:top-3 md:left-3 md:text-xs"
-									>
-										<!-- Using categoryId as API doesn't provide category name in sample -->
-										{product.categoryId}
-									</div>
+									{#if product.categoryId}
+										<div
+											class="badge badge-sm badge-neutral md:badge-md absolute top-2 left-2 border-none bg-black/70 text-[10px] text-white backdrop-blur-md md:top-3 md:left-3 md:text-xs"
+										>
+											{product.categoryId}
+										</div>
+									{/if}
 
 									<div
 										class="absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-black/80 to-transparent p-2 transition-transform duration-300 group-hover:translate-y-0 md:p-3"
 									>
 										<button
-											class="btn btn-primary btn-xs md:btn-sm w-full shadow-lg"
+											type="button"
+											class="btn btn-xs md:btn-sm w-full shadow-lg {addedToCart.has(product.id)
+												? 'btn-success'
+												: 'btn-primary'}"
 											aria-label={`Thêm ${product.name} vào giỏ`}
+											onclick={(e) => handleQuickAdd(e, product)}
 										>
-											<ShoppingCart size={14} class="md:hidden" />
-											<ShoppingCart size={16} class="hidden md:block" />
-											<span class="text-[10px] md:text-xs">Thêm vào giỏ</span>
+											{#if addedToCart.has(product.id)}
+												<Check size={14} class="md:hidden" />
+												<Check size={16} class="hidden md:block" />
+												<span class="text-[10px] md:text-xs">Đã thêm!</span>
+											{:else}
+												<ShoppingCart size={14} class="md:hidden" />
+												<ShoppingCart size={16} class="hidden md:block" />
+												<span class="text-[10px] md:text-xs">Thêm vào giỏ</span>
+											{/if}
 										</button>
 									</div>
 								</figure>
 
 								<div class="p-3 md:p-4">
-									<a
-										href={`/products/${product.id}`}
-										class="group-hover:text-primary line-clamp-2 block text-sm font-bold text-gray-900 transition-colors md:text-base"
+									<h3
+										class="group-hover:text-primary line-clamp-2 text-sm font-bold text-gray-900 transition-colors md:text-base"
 									>
 										{product.name}
-									</a>
+									</h3>
 									<div class="mt-2 flex items-center justify-between">
 										<span class="text-primary text-base font-semibold md:text-lg"
 											>{formatCurrency(product.price)}</span
 										>
-										<!-- API response doesn't strictly include rating, hiding to prevent error, or toggle if extended -->
-										<!-- <div class="flex items-center gap-1">
-											<Star size={12} class="fill-orange-400 text-orange-400 md:hidden" />
-											<Star size={14} class="hidden fill-orange-400 text-orange-400 md:block" />
-											<span class="text-[10px] text-gray-600 md:text-xs">5.0</span>
-										</div> -->
 									</div>
 								</div>
 							</article>
-						</div>
+						</a>
 					{/each}
 				</div>
 			</div>
@@ -435,47 +464,60 @@
 				<div
 					class="embla__container flex touch-pan-y gap-3 py-3 pl-2 md:gap-4 md:py-4 md:pl-4 lg:gap-5"
 				>
-					{#each data.newArrivals as product}
-						<div
+					{#each data.newArrivals as product, idx}
+						<a
+							href={`/products/${product.id}`}
 							class="product-card min-w-0 flex-[0_0_70%] sm:flex-[0_0_45%] md:flex-[0_0_30%] lg:flex-[0_0_22%] xl:flex-[0_0_18%]"
 						>
 							<article
-								class="group relative h-full overflow-hidden rounded-xl bg-white shadow-sm transition-all hover:shadow-lg md:rounded-2xl"
+								class="group relative h-full cursor-pointer overflow-hidden rounded-xl bg-white shadow-sm transition-all hover:shadow-lg active:scale-[0.98] md:rounded-2xl"
 							>
 								<figure class="relative aspect-[3/4] overflow-hidden bg-gray-100">
 									<img
 										src={product.imageUrl}
 										alt={product.name}
-										class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+										class="h-full w-full object-cover transition-transform duration-500 will-change-transform group-hover:scale-105"
 										loading="lazy"
+										decoding="async"
 									/>
-									<div
-										class="badge badge-sm badge-neutral md:badge-md absolute top-2 left-2 border-none bg-black/70 text-[10px] text-white backdrop-blur-md md:top-3 md:left-3 md:text-xs"
-									>
-										{product.categoryId}
-									</div>
+									{#if product.categoryId}
+										<div
+											class="badge badge-sm badge-neutral md:badge-md absolute top-2 left-2 border-none bg-black/70 text-[10px] text-white backdrop-blur-md md:top-3 md:left-3 md:text-xs"
+										>
+											{product.categoryId}
+										</div>
+									{/if}
 
 									<div
 										class="absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-black/80 to-transparent p-2 transition-transform duration-300 group-hover:translate-y-0 md:p-3"
 									>
 										<button
-											class="btn btn-primary btn-xs md:btn-sm w-full shadow-lg"
+											type="button"
+											class="btn btn-xs md:btn-sm w-full shadow-lg {addedToCart.has(product.id)
+												? 'btn-success'
+												: 'btn-primary'}"
 											aria-label={`Thêm ${product.name} vào giỏ`}
+											onclick={(e) => handleQuickAdd(e, product)}
 										>
-											<ShoppingCart size={14} class="md:hidden" />
-											<ShoppingCart size={16} class="hidden md:block" />
-											<span class="text-[10px] md:text-xs">Thêm vào giỏ</span>
+											{#if addedToCart.has(product.id)}
+												<Check size={14} class="md:hidden" />
+												<Check size={16} class="hidden md:block" />
+												<span class="text-[10px] md:text-xs">Đã thêm!</span>
+											{:else}
+												<ShoppingCart size={14} class="md:hidden" />
+												<ShoppingCart size={16} class="hidden md:block" />
+												<span class="text-[10px] md:text-xs">Thêm vào giỏ</span>
+											{/if}
 										</button>
 									</div>
 								</figure>
 
 								<div class="p-3 md:p-4">
-									<a
-										href={`/products/${product.id}`}
-										class="group-hover:text-primary line-clamp-2 block text-sm font-bold text-gray-900 transition-colors md:text-base"
+									<h3
+										class="group-hover:text-primary line-clamp-2 text-sm font-bold text-gray-900 transition-colors md:text-base"
 									>
 										{product.name}
-									</a>
+									</h3>
 									<div class="mt-2 flex items-center justify-between">
 										<span class="text-primary text-base font-semibold md:text-lg"
 											>{formatCurrency(product.price)}</span
@@ -483,7 +525,7 @@
 									</div>
 								</div>
 							</article>
-						</div>
+						</a>
 					{/each}
 				</div>
 			</div>
@@ -545,47 +587,60 @@
 				<div
 					class="embla__container flex touch-pan-y gap-3 py-3 pl-2 md:gap-4 md:py-4 md:pl-4 lg:gap-5"
 				>
-					{#each data.bestSellers as product}
-						<div
+					{#each data.bestSellers as product, idx}
+						<a
+							href={`/products/${product.id}`}
 							class="product-card min-w-0 flex-[0_0_70%] sm:flex-[0_0_45%] md:flex-[0_0_30%] lg:flex-[0_0_22%] xl:flex-[0_0_18%]"
 						>
 							<article
-								class="group relative h-full overflow-hidden rounded-xl bg-white shadow-sm transition-all hover:shadow-lg md:rounded-2xl"
+								class="group relative h-full cursor-pointer overflow-hidden rounded-xl bg-white shadow-sm transition-all hover:shadow-lg active:scale-[0.98] md:rounded-2xl"
 							>
 								<figure class="relative aspect-[3/4] overflow-hidden bg-gray-100">
 									<img
 										src={product.imageUrl}
 										alt={product.name}
-										class="h-full w-full object-cover transition-transform duration-700 group-hover:scale-110"
+										class="h-full w-full object-cover transition-transform duration-500 will-change-transform group-hover:scale-105"
 										loading="lazy"
+										decoding="async"
 									/>
-									<div
-										class="badge badge-sm badge-neutral md:badge-md absolute top-2 left-2 border-none bg-black/70 text-[10px] text-white backdrop-blur-md md:top-3 md:left-3 md:text-xs"
-									>
-										{product.categoryId}
-									</div>
+									{#if product.categoryId}
+										<div
+											class="badge badge-sm badge-neutral md:badge-md absolute top-2 left-2 border-none bg-black/70 text-[10px] text-white backdrop-blur-md md:top-3 md:left-3 md:text-xs"
+										>
+											{product.categoryId}
+										</div>
+									{/if}
 
 									<div
 										class="absolute inset-x-0 bottom-0 translate-y-full bg-gradient-to-t from-black/80 to-transparent p-2 transition-transform duration-300 group-hover:translate-y-0 md:p-3"
 									>
 										<button
-											class="btn btn-primary btn-xs md:btn-sm w-full shadow-lg"
+											type="button"
+											class="btn btn-xs md:btn-sm w-full shadow-lg {addedToCart.has(product.id)
+												? 'btn-success'
+												: 'btn-primary'}"
 											aria-label={`Thêm ${product.name} vào giỏ`}
+											onclick={(e) => handleQuickAdd(e, product)}
 										>
-											<ShoppingCart size={14} class="md:hidden" />
-											<ShoppingCart size={16} class="hidden md:block" />
-											<span class="text-[10px] md:text-xs">Thêm vào giỏ</span>
+											{#if addedToCart.has(product.id)}
+												<Check size={14} class="md:hidden" />
+												<Check size={16} class="hidden md:block" />
+												<span class="text-[10px] md:text-xs">Đã thêm!</span>
+											{:else}
+												<ShoppingCart size={14} class="md:hidden" />
+												<ShoppingCart size={16} class="hidden md:block" />
+												<span class="text-[10px] md:text-xs">Thêm vào giỏ</span>
+											{/if}
 										</button>
 									</div>
 								</figure>
 
 								<div class="p-3 md:p-4">
-									<a
-										href={`/products/${product.id}`}
-										class="group-hover:text-primary line-clamp-2 block text-sm font-bold text-gray-900 transition-colors md:text-base"
+									<h3
+										class="group-hover:text-primary line-clamp-2 text-sm font-bold text-gray-900 transition-colors md:text-base"
 									>
 										{product.name}
-									</a>
+									</h3>
 									<div class="mt-2 flex items-center justify-between">
 										<span class="text-primary text-base font-semibold md:text-lg"
 											>{formatCurrency(product.price)}</span
@@ -593,7 +648,7 @@
 									</div>
 								</div>
 							</article>
-						</div>
+						</a>
 					{/each}
 				</div>
 			</div>

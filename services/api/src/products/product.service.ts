@@ -131,24 +131,24 @@ export class ProductService {
 				}
 
 				try {
-                    // Fetch full product with relations for indexing
-                    const fullProduct = await tx.query.products.findFirst({
-                        where: (p, { eq }) => eq(p.id, newProduct.id),
-                        with: {
-                            category: true,
-                            productTags: {
-                                with: { tag: true }
-                            }
-                        }
-                    });
+					// Fetch full product with relations for indexing
+					const fullProduct = await tx.query.products.findFirst({
+						where: (p, { eq }) => eq(p.id, newProduct.id),
+						with: {
+							category: true,
+							productTags: {
+								with: { tag: true },
+							},
+						},
+					});
 
-                    if (fullProduct) {
-                        await meilisearchService.indexProduct(fullProduct);
-                    }
-                } catch (error) {
-                    console.error('⚠️ Meilisearch indexing failed:', error);
-                    // Don't throw - product already created
-                }
+					if (fullProduct) {
+						await meilisearchService.indexProduct(fullProduct);
+					}
+				} catch (error) {
+					console.error('⚠️ Meilisearch indexing failed:', error);
+					// Don't throw - product already created
+				}
 
 				return newProduct;
 			});
@@ -231,7 +231,9 @@ export class ProductService {
 
 			// Flatten tags to string array for response schema compatibility
 			const data = rawData.map((product) => {
-				const flatTags = product.productTags.map((pt) => pt.tag.name);
+				const flatTags = product.productTags
+					.map((pt) => pt.tag?.name)
+					.filter((name): name is string => Boolean(name));
 				const { productTags, ...rest } = product;
 				return { ...rest, tags: flatTags };
 			});
@@ -277,7 +279,9 @@ export class ProductService {
 				throw new NotFoundError('Product not found.');
 			}
 
-			const flatTags = product.productTags.map((pt) => pt.tag.name);
+			const flatTags = product.productTags
+				.map((pt) => pt.tag?.name)
+				.filter((name): name is string => Boolean(name));
 			const { productTags, ...rest } = product;
 			return { ...rest, tags: flatTags };
 		} catch (error) {
@@ -390,22 +394,22 @@ export class ProductService {
 				}
 
 				try {
-                    const fullProduct = await tx.query.products.findFirst({
-                        where: (p, { eq }) => eq(p.id, id),
-                        with: {
-                            category: true,
-                            productTags: {
-                                with: { tag: true }
-                            }
-                        }
-                    });
+					const fullProduct = await tx.query.products.findFirst({
+						where: (p, { eq }) => eq(p.id, id),
+						with: {
+							category: true,
+							productTags: {
+								with: { tag: true },
+							},
+						},
+					});
 
-                    if (fullProduct) {
-                        await meilisearchService.updateProduct(fullProduct);
-                    }
-                } catch (error) {
-                    console.error('⚠️ Meilisearch update failed:', error);
-                }
+					if (fullProduct) {
+						await meilisearchService.updateProduct(fullProduct);
+					}
+				} catch (error) {
+					console.error('⚠️ Meilisearch update failed:', error);
+				}
 
 				return { message: `Product ${id} updated successfully` };
 			});
@@ -432,10 +436,10 @@ export class ProductService {
 			}
 
 			try {
-                await meilisearchService.deleteProduct(id);
-            } catch (error) {
-                console.error('⚠️ Meilisearch delete failed:', error);
-            }
+				await meilisearchService.deleteProduct(id);
+			} catch (error) {
+				console.error('⚠️ Meilisearch delete failed:', error);
+			}
 
 			return { message: `Soft deleted product ${id}` };
 		} catch (error) {

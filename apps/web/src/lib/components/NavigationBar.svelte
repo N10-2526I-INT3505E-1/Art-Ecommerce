@@ -33,6 +33,11 @@
 	let cartCount = $derived(cartItems.reduce((sum, item) => sum + item.quantity, 0));
 	let cartSubtotal = $derived(cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0));
 
+	// Check if user has manager/operator role
+	let isManagerOrOperator = $derived(
+		currentUser && ['manager', 'operator'].includes(currentUser.role),
+	);
+
 	const categories = [
 		{ label: 'Tranh', href: '/c/tranh' },
 		{ label: 'Tượng', href: '/c/tuong' },
@@ -260,6 +265,13 @@
 							<span class="text-base-content/50 font-mono text-xs font-normal">
 								@{currentUser.username}
 							</span>
+							{#if isManagerOrOperator}
+								<span
+									class="bg-primary/10 text-primary mt-1 w-fit rounded px-1.5 py-0.5 text-[10px] font-bold tracking-wider uppercase"
+								>
+									{currentUser.role}
+								</span>
+							{/if}
 						</div>
 					</li>
 					<div class="divider my-0"></div>
@@ -273,6 +285,23 @@
 							<Package class="h-4 w-4 opacity-70" /> <span>Đơn mua hàng</span>
 						</a>
 					</li>
+					<li class="p-1">
+						<a href="/bazi" class="gap-3 rounded-lg py-2.5 font-medium">
+							<Icon iconNode={yinYang} class="h-4 w-4 opacity-70" />
+							<span>Lá số Bát tự</span>
+						</a>
+					</li>
+
+					{#if isManagerOrOperator}
+						<div class="divider my-0"></div>
+						<li class="p-1">
+							<a href="/manage" class="text-secondary gap-3 rounded-lg py-2.5 font-medium">
+								<Settings class="h-4 w-4" />
+								<span>Quản lý hệ thống</span>
+							</a>
+						</li>
+					{/if}
+
 					<div class="divider my-0"></div>
 					<li class="p-1">
 						<form action="/login?/logout" method="POST" class="w-full p-0">
@@ -287,6 +316,41 @@
 				</ul>
 			</div>
 		{:else}
+			<!-- Mobile: user icon dropdown -->
+			<div class="dropdown dropdown-end md:hidden">
+				<button
+					type="button"
+					tabindex="0"
+					class="btn btn-ghost btn-circle btn-sm h-10 w-10 transition-colors hover:bg-white/10"
+					aria-label="Tài khoản"
+				>
+					<User class="h-5 w-5" />
+				</button>
+
+				<ul
+					tabindex="-1"
+					class="menu menu-md dropdown-content bg-base-100 text-base-content rounded-box border-base-200 z-[1] mt-4 w-56 border p-3 shadow-lg ring-1 ring-black/5"
+				>
+					<!-- Header -->
+					<li class="menu-title text-base-content/80 px-2 py-2">
+						<span>Tài khoản</span>
+					</li>
+
+					<li class="p-1">
+						<a href="/login" class="justify-start gap-3 rounded-lg px-4 py-3">
+							<User class="h-5 w-5 opacity-70" />
+							<span class="font-medium">Đăng nhập</span>
+						</a>
+					</li>
+					<li class="p-1">
+						<a href="/register" class="justify-start gap-3 rounded-lg px-4 py-3">
+							<UserPlus class="h-5 w-5 opacity-70" />
+							<span class="font-bold">Đăng ký</span>
+						</a>
+					</li>
+				</ul>
+			</div>
+
 			<!-- Desktop: Login Buttons -->
 			<div class="hidden items-center gap-3 md:flex">
 				<a

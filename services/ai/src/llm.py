@@ -262,9 +262,21 @@ PHONG CÁCH TRÌNH BÀY
         }
     ]
     
-    # Add image to user message if provided
+    # Add images to user message if provided
+    images_to_send = []
+    
+    # Add room/space image (from /ai-consult upload)
     if user_image_bytes:
-        messages[1]['images'] = [user_image_bytes]
+        images_to_send.append(user_image_bytes)
+        print("🖼️ Đã thêm ảnh căn phòng vào prompt")
+    
+    # Add product image (from PDP context)
+    if product_image_bytes:
+        images_to_send.append(product_image_bytes)
+        print("🛍️ Đã thêm ảnh sản phẩm vào prompt")
+    
+    if images_to_send:
+        messages[1]['images'] = images_to_send
 
     # Gọi Stream
     try:

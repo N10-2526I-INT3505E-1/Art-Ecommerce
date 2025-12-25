@@ -145,12 +145,30 @@ async def analyze_room(
 async def chat_http(request: ChatRequest):
     """
     Endpoint này dùng để Test tính năng Hỏi đáp phong thủy (RAG).
-    - Input: JSON { "text": "Mệnh kim hợp màu gì?", "feng_shui_profile": {...} }
+    - Input: JSON { "text": "Mệnh kim hợp màu gì?", "feng_shui_profile": {...}, "current_product": {...} }
     - Output: JSON câu trả lời.
     """
     try:
         user_text = request.text
         feng_shui_data = request.feng_shui_profile.model_dump() if request.feng_shui_profile else None
+        
+        # Extract current product data
+        current_product_data = None
+        product_image_bytes = None
+        
+        if request.current_product:
+            current_product_data = request.current_product.model_dump()
+            print(f"🛍️ Sản phẩm đang xem: {current_product_data.get('name')}")
+            
+            # Fetch product image if available
+            image_url = current_product_data.get('imageUrl')
+            if image_url:
+                print(f"🖼️ Đang tải ảnh sản phẩm từ: {image_url[:50]}...")
+                product_image_bytes = await fetch_image_from_url(image_url)
+                if product_image_bytes:
+                    print(f"✅ Đã tải ảnh sản phẩm ({len(product_image_bytes)} bytes)")
+                else:
+                    print(f"⚠️ Không thể tải ảnh sản phẩm")
         
         if feng_shui_data:
             print(f"📊 Hồ sơ bát tự: Dụng Thần={feng_shui_data.get('dung_than', [])}")
@@ -165,7 +183,9 @@ async def chat_http(request: ChatRequest):
         generator = chat_stream(
             user_text=user_text,
             knowledge_context=knowledge_found,
-            feng_shui_profile=feng_shui_data
+            feng_shui_profile=feng_shui_data,
+            current_product=current_product_data,
+            product_image_bytes=product_image_bytes
         )
         
         full_response = ""
@@ -176,6 +196,8 @@ async def chat_http(request: ChatRequest):
             "question": user_text,
             "context_found": bool(knowledge_found),
             "has_feng_shui_profile": feng_shui_data is not None,
+            "has_current_product": current_product_data is not None,
+            "has_product_image": product_image_bytes is not None,
             "answer": full_response
         }
 

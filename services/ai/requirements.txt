@@ -1,0 +1,18 @@
+fastapi
+uvicorn[standard]
+python-multipart
+websockets
+ollama
+qdrant-client
+pydantic-settings
+requests
+# Core AI Libs
+protobuf
+torch 
+torchvision 
+torchaudio --index-url https://download.pytorch.org/whl/cu118
+transformers
+sentence-transformers
+pillow
+accelerate
+sentencepiece

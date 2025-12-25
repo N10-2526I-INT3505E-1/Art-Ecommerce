@@ -15,6 +15,7 @@
 	import Footer from '$lib/components/Footer.svelte';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
 	import NavigationBar from '$lib/components/NavigationBar.svelte';
+	import AIChatWidget from '$lib/components/AIChatWidget.svelte';
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
@@ -224,6 +225,7 @@
 		{/if}
 	</div>
 </main>
+<AIChatWidget />
 
 <style>
 	main {

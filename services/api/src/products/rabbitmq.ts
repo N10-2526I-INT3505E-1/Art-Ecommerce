@@ -2,7 +2,7 @@ import { Elysia } from 'elysia';
 import amqp from 'amqplib';
 
 // Use Environment Variables so you can change this in Docker/K8s later
-const RABBIT_URL = process.env.RABBIT_URL;
+const RABBIT_URL = process.env.RABBIT_URL || 'amqp://localhost';
 
 export const QUEUES = {
 	PRODUCT_UPDATES: 'queue_product_updates',

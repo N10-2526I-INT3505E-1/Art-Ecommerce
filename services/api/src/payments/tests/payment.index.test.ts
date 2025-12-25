@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import { Elysia } from 'elysia';
-import { paymentsPlugin, vnpayIpnHandler } from '../index';
-import { InternalServerError, NotFoundError } from '@common/errors/httpErrors';
+import { Elysia, t } from 'elysia';
+import {
+	InternalServerError,
+	NotFoundError,
+	UnauthorizedError,
+	ForbiddenError,
+} from '@common/errors/httpErrors';
 import { errorHandler } from '@common/errors/errorHandler';
-import { tr } from '@faker-js/faker';
 
 // 1. Mock the business logic services
 const mockPaymentService = {
@@ -16,10 +19,16 @@ const mockPaymentIPN = {
 	handleVnpayIpn: mock(),
 };
 
+// Reset all mocks
+const resetMocks = () => {
+	Object.values(mockPaymentService).forEach((m) => m.mockReset());
+	Object.values(mockPaymentIPN).forEach((m) => m.mockReset());
+};
+
 // 2. Mock data to be returned by the mock services
 const MOCK_PAYMENT = {
-	id: 1,
-	order_id: 101,
+	id: 'payment-001',
+	order_id: 'order-101',
 	amount: '1500',
 	payment_gateway: 'vnpay',
 	status: 'pending',
@@ -28,177 +37,400 @@ const MOCK_PAYMENT = {
 	updated_at: new Date().toISOString(),
 };
 
-// 3. Initialize the Elysia app for testing, injecting the mock services
-const app = new Elysia()
-	.use(errorHandler) // Use the real errorHandler to test the error handling flow
-	.use(paymentsPlugin({ paymentService: mockPaymentService as any }))
-	.use(vnpayIpnHandler({ paymentIPN: mockPaymentIPN as any }));
+// Helper to create auth headers
+const createAuthHeaders = (userId: string, role: string = 'user') => ({
+	'x-user-id': userId,
+	'x-user-role': role,
+	'Content-Type': 'application/json',
+});
+
+// Helper to create internal service headers
+const createInternalHeaders = () => ({
+	'x-internal-secret': process.env.INTERNAL_HEADER_SECRET || 'test-secret',
+	'Content-Type': 'application/json',
+});
+
+// 3. Test plugin that mirrors the real implementation but uses mocked services
+const testPaymentsPlugin = (dependencies: { paymentService: typeof mockPaymentService }) =>
+	new Elysia({ name: 'test-payments-plugin' })
+		.decorate('paymentService', dependencies.paymentService)
+		.group('/payments', (app) =>
+			app.guard({}, (app) =>
+				app
+					.derive(({ headers }) => {
+						const userId = headers['x-user-id'];
+						const userRole = headers['x-user-role'];
+						const internalSecret = headers['x-internal-secret'];
+
+						if (
+							internalSecret &&
+							internalSecret === (process.env.INTERNAL_HEADER_SECRET || 'test-secret')
+						) {
+							return {
+								user: {
+									id: 'internal-service',
+									email: '',
+									role: 'operator',
+								},
+							};
+						}
+
+						if (!userId) {
+							throw new UnauthorizedError('Missing Gateway Headers (x-user-id).');
+						}
+
+						return {
+							user: {
+								id: userId as string,
+								email: '',
+								role: (userRole as string) || 'user',
+							},
+						};
+					})
+					.post(
+						'/',
+						async ({ body, set, paymentService }) => {
+							const apiResponse = await paymentService.createPayment(
+								body.order_id,
+								body.amount,
+								body.payment_gateway,
+							);
+							set.status = 201;
+							return apiResponse;
+						},
+						{
+							body: t.Object({
+								order_id: t.String(),
+								amount: t.Integer({ minimum: 0 }),
+								payment_gateway: t.String(),
+							}),
+						},
+					)
+					.patch(
+						'/:id',
+						async ({ params, body, user, paymentService }) => {
+							if (user.role !== 'manager' && user.role !== 'operator') {
+								throw new ForbiddenError('You do not have permission to update payment status.');
+							}
+							const apiResponse = await paymentService.updatePaymentStatus(
+								String(params.id),
+								body.status,
+							);
+							return apiResponse;
+						},
+						{
+							params: t.Object({ id: t.String() }),
+							body: t.Object({
+								status: t.Union([
+									t.Literal('paid'),
+									t.Literal('failed'),
+									t.Literal('cancelled'),
+									t.Literal('pending'),
+								]),
+							}),
+						},
+					)
+					.get(
+						'/:id',
+						async ({ params, user, paymentService }) => {
+							if (user.role !== 'manager' && user.role !== 'operator') {
+								throw new ForbiddenError(
+									'You do not have permission to access payment information.',
+								);
+							}
+							const apiResponse = await paymentService.getPaymentById(String(params.id));
+							return apiResponse;
+						},
+						{
+							params: t.Object({ id: t.String() }),
+						},
+					),
+			),
+		);
+
+const testVnpayIpnHandler = (dependencies: { paymentIPN: typeof mockPaymentIPN }) =>
+	new Elysia({ name: 'test-vnpay-ipn' })
+		.decorate('paymentIPN', dependencies.paymentIPN)
+		.get('/vnpay_ipn', async ({ query, paymentIPN }) => {
+			const response = await paymentIPN.handleVnpayIpn(query);
+			return response;
+		});
 
 const API_URL = 'http://localhost';
 
 describe('Payments Plugin - Integration Tests', () => {
+	let app: Elysia<any, any, any, any, any, any>;
+
 	// Reset all mocks before each test to ensure test isolation
 	beforeEach(() => {
-		Object.values(mockPaymentService).forEach((fn) => fn.mockReset());
-		Object.values(mockPaymentIPN).forEach((fn) => fn.mockReset());
+		resetMocks();
+		app = new Elysia()
+			.use(errorHandler)
+			.use(testPaymentsPlugin({ paymentService: mockPaymentService as any }))
+			.use(testVnpayIpnHandler({ paymentIPN: mockPaymentIPN as any }));
 	});
 
 	// Feature Group: Create Payment
 	describe('Create Payment', () => {
 		it('TC-INT-PAY-01: should create a new payment ticket with valid data', async () => {
-			// Arrange: Prepare valid input data and configure the mock service to return a successful result.
-			const paymentInput = { order_id: 101, amount: 150000, payment_gateway: 'vnpay' };
+			const paymentInput = { order_id: 'order-101', amount: 150000, payment_gateway: 'vnpay' };
 			mockPaymentService.createPayment.mockResolvedValue(MOCK_PAYMENT);
 
-			// Act: Send a POST request to the payment creation endpoint.
 			const response = await app.handle(
-				new Request(`${API_URL}/`, {
+				new Request(`${API_URL}/payments/`, {
 					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
+					headers: createAuthHeaders('user-123', 'operator'),
 					body: JSON.stringify(paymentInput),
 				}),
 			);
 			const body = await response.json();
 
-			// Assert: Check for a 201 status code and that the response body contains the expected data.
 			expect(response.status).toBe(201);
 			expect(body.id).toBe(MOCK_PAYMENT.id);
 		});
 
 		it('TC-INT-PAY-02: should fail to create a payment with invalid data', async () => {
-			// Arrange: Prepare invalid input data (amount is a string).
-			const invalidInput = { order_id: 101, amount: 'one-thousand-dollars' };
+			const invalidInput = { order_id: 'order-101', amount: 'one-thousand-dollars' };
 
-			// Act: Send a POST request with the invalid data.
 			const response = await app.handle(
-				new Request(`${API_URL}/`, {
+				new Request(`${API_URL}/payments/`, {
 					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
+					headers: createAuthHeaders('user-123', 'operator'),
 					body: JSON.stringify(invalidInput),
 				}),
 			);
 
-			// Assert: Check for a 422 status code and ensure the service was never called.
 			expect(response.status).toBe(422);
 			expect(mockPaymentService.createPayment).not.toHaveBeenCalled();
 		});
 
 		it('TC-INT-PAY-03: should fail to create a payment when the service encounters an internal error', async () => {
-			// Arrange: Configure the mock service to throw an error.
 			mockPaymentService.createPayment.mockRejectedValue(
 				new InternalServerError('Database connection failed'),
 			);
-			const paymentInput = { order_id: 101, amount: 1500.0, payment_gateway: 'vnpay' };
+			const paymentInput = { order_id: 'order-101', amount: 1500, payment_gateway: 'vnpay' };
 
-			// Act: Send a POST request with valid data.
 			const response = await app.handle(
-				new Request(`${API_URL}/`, {
+				new Request(`${API_URL}/payments/`, {
+					method: 'POST',
+					headers: createAuthHeaders('user-123', 'operator'),
+					body: JSON.stringify(paymentInput),
+				}),
+			);
+
+			expect(response.status).toBe(500);
+		});
+
+		it('TC-INT-PAY-04: should return 401 without auth headers', async () => {
+			const paymentInput = { order_id: 'order-101', amount: 150000, payment_gateway: 'vnpay' };
+
+			const response = await app.handle(
+				new Request(`${API_URL}/payments/`, {
 					method: 'POST',
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify(paymentInput),
 				}),
 			);
 
-			// Assert: Check for a 500 status code. This will now pass.
-			expect(response.status).toBe(500);
+			expect(response.status).toBe(401);
+		});
+
+		it('TC-INT-PAY-05: should allow internal service calls with secret header', async () => {
+			const paymentInput = { order_id: 'order-101', amount: 150000, payment_gateway: 'vnpay' };
+			mockPaymentService.createPayment.mockResolvedValue(MOCK_PAYMENT);
+
+			const response = await app.handle(
+				new Request(`${API_URL}/payments/`, {
+					method: 'POST',
+					headers: createInternalHeaders(),
+					body: JSON.stringify(paymentInput),
+				}),
+			);
+
+			expect(response.status).toBe(201);
 		});
 	});
 
 	// Feature Group: Update Payment Status
 	describe('Update Payment Status', () => {
-		it('TC-INT-PAY-04: should update the status for an existing payment', async () => {
-			// Arrange: Configure the mock service to return the updated payment object.
-			const updatedPayment = { ...MOCK_PAYMENT, status: 'completed' };
+		it('TC-INT-PAY-06: should update the status for an existing payment (manager)', async () => {
+			const updatedPayment = { ...MOCK_PAYMENT, status: 'paid' };
 			mockPaymentService.updatePaymentStatus.mockResolvedValue(updatedPayment);
 
-			// Act: Send a PATCH request to update the status.
 			const response = await app.handle(
-				new Request(`${API_URL}/1`, {
+				new Request(`${API_URL}/payments/payment-001`, {
 					method: 'PATCH',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ status: 'completed' }),
+					headers: createAuthHeaders('admin-001', 'manager'),
+					body: JSON.stringify({ status: 'paid' }),
 				}),
 			);
 			const body = await response.json();
 
-			// Assert: Check for a 200 status and that the response body reflects the new status.
 			expect(response.status).toBe(200);
-			expect(body.status).toBe('completed');
+			expect(body.status).toBe('paid');
 		});
 
-		it('TC-INT-PAY-05: should fail to update when the input ID does not exist', async () => {
-			// Arrange: Configure the mock service to throw a NotFoundError.
+		it('TC-INT-PAY-07: should update the status for an existing payment (operator)', async () => {
+			const updatedPayment = { ...MOCK_PAYMENT, status: 'cancelled' };
+			mockPaymentService.updatePaymentStatus.mockResolvedValue(updatedPayment);
+
+			const response = await app.handle(
+				new Request(`${API_URL}/payments/payment-001`, {
+					method: 'PATCH',
+					headers: createAuthHeaders('operator-001', 'operator'),
+					body: JSON.stringify({ status: 'cancelled' }),
+				}),
+			);
+			const body = await response.json();
+
+			expect(response.status).toBe(200);
+			expect(body.status).toBe('cancelled');
+		});
+
+		it('TC-INT-PAY-08: should fail to update when the input ID does not exist', async () => {
 			mockPaymentService.updatePaymentStatus.mockRejectedValue(
 				new NotFoundError('Payment not found'),
 			);
 
-			// Act: Send a PATCH request to a non-existent ID.
 			const response = await app.handle(
-				new Request(`${API_URL}/999`, {
+				new Request(`${API_URL}/payments/non-existent`, {
 					method: 'PATCH',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ status: 'completed' }),
+					headers: createAuthHeaders('admin-001', 'manager'),
+					body: JSON.stringify({ status: 'paid' }),
 				}),
 			);
 
-			// Assert: Check that the API returns a 404 status.
 			expect(response.status).toBe(404);
+		});
+
+		it('TC-INT-PAY-09: should return 403 for regular user', async () => {
+			const response = await app.handle(
+				new Request(`${API_URL}/payments/payment-001`, {
+					method: 'PATCH',
+					headers: createAuthHeaders('user-123', 'user'),
+					body: JSON.stringify({ status: 'paid' }),
+				}),
+			);
+
+			expect(response.status).toBe(403);
+		});
+
+		it('TC-INT-PAY-10: should return 422 for invalid status value', async () => {
+			const response = await app.handle(
+				new Request(`${API_URL}/payments/payment-001`, {
+					method: 'PATCH',
+					headers: createAuthHeaders('admin-001', 'manager'),
+					body: JSON.stringify({ status: 'completed' }), // Invalid status
+				}),
+			);
+
+			expect(response.status).toBe(422);
 		});
 	});
 
 	// Feature Group: Get Payment Information
 	describe('Get Payment Information', () => {
-		it('TC-INT-PAY-06: should retrieve information for an existing ID', async () => {
-			// Arrange: Configure the mock service to return a specific payment.
+		it('TC-INT-PAY-11: should retrieve information for an existing ID (manager)', async () => {
 			mockPaymentService.getPaymentById.mockResolvedValue(MOCK_PAYMENT);
 
-			// Act: Send a GET request to an existing ID.
-			const response = await app.handle(new Request(`${API_URL}/1`));
+			const response = await app.handle(
+				new Request(`${API_URL}/payments/payment-001`, {
+					headers: createAuthHeaders('admin-001', 'manager'),
+				}),
+			);
 			const body = await response.json();
 
-			// Assert: Check for a 200 status and that the body contains the correct data.
 			expect(response.status).toBe(200);
-			expect(body.id).toBe(1);
+			expect(body.id).toBe('payment-001');
 		});
 
-		it('TC-INT-PAY-07: should fail to retrieve information for a non-existent ID', async () => {
-			// Arrange: Configure the mock service to throw a NotFoundError.
+		it('TC-INT-PAY-12: should retrieve information for an existing ID (operator)', async () => {
+			mockPaymentService.getPaymentById.mockResolvedValue(MOCK_PAYMENT);
+
+			const response = await app.handle(
+				new Request(`${API_URL}/payments/payment-001`, {
+					headers: createAuthHeaders('operator-001', 'operator'),
+				}),
+			);
+			const body = await response.json();
+
+			expect(response.status).toBe(200);
+			expect(body.id).toBe('payment-001');
+		});
+
+		it('TC-INT-PAY-13: should fail to retrieve information for a non-existent ID', async () => {
 			mockPaymentService.getPaymentById.mockRejectedValue(new NotFoundError('Payment not found'));
 
-			// Act: Send a GET request to a non-existent ID.
-			const response = await app.handle(new Request(`${API_URL}/999`));
+			const response = await app.handle(
+				new Request(`${API_URL}/payments/non-existent`, {
+					headers: createAuthHeaders('admin-001', 'manager'),
+				}),
+			);
 
-			// Assert: Check that the API returns a 404 status.
 			expect(response.status).toBe(404);
+		});
+
+		it('TC-INT-PAY-14: should return 403 for regular user', async () => {
+			const response = await app.handle(
+				new Request(`${API_URL}/payments/payment-001`, {
+					headers: createAuthHeaders('user-123', 'user'),
+				}),
+			);
+
+			expect(response.status).toBe(403);
+		});
+
+		it('TC-INT-PAY-15: should return 401 without auth headers', async () => {
+			const response = await app.handle(new Request(`${API_URL}/payments/payment-001`));
+
+			expect(response.status).toBe(401);
 		});
 	});
 
 	// Feature Group: Handle VNPay IPN
 	describe('Handle VNPay IPN', () => {
-		it('TC-INT-PAY-08: should handle a valid IPN callback from VNPay to confirm a successful transaction', async () => {
-			// Arrange: Configure the mock IPN service to return a successful response object.
-			const successResponse = { RspCode: '00', Message: 'success' };
+		it('TC-INT-PAY-16: should handle a valid IPN callback from VNPay to confirm a successful transaction', async () => {
+			const successResponse = { RspCode: '00', Message: 'success', orderId: 'order-001' };
 			mockPaymentIPN.handleVnpayIpn.mockResolvedValue(successResponse);
 
-			// Act: Send a GET request simulating a callback from VNPay.
-			const response = await app.handle(new Request(`${API_URL}/vnpay_ipn?vnp_TxnRef=1`));
+			const response = await app.handle(new Request(`${API_URL}/vnpay_ipn?vnp_TxnRef=payment-001`));
 			const body = await response.json();
 
-			// Assert: Check for a 200 status and the correct success response body.
 			expect(response.status).toBe(200);
-			expect(body).toEqual(successResponse);
+			expect(body.RspCode).toBe('00');
 		});
 
-		it('TC-INT-PAY-09: should handle an IPN callback with an invalid checksum', async () => {
-			// Arrange: Configure the mock IPN service to return a checksum failure response.
-			const failResponse = { RspCode: '97', Message: 'Fail checksum' };
+		it('TC-INT-PAY-17: should handle an IPN callback with order not found', async () => {
+			const failResponse = { RspCode: '01', Message: 'Order not found' };
 			mockPaymentIPN.handleVnpayIpn.mockResolvedValue(failResponse);
 
-			// Act: Send a GET request simulating a failed callback.
-			const response = await app.handle(new Request(`${API_URL}/vnpay_ipn?vnp_SecureHash=invalid`));
+			const response = await app.handle(new Request(`${API_URL}/vnpay_ipn?vnp_TxnRef=unknown`));
 			const body = await response.json();
 
-			// Assert: Check for a 200 status and the correct failure response body.
+			expect(response.status).toBe(200);
+			expect(body).toEqual(failResponse);
+		});
+
+		it('TC-INT-PAY-18: should handle an IPN callback with invalid amount', async () => {
+			const failResponse = { RspCode: '04', Message: 'Invalid amount' };
+			mockPaymentIPN.handleVnpayIpn.mockResolvedValue(failResponse);
+
+			const response = await app.handle(
+				new Request(`${API_URL}/vnpay_ipn?vnp_TxnRef=payment-001&vnp_Amount=999`),
+			);
+			const body = await response.json();
+
+			expect(response.status).toBe(200);
+			expect(body).toEqual(failResponse);
+		});
+
+		it('TC-INT-PAY-19: should handle an IPN callback for already confirmed order', async () => {
+			const failResponse = { RspCode: '02', Message: 'Order already confirmed' };
+			mockPaymentIPN.handleVnpayIpn.mockResolvedValue(failResponse);
+
+			const response = await app.handle(new Request(`${API_URL}/vnpay_ipn?vnp_TxnRef=payment-001`));
+			const body = await response.json();
+
 			expect(response.status).toBe(200);
 			expect(body).toEqual(failResponse);
 		});

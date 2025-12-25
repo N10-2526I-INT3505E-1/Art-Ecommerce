@@ -40,7 +40,7 @@ export const usersPlugin = (dependencies: { userService: UserService }) =>
 
 		// GROUP 1: PUBLIC ROUTES (AUTH & SESSION)
 		// Nhiệm vụ: Tạo Token (Sign) trả về cho Client
-		.group('/sessions', (app) =>
+		.group('/v1/sessions', (app) =>
 			app
 				// POST /sessions - Login
 				.post(
@@ -140,7 +140,7 @@ export const usersPlugin = (dependencies: { userService: UserService }) =>
 		)
 
 		// GROUP 2: USERS RESOURCES
-		.group('/users', (app) =>
+		.group('/v1/users', (app) =>
 			app
 				// POST /users - Register (Public)
 				.post(

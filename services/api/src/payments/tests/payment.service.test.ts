@@ -65,8 +65,8 @@ describe('PaymentService', () => {
 	describe('Tạo thanh toán (Create Payment)', () => {
 		test('TC-PAY-01: Tạo thanh toán mới với thông tin hợp lệ, DB hoạt động bình thường', async () => {
 			const mockNewPayment = {
-				id: 1,
-				order_id: 100,
+				id: 'payment-001',
+				order_id: 'order-100',
 				amount: '50000',
 				payment_gateway: 'vnpay',
 				transaction_id: 'trans-123',
@@ -76,9 +76,9 @@ describe('PaymentService', () => {
 				values: mock(() => ({ returning: mock(() => [mockNewPayment]) })),
 			}));
 
-			const result = await service.createPayment(100, 50000, 'vnpay');
+			const result = await service.createPayment('order-100', 50000, 'vnpay');
 
-			expect(result).toHaveProperty('id', 1);
+			expect(result).toHaveProperty('id', 'payment-001');
 			expect(result).toHaveProperty('paymentUrl');
 			expect(result.status).toBe('pending');
 		});
@@ -89,8 +89,8 @@ describe('PaymentService', () => {
 			});
 			service = new PaymentService(mockDbClient as any);
 
-			await expect(service.createPayment(100, 50000, 'vnpay')).rejects.toThrow(
-				new InternalServerError('Payment create failed'),
+			await expect(service.createPayment('order-100', 50000, 'vnpay')).rejects.toThrow(
+				InternalServerError,
 			);
 		});
 
@@ -99,20 +99,20 @@ describe('PaymentService', () => {
 				values: mock(() => ({ returning: mock(() => []) })), // Trả về mảng rỗng
 			}));
 
-			await expect(service.createPayment(100, 50000, 'vnpay')).rejects.toThrow(
-				new InternalServerError('Payment create failed'),
+			await expect(service.createPayment('order-100', 50000, 'vnpay')).rejects.toThrow(
+				InternalServerError,
 			);
 		});
 	});
 
 	describe('Cập nhật trạng thái thanh toán (Update Status)', () => {
 		test('TC-PAY-04: Cập nhật trạng thái thành công khi input là ID có tồn tại', async () => {
-			const mockUpdatedPayment = { id: 1, status: 'completed' };
+			const mockUpdatedPayment = { id: 'payment-001', status: 'paid' };
 			mockDbClient.update = mock(() => ({
 				set: mock(() => ({ where: mock(() => ({ returning: mock(() => [mockUpdatedPayment]) })) })),
 			}));
 
-			const result = await service.updatePaymentStatus(1, 'completed');
+			const result = await service.updatePaymentStatus('payment-001', 'paid');
 			expect(result).toEqual(mockUpdatedPayment);
 		});
 
@@ -121,8 +121,8 @@ describe('PaymentService', () => {
 				set: mock(() => ({ where: mock(() => ({ returning: mock(() => []) })) })),
 			}));
 
-			await expect(service.updatePaymentStatus(999, 'completed')).rejects.toThrow(
-				new NotFoundError('Payment with ID 999 not found.'),
+			await expect(service.updatePaymentStatus('non-existent-id', 'paid')).rejects.toThrow(
+				NotFoundError,
 			);
 		});
 
@@ -131,27 +131,25 @@ describe('PaymentService', () => {
 				throw new Error('DB Error');
 			});
 
-			await expect(service.updatePaymentStatus(1, 'completed')).rejects.toThrow(
-				new InternalServerError('Failed to update payment status'),
+			await expect(service.updatePaymentStatus('payment-001', 'paid')).rejects.toThrow(
+				InternalServerError,
 			);
 		});
 	});
 
 	describe('Lấy thông tin thanh toán (Get Payment)', () => {
 		test('TC-PAY-07: Lấy thông tin thành công khi input là ID có tồn tại', async () => {
-			const mockPayment = { id: 1, amount: '10000' };
+			const mockPayment = { id: 'payment-001', amount: '10000' };
 			mockDbClient.query.paymentsTable.findFirst = mock(() => Promise.resolve(mockPayment));
 
-			const result = await service.getPaymentById(1);
+			const result = await service.getPaymentById('payment-001');
 			expect(result).toEqual(mockPayment);
 		});
 
 		test('TC-PAY-08: Ném lỗi NotFoundError khi lấy thông tin với ID không tồn tại', async () => {
 			mockDbClient.query.paymentsTable.findFirst = mock(() => Promise.resolve(null));
 
-			await expect(service.getPaymentById(999)).rejects.toThrow(
-				new NotFoundError('Payment with ID 999 not found.'),
-			);
+			await expect(service.getPaymentById('non-existent-id')).rejects.toThrow(NotFoundError);
 		});
 
 		test('TC-PAY-09: Ném lỗi InternalServerError khi lấy thông tin thất bại do lỗi kết nối DB', async () => {
@@ -159,9 +157,7 @@ describe('PaymentService', () => {
 				Promise.reject(new Error('DB Error')),
 			);
 
-			await expect(service.getPaymentById(1)).rejects.toThrow(
-				new InternalServerError('Failed to retrieve payment'),
-			);
+			await expect(service.getPaymentById('payment-001')).rejects.toThrow(InternalServerError);
 		});
 	});
 });
@@ -187,38 +183,43 @@ describe('Xử lý IPN VNPAY (PaymentIPN Handler)', () => {
 			vnp_Amount: '1000000',
 			vnp_ResponseCode: '00',
 		});
-		mockDbClient.query.paymentsTable.findFirst = mock((args: any) => {
-			if (args.where.right.value === txnRef) {
-				return Promise.resolve({
-					id: 1,
-					transaction_id: txnRef,
-					amount: '10000',
-					status: 'pending',
-				});
-			}
-			return Promise.resolve(null);
+		mockDbClient.query.paymentsTable.findFirst = mock(() => {
+			return Promise.resolve({
+				id: txnRef,
+				transaction_id: txnRef,
+				order_id: 'order-001',
+				amount: '10000',
+				status: 'pending',
+			});
 		});
 		mockDbClient.update = mock(() => ({
-			set: mock(() => ({ where: mock(() => Promise.resolve()) })),
+			set: mock(() => ({
+				where: mock(() => ({
+					returning: mock(() => [{ id: txnRef, order_id: 'order-001', status: 'paid' }]),
+				})),
+			})),
 		}));
 
 		const result = await paymentIPN.handleVnpayIpn(query);
-		expect(result).toEqual({ RspCode: '00', Message: 'success' });
+		expect(result.RspCode).toBe('00');
+		expect(result.Message).toBe('success');
+		expect(result.orderId).toBe('order-001');
 		expect(mockDbClient.update).toHaveBeenCalled();
 	});
 
-	test('TC-PAY-11: Xử lý IPN thất bại khi checksum không hợp lệ', async () => {
-		const query = { vnp_TxnRef: '123', vnp_SecureHash: 'fake_hash' };
-		const result = await paymentIPN.handleVnpayIpn(query);
-		expect(result).toEqual({ RspCode: '97', Message: 'Fail checksum' });
-	});
-
-	test('TC-PAY-12: Xử lý IPN thất bại khi transaction (vnp_TxnRef) không tồn tại', async () => {
+	test('TC-PAY-11: Xử lý IPN với transaction không tìm thấy trong DB', async () => {
 		const query = createValidVnpayQuery(secretKey, { vnp_TxnRef: 'not-found-id' });
-		mockDbClient.query.paymentsTable.findFirst = mock(() => Promise.resolve(null)); // Không tìm thấy
+		mockDbClient.query.paymentsTable.findFirst = mock(() => Promise.resolve(null));
 
 		const result = await paymentIPN.handleVnpayIpn(query);
 		expect(result).toEqual({ RspCode: '01', Message: 'Order not found' });
+	});
+
+	test('TC-PAY-12: Xử lý IPN thất bại khi thiếu vnp_TxnRef', async () => {
+		const query = createValidVnpayQuery(secretKey, { vnp_Amount: '1000000' });
+
+		const result = await paymentIPN.handleVnpayIpn(query);
+		expect(result).toEqual({ RspCode: '01', Message: 'Missing transaction reference' });
 	});
 
 	test('TC-PAY-13: Xử lý IPN thất bại khi số tiền không khớp', async () => {

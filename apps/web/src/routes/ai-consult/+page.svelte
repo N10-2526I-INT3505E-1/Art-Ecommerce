@@ -29,7 +29,7 @@
 
 			console.log('🚀 Sending image to AI service...');
 
-			const response = await fetch('http://localhost:8000/analyze', {
+			const response = await fetch('https://api.novus.io.vn/analyze', {
 				method: 'POST',
 				body: formData,
 			});

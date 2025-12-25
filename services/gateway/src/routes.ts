@@ -142,8 +142,8 @@ export const routes = new Elysia({ name: 'gateway-routes' })
 				return proxyRequest(PAYMENTS_SERVICE_URL, ctx.request);
 			})
 
-			// Products (Public Read)
-			.get('/products*', async (ctx) => {
+			// Products (Public View)
+			.all('/products*', async (ctx) => {
 				return proxyRequest(PRODUCTS_SERVICE_URL, ctx.request);
 			})
 
@@ -172,20 +172,6 @@ export const routes = new Elysia({ name: 'gateway-routes' })
 					// Users (Profile, Addresses, Bazi - anything NOT registration)
 					.all('/users*', async (ctx: ContextWithUser) => {
 						return proxyRequest(USERS_SERVICE_URL, ctx.request, ctx.user);
-					})
-
-					// Products (Create/Update/Delete - Protected)
-					.put('/products*', async (ctx: ContextWithUser) => {
-						return proxyRequest(PRODUCTS_SERVICE_URL, ctx.request, ctx.user);
-					})
-					.post('/products*', async (ctx: ContextWithUser) => {
-						return proxyRequest(PRODUCTS_SERVICE_URL, ctx.request, ctx.user);
-					})
-					.delete('/products*', async (ctx: ContextWithUser) => {
-						return proxyRequest(PRODUCTS_SERVICE_URL, ctx.request, ctx.user);
-					})
-					.patch('/products*', async (ctx: ContextWithUser) => {
-						return proxyRequest(PRODUCTS_SERVICE_URL, ctx.request, ctx.user);
 					}),
 			),
 	);

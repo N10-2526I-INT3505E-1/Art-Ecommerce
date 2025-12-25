@@ -55,8 +55,8 @@ export const load: PageServerLoad = async ({ fetch, request, url }) => {
 		await Promise.all(
 			uniqueUserIds.map(async (userId: string) => {
 				try {
-					const userResponse = await client.get(`users/${userId}`).json<UserInfo>();
-					userMap[userId] = userResponse;
+					const userResponse = await client.get(`users/${userId}`).json<{ user: UserInfo }>();
+					userMap[userId] = userResponse.user;
 				} catch (e) {
 					console.error(`Không thể lấy thông tin user ${userId}`, e);
 					// Set default user info if fetch fails

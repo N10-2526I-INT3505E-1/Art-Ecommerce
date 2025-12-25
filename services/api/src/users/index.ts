@@ -270,22 +270,51 @@ export const usersPlugin = (dependencies: { userService: UserService }) =>
 							.patch(
 								'/:user_id',
 								async ({ params, body, user, userService }) => {
-									if (user.role !== 'manager' && user.id !== params.user_id) {
+									const isManager = user.role === 'manager';
+									const isOwner = user.id === params.user_id;
+
+									// Must be manager or owner
+									if (!isManager && !isOwner) {
 										throw new ForbiddenError('Access denied');
 									}
+
+									// Non-managers cannot update role or email
+									if (!isManager && (body.role || body.email)) {
+										throw new ForbiddenError('Only managers can update role or email');
+									}
+
+									// Prevent manager self-demotion
+									if (isManager && isOwner && body.role && body.role !== 'manager') {
+										throw new ForbiddenError('Cannot demote yourself');
+									}
+
 									const updatedUser = await userService.updateUser(params.user_id, body);
-									return { user: updatedUser };
+									const { password, ...safeUser } = updatedUser;
+									return { user: safeUser };
 								},
 								{
 									params: t.Object({ user_id: t.String() }),
-									body: t.Partial(
-										t.Omit(SignUpSchema, ['id', 'password', 'role', 'created_at', 'updated_at']),
-									),
+									body: t.Object({
+										first_name: t.Optional(t.String({ minLength: 1, maxLength: 50 })),
+										last_name: t.Optional(t.String({ minLength: 1, maxLength: 50 })),
+										username: t.Optional(t.String({ minLength: 5, maxLength: 30 })),
+										email: t.Optional(t.String({ format: 'email' })),
+										role: t.Optional(
+											t.Union([t.Literal('manager'), t.Literal('operator'), t.Literal('user')]),
+										),
+									}),
 									response: {
 										200: t.Object({ user: SafeUserResponseSchema }),
+										403: ErrorSchema,
 										404: ErrorSchema,
+										409: ErrorSchema,
 									},
-									detail: { tags: ['Users'], summary: 'Update user' },
+									detail: {
+										tags: ['Users'],
+										summary: 'Update user',
+										description:
+											'Managers can update role, email, username, name. Users can only update their own name and username.',
+									},
 								},
 							)
 

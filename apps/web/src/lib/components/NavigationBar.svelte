@@ -29,6 +29,7 @@
 		{ label: 'Tượng', href: '/c/tuong' },
 		{ label: 'Cây', href: '/c/cay' },
 		{ label: 'Đồ vật phong thuỷ', href: '/c/do-vat-phong-thuy' },
+		{ label: 'Tư vấn AI', href: '/ai-consult' },
 	];
 </script>
 

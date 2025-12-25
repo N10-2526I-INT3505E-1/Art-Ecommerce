@@ -62,9 +62,9 @@ export const actions: Actions = {
 		const tagsRaw = formData.get('tags') as string;
 		const tags = tagsRaw
 			? tagsRaw
-					.split(',')
-					.map((t) => t.trim())
-					.filter(Boolean)
+				.split(',')
+				.map((t) => t.trim())
+				.filter(Boolean)
 			: [];
 
 		if (!name || !price) {
@@ -99,9 +99,9 @@ export const actions: Actions = {
 		const tagsRaw = formData.get('tags') as string;
 		const tags = tagsRaw
 			? tagsRaw
-					.split(',')
-					.map((t) => t.trim())
-					.filter(Boolean)
+				.split(',')
+				.map((t) => t.trim())
+				.filter(Boolean)
 			: undefined;
 
 		if (!id) {

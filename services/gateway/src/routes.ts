@@ -175,7 +175,16 @@ export const routes = new Elysia({ name: 'gateway-routes' })
 					})
 
 					// Products (Create/Update/Delete - Protected)
-					.all('/products*', async (ctx: ContextWithUser) => {
+					.put('/products*', async (ctx: ContextWithUser) => {
+						return proxyRequest(PRODUCTS_SERVICE_URL, ctx.request, ctx.user);
+					})
+					.post('/products*', async (ctx: ContextWithUser) => {
+						return proxyRequest(PRODUCTS_SERVICE_URL, ctx.request, ctx.user);
+					})
+					.delete('/products*', async (ctx: ContextWithUser) => {
+						return proxyRequest(PRODUCTS_SERVICE_URL, ctx.request, ctx.user);
+					})
+					.patch('/products*', async (ctx: ContextWithUser) => {
 						return proxyRequest(PRODUCTS_SERVICE_URL, ctx.request, ctx.user);
 					}),
 			),

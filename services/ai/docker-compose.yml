@@ -5,7 +5,7 @@ services:
     image: getmeili/meilisearch:latest
     container_name: meilisearch
     ports:
-      - "7700:7700"
+      - '7700:7700'
     environment:
       # - MEILI_MASTER_KEY=masterKey123
       - MEILI_ENV=development
@@ -18,8 +18,8 @@ services:
     image: qdrant/qdrant:latest
     container_name: qdrant
     ports:
-      - "6333:6333"
-      - "6334:6334"
+      - '6333:6333'
+      - '6334:6334'
     volumes:
       - ./qdrant_storage:/qdrant/storage
     restart: unless-stopped

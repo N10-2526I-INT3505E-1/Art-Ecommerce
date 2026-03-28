@@ -3,8 +3,6 @@ import { db } from './db';
 import { CreateOrderSchema, OrderResponseSchema, CreateOrderWithItemsSchema } from './order.model';
 import { OrderService } from './order.service';
 import { CreateOrderItemSchema, OrderItemResponseSchema } from './order_item.model';
-import { rabbitPlugin, QUEUES } from './rabbitmq';
-import type { Channel } from 'amqplib';
 import { ForbiddenError, UnauthorizedError } from '@common/errors/httpErrors';
 
 let orderService = new OrderService(db);
@@ -12,107 +10,6 @@ let orderService = new OrderService(db);
 export const ordersPlugin = async (dependencies: { orderService: OrderService }) =>
 	new Elysia({ name: 'orders-plugin' })
 		.decorate('orderService', dependencies.orderService)
-		.use(await rabbitPlugin())
-		.onStart(async (app) => {
-			const rabbitChannel: Channel = app.decorator.rabbitChannel;
-			const sendToQueue = app.decorator.sendToQueue;
-
-			// Re-initialize orderService with rabbit channel for expiry messaging
-			orderService = new OrderService(db, rabbitChannel);
-			app.decorator.orderService = orderService;
-
-			console.log('Order Service listening...');
-
-			// Consumer 1: Handle Payment Results
-			rabbitChannel.consume(QUEUES.PAYMENT_PROCESS, async (msg) => {
-				if (!msg) return;
-
-				try {
-					const data = JSON.parse(msg.content.toString());
-
-					// Update the Order Status in Database
-					if (data.type === 'PAYMENT_RESULT' && data.status === 'PAID') {
-						console.log(
-							`Received PAYMENT_RESULT for Order ID ${data.orderId}, updating order status to 'paid'`,
-						);
-						const updateState = await orderService.updateOrder(data.orderId, {
-							status: 'paid', // Update order status to 'paid'
-						});
-						// If order status updated successfully, send product stock update to Product Service
-						if (updateState) {
-							const order_item = await orderService.getOrderItems(data.orderId);
-							const sent = sendToQueue(QUEUES.PRODUCT_UPDATES, {
-								type: 'PRODUCT_STOCK_UPDATE',
-								// Send order items to Product Service to update stock
-								orderItems: order_item.map((item) => ({
-									product_id: item.product_id,
-									quantity: item.quantity,
-								})),
-							});
-							if (!sent) {
-								console.error(
-									'Failed to send product stock update to RabbitMQ, Product Service might not be notified',
-								);
-							}
-						}
-					}
-
-					// Acknowledge the message (tell RabbitMQ we are done)
-					rabbitChannel.ack(msg);
-				} catch (err) {
-					console.error('Error processing RabbitMQ message:', err);
-					// Ack to prevent infinite loops if data is bad
-					rabbitChannel.ack(msg);
-				}
-			});
-
-			// Consumer 2: Handle Order Expiry (Auto-cancel pending orders after 15 minutes)
-			rabbitChannel.consume(QUEUES.ORDER_EXPIRY, async (msg) => {
-				if (!msg) return;
-
-				try {
-					const data = JSON.parse(msg.content.toString());
-
-					// Only process ORDER_EXPIRY_CHECK messages
-					if (data.type === 'ORDER_EXPIRY_CHECK') {
-						const orderId = data.orderId;
-						console.log(`Processing order expiry check for Order ID: ${orderId}`);
-
-						try {
-							const order = await orderService.getOrderById(orderId);
-
-							// If order is still PENDING, cancel it automatically
-							if (order.status === 'pending') {
-								console.log(
-									`Order ${orderId} is still PENDING after 15 minutes. Auto-cancelling...`,
-								);
-								await orderService.updateOrder(orderId, {
-									status: 'cancelled',
-								});
-								console.log(`Order ${orderId} has been cancelled due to inactivity.`);
-							} else if (order.status === 'paid') {
-								// Order was paid, no action needed
-								console.log(`Order ${orderId} is already PAID. Ignoring expiry message.`);
-							} else {
-								// Order has other status (cancelled, shipped, etc.)
-								console.log(
-									`Order ${orderId} has status '${order.status}'. No expiry action needed.`,
-								);
-							}
-						} catch (err) {
-							console.error(`Error processing order expiry for ${orderId}:`, err);
-						}
-					}
-
-					// Acknowledge the message
-					rabbitChannel.ack(msg);
-				} catch (err) {
-					console.error('Error processing order expiry message:', err);
-					// Ack to prevent infinite loops
-					rabbitChannel.ack(msg);
-				}
-			});
-		})
 		.group('/v1/orders', (app) =>
 			app
 				// 1. Create Order with Items

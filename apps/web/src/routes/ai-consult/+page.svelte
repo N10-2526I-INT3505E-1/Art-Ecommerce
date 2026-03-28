@@ -53,25 +53,29 @@
 				console.log('📊 Including Feng Shui profile:', fengShuiProfile);
 			}
 
-			console.log('🚀 Sending image to AI service...');
+			console.log('🚀 AI analysis (demo mode)...');
 
-			const response = await fetch('https://api.novus.io.vn/analyze', {
-				method: 'POST',
-				body: formData,
-			});
+			// Demo stub: simulate AI analysis with canned response
+			await new Promise((resolve) => setTimeout(resolve, 1500)); // Simulate processing delay
 
-			console.log('📡 Response status:', response.status);
-
-			if (!response.ok) {
-				const errorText = await response.text();
-				console.error('❌ Error response:', errorText);
-				throw new Error(`Lỗi ${response.status}: ${errorText}`);
-			}
-
-			const data = await response.json();
-			console.log('✅ Received data:', data);
-
-			analysisData = data;
+			analysisData = {
+				analysis: `## 🏠 Phân Tích Demo
+	
+	Đây là bản demo của tính năng tư vấn AI.
+	
+	**Không gian phòng:** Phòng có thiết kế hiện đại, phù hợp trang trí tranh nghệ thuật.
+	
+	**Gợi ý phong thủy:**
+	${
+		baziProfile?.limit_score
+			? `- Dụng Thần của bạn: **${dungThan.join(', ')}** → Nên chọn tranh có tông màu phù hợp.
+	- Kỵ Thần: **${[...kyThan, ...hungThan].join(', ') || 'Không có'}** → Tránh các yếu tố này.`
+			: '- Đăng nhập và tạo hồ sơ Bát Tự để nhận tư vấn cá nhân hóa.'
+	}
+	
+	**Lưu ý:** Tính năng AI đầy đủ chỉ có trong phiên bản production với Ollama + Qdrant.`,
+				products: [],
+			};
 		} catch (err) {
 			console.error('❌ Analysis error:', err);
 			error = err instanceof Error ? err.message : 'Đã xảy ra lỗi khi kết nối AI service';

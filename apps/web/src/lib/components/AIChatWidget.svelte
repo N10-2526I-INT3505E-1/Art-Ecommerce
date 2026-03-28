@@ -49,7 +49,8 @@
 	let isTyping = $state(false);
 	let messagesContainer = $state<HTMLDivElement | null>(null);
 
-	const API_URL = 'https://api.novus.io.vn/api/chat';
+	// Demo mode: no external AI service
+	const DEMO_MODE = true;
 
 	// Get current product from store - use .value for Svelte 5 reactivity
 	const currentProduct = $derived(currentProductStore.value);
@@ -81,46 +82,42 @@
 		scrollToBottom();
 
 		try {
-			// Build request body with optional feng shui profile and current product
-			const requestBody: {
-				text: string;
-				feng_shui_profile?: FengShuiProfile;
-				current_product?: CurrentProduct;
-			} = {
-				text: userMessage,
-			};
+			// Demo mode: generate canned responses
+			await new Promise((resolve) => setTimeout(resolve, 800)); // Simulate delay
 
-			if (fengShuiProfile) {
-				requestBody.feng_shui_profile = fengShuiProfile;
-				console.log('📊 Including Feng Shui profile in chat');
-			}
+			let aiResponse = '';
+			const lowerMsg = userMessage.toLowerCase();
 
 			if (currentProduct) {
-				requestBody.current_product = currentProduct;
-				console.log('🛍️ Including current product context:', currentProduct.name);
+				if (
+					lowerMsg.includes('hợp') ||
+					lowerMsg.includes('mệnh') ||
+					lowerMsg.includes('phong thủy')
+				) {
+					aiResponse = `**Phân tích sản phẩm "${currentProduct.name}":**\n\n`;
+					if (fengShuiProfile && fengShuiProfile.dung_than.length > 0) {
+						aiResponse += `Dựa trên Dụng Thần **${fengShuiProfile.dung_than.join(', ')}** của bạn, sản phẩm này có thể phù hợp với không gian sống của bạn.\n\n`;
+						aiResponse += `💡 *Đây là bản demo. Phân tích chi tiết có trong phiên bản đầy đủ.*`;
+					} else {
+						aiResponse += `Để phân tích phong thủy chính xác, bạn cần tạo hồ sơ Bát Tự tại trang [Bát Tự](/bazi).\n\n`;
+						aiResponse += `💡 *Đây là bản demo.*`;
+					}
+				} else {
+					aiResponse = `Sản phẩm **${currentProduct.name}** là một lựa chọn tốt cho trang trí không gian.\n\nBạn có muốn tôi phân tích phong thủy của sản phẩm này không?`;
+				}
+			} else if (lowerMsg.includes('mệnh') || lowerMsg.includes('ngũ hành')) {
+				if (fengShuiProfile) {
+					aiResponse = `Theo hồ sơ của bạn:\n- **Dụng Thần:** ${fengShuiProfile.dung_than.join(', ')}\n- **Hỷ Thần:** ${fengShuiProfile.hy_than.join(', ')}\n\nBạn nên chọn tranh và đồ trang trí phù hợp với các hành trên.\n\n💡 *Đây là bản demo.*`;
+				} else {
+					aiResponse = `Bạn chưa có hồ sơ Bát Tự. Hãy tạo hồ sơ tại trang [Bát Tự](/bazi) để nhận tư vấn cá nhân hóa!\n\n💡 *Đây là bản demo.*`;
+				}
+			} else {
+				aiResponse = `Cảm ơn câu hỏi của bạn! Tôi là AI phong thủy Novice.\n\nTrong bản demo này, tôi có thể hỗ trợ:\n- Phân tích sản phẩm (mở trang sản phẩm rồi hỏi)\n- Tư vấn theo mệnh ngũ hành\n\n💡 *Tính năng AI đầy đủ có trong phiên bản production.*`;
 			}
 
-			const response = await fetch(API_URL, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify(requestBody),
-			});
-
-			if (!response.ok) {
-				throw new Error(`HTTP error! status: ${response.status}`);
-			}
-
-			const data = await response.json();
-
-			// Add AI response
-			messages = [
-				...messages,
-				{ role: 'ai', content: data.answer || 'Xin lỗi, tôi không thể trả lời lúc này.' },
-			];
+			messages = [...messages, { role: 'ai', content: aiResponse }];
 		} catch (error) {
-			console.error('Error sending message:', error);
+			console.error('Error generating response:', error);
 			messages = [
 				...messages,
 				{ role: 'ai', content: 'Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại sau.' },

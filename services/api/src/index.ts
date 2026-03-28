@@ -49,9 +49,9 @@ export const app = new Elysia()
 	.use(usersPlugin({ userService }))
 	.use(productsPlugin({ productService: new ProductService(productDb) }))
 	.use(searchRoutes)
-	// .use(ordersPlugin({ orderService: new OrderService(orderDb) }))
-	// .use(paymentsPlugin({ paymentService: new PaymentService(paymentDb) }))
-	// .use(vnpayIpnHandler({ paymentIPN: new PaymentIPN(paymentDb) }))
+	.use(await ordersPlugin({ orderService: new OrderService(orderDb) }))
+	.use(paymentsPlugin({ paymentService: new PaymentService(paymentDb) }))
+	.use(vnpayIpnHandler({ paymentIPN: new PaymentIPN(paymentDb) }))
 
 	.get('/', () => ({ status: 'ok' }), {
 		detail: { summary: 'Health check endpoint' },

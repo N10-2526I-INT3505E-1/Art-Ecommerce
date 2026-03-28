@@ -1,0 +1,18 @@
+FROM oven/bun:1-alpine
+
+WORKDIR /app
+
+# Copy root package files
+COPY package.json bun.lock ./
+
+# Copy API service
+COPY services/api/ ./services/api/
+
+# Install dependencies
+RUN bun install --production
+
+# Expose port
+EXPOSE 3000
+
+# Start the API monolith
+CMD ["bun", "run", "services/api/src/index.ts"]

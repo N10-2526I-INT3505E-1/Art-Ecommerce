@@ -3,7 +3,6 @@ import slugify from '@sindresorhus/slugify';
 import { and, desc, eq, gte, inArray, isNull, like, lte, ne, sql } from 'drizzle-orm';
 import type { db as defaultDb } from './db';
 import { categories, product_tags, products, tags } from './product.model';
-import { meilisearchService } from '../search/meilisearch.service';
 
 type DbClient = typeof defaultDb;
 
@@ -130,27 +129,7 @@ export class ProductService {
 					}
 				}
 
-				try {
-					// Fetch full product with relations for indexing
-					const fullProduct = await tx.query.products.findFirst({
-						where: (p, { eq }) => eq(p.id, newProduct.id),
-						with: {
-							category: true,
-							productTags: {
-								with: { tag: true },
-							},
-						},
-					});
-
-					if (fullProduct) {
-						await meilisearchService.indexProduct(fullProduct);
-					}
-				} catch (error) {
-					console.error('⚠️ Meilisearch indexing failed:', error);
-					// Don't throw - product already created
-				}
-
-				return newProduct;
+					return newProduct;
 			});
 		} catch (error) {
 			console.error('Create Product Failed:', error);
@@ -393,25 +372,7 @@ export class ProductService {
 					}
 				}
 
-				try {
-					const fullProduct = await tx.query.products.findFirst({
-						where: (p, { eq }) => eq(p.id, id),
-						with: {
-							category: true,
-							productTags: {
-								with: { tag: true },
-							},
-						},
-					});
-
-					if (fullProduct) {
-						await meilisearchService.updateProduct(fullProduct);
-					}
-				} catch (error) {
-					console.error('⚠️ Meilisearch update failed:', error);
-				}
-
-				return { message: `Product ${id} updated successfully` };
+					return { message: `Product ${id} updated successfully` };
 			});
 		} catch (error) {
 			if (error instanceof NotFoundError) throw error;
@@ -435,13 +396,7 @@ export class ProductService {
 				throw new NotFoundError('Product not found.');
 			}
 
-			try {
-				await meilisearchService.deleteProduct(id);
-			} catch (error) {
-				console.error('⚠️ Meilisearch delete failed:', error);
-			}
-
-			return { message: `Soft deleted product ${id}` };
+				return { message: `Soft deleted product ${id}` };
 		} catch (error) {
 			if (error instanceof NotFoundError) throw error;
 			console.error('Delete Product Failed:', error);

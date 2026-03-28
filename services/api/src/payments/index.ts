@@ -10,7 +10,6 @@ import {
 	updatePaymentResponseSchema,
 } from './payment.model';
 import { PaymentIPN, PaymentService } from './payment.service';
-import { rabbitPlugin, QUEUES } from './rabbitmq';
 import { ForbiddenError, UnauthorizedError } from '@common/errors/httpErrors';
 const paymentService = new PaymentService(db);
 
@@ -22,7 +21,7 @@ export const paymentsPlugin = (dependencies: { paymentService: PaymentService })
 		// Returns the created payment with a generated payment URL
 		.group('/v1/payments', (app) =>
 			app.guard(
-				{}, // Không cần beforeHandle verify token nữa
+				{},
 				(app) =>
 					app
 						// Trích xuất thông tin User từ Header do Gateway gửi xuống
@@ -39,17 +38,14 @@ export const paymentsPlugin = (dependencies: { paymentService: PaymentService })
 									},
 								};
 							}
-							// Nếu không có header -> Ai đó đang gọi thẳng vào Service bỏ qua Gateway -> Chặn
 							if (userId == null) {
 								throw new UnauthorizedError('Missing Gateway Headers (x-user-id).');
 							}
-							// Nếu secret đúng thì bỏ qua, đây là call nội bộ giữa các service
 
-							// Trả về thông tin User để gắn vào context
 							return {
 								user: {
 									id: userId as string,
-									email: '', // Gateway thường không gửi email, service tự fetch nếu cần
+									email: '',
 									role: (userRole as string) || 'user',
 								},
 							};
@@ -57,10 +53,6 @@ export const paymentsPlugin = (dependencies: { paymentService: PaymentService })
 						.post(
 							'/',
 							async ({ body, set, paymentService }) => {
-								//try {
-								// A transaction ensures the insert is an all-or-nothing operation.
-
-								// If transaction is successful, set status and return the new payment
 								const apiResponse = await paymentService.createPayment(
 									body.order_id,
 									body.amount,
@@ -70,7 +62,6 @@ export const paymentsPlugin = (dependencies: { paymentService: PaymentService })
 								return apiResponse;
 							},
 							{
-								// Apply the schemas for automatic validation and documentation
 								body: createPaymentBodySchema,
 								response: {
 									201: paymentResponseSchema,
@@ -86,9 +77,6 @@ export const paymentsPlugin = (dependencies: { paymentService: PaymentService })
 							},
 						)
 
-						// PATCH /api/payments/:id - Updates the status of an existing payment
-						// Accepts payment ID in the URL and new status in the request body
-						// Used primarily for webhook callbacks from payment providers
 						.patch(
 							'/:id',
 							async ({ params, body, user, set, paymentService }) => {
@@ -103,26 +91,23 @@ export const paymentsPlugin = (dependencies: { paymentService: PaymentService })
 								return apiResponse;
 							},
 							{
-								// Apply schemas for validation and documentation
 								params: updatePaymentParamsSchema,
 								body: updatePaymentBodySchema,
 								response: {
 									200: updatePaymentResponseSchema,
-									400: errorResponseSchema, // Handles validation errors for body/params
-									404: errorResponseSchema, // Handles our custom "not found" case
+									400: errorResponseSchema,
+									404: errorResponseSchema,
 									500: errorResponseSchema,
 								},
 								detail: {
 									summary: "Update a Payment's Status",
 									description:
-										'Updates the status of an existing payment by its ID. This is typically used by a webhook from a payment provider.',
+										'Updates the status of an existing payment by its ID.',
 									tags: ['Payments'],
 								},
 							},
 						)
 
-						// GET /api/payments/:id - Retrieves payment details by ID
-						// Returns the payment record with all its information (id, order_id, amount, gateway, status, timestamps)
 						.get(
 							'/:id',
 							async ({ params, user, set, paymentService }) => {
@@ -136,7 +121,6 @@ export const paymentsPlugin = (dependencies: { paymentService: PaymentService })
 								return apiResponse;
 							},
 							{
-								// Apply schemas for validation and documentation
 								params: updatePaymentParamsSchema,
 								response: {
 									200: updatePaymentResponseSchema,
@@ -152,60 +136,26 @@ export const paymentsPlugin = (dependencies: { paymentService: PaymentService })
 			),
 		);
 
-// Helper function to sort object keys
-function sortObject(obj: Record<string, any>): Record<string, any> {
-	const sorted: Record<string, any> = {};
-	const keys = Object.keys(obj).sort();
-	for (const key of keys) {
-		sorted[key] = obj[key];
-	}
-	return sorted;
-}
-
+// Stubbed VNPay IPN handler for demo — no RabbitMQ, just updates payment status directly
 const paymentIPN = new PaymentIPN(db);
-// VNPay IPN endpoint handler
 export const vnpayIpnHandler = (dependencies: { paymentIPN: PaymentIPN }) =>
 	new Elysia()
-		.use(rabbitPlugin())
 		.decorate('paymentIPN', paymentIPN)
 		.get(
 			'/v1/vnpay_ipn',
-			async ({ query, set, paymentIPN, sendToQueue }) => {
+			async ({ query, set, paymentIPN }) => {
 				const response = await paymentIPN.handleVnpayIpn(query);
-				const orderId = response.orderId;
-				if (response.RspCode === '00') {
-					const isSendToQueue = sendToQueue(QUEUES.PAYMENT_PROCESS, {
-						type: 'PAYMENT_RESULT',
-						orderId: orderId, // VNPay Transaction Reference
-						status: 'PAID',
-						amount: query.vnp_Amount,
-						id: query.vnp_TxnRef,
-					});
-					if (!isSendToQueue) {
-						(console.error(
-							'Failed to send payment result to RabbitMQ, Order Service might not be notified',
-						),
-							{
-								type: 'PAYMENT_RESULT',
-								orderId: query.vnp_TxnRef, // VNPay Transaction Reference
-								status: 'PAID',
-								amount: query.vnp_Amount,
-								id: query.vnp_TxnRef,
-							});
-					}
-					return {
-						RspCode: response.RspCode,
-						Message: response.Message,
-					};
-				}
 				set.status = 200;
-				return response;
+				return {
+					RspCode: response.RspCode,
+					Message: response.Message,
+				};
 			},
 			{
 				detail: {
-					summary: 'VNPay IPN Callback',
+					summary: 'VNPay IPN Callback (Stubbed)',
 					description:
-						'Webhook endpoint for VNPay payment verification using HMAC-SHA512 hash validation.',
+						'Webhook endpoint for VNPay payment verification. In demo mode, RabbitMQ is not used.',
 					tags: ['Payments'],
 				},
 			},

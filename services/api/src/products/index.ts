@@ -8,7 +8,6 @@ import { Elysia, t } from 'elysia';
 import { db } from './db';
 import { ProductService } from './product.service';
 import { UnauthorizedError, ForbiddenError } from '@common/errors/httpErrors';
-import { rabbitPlugin, QUEUES } from './rabbitmq';
 
 const ErrorSchema = t.Object({ message: t.String() });
 

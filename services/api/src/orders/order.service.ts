@@ -10,11 +10,8 @@ import { ordersTable } from './order.model';
 import { orderItemsTable } from './order_item.model';
 import { randomUUIDv7 } from 'bun';
 import { UserAddressSchema } from './order.model';
-import type { Channel } from 'amqplib';
-
-// URL của Payment Service (Lấy từ .env hoặc mặc định)
-const PAYMENT_SERVICE_URL = process.env.PAYMENT_SERVICE_URL || 'http://localhost:4002';
-const PRODUCT_SERVICE_URL = process.env.PRODUCT_SERVICE_URL || 'http://localhost:4003';
+import { db as productDb } from '../products/db';
+import { products } from '../products/product.model';
 export type NewOrder = typeof ordersTable.$inferInsert;
 export type NewOrderItem = typeof orderItemsTable.$inferInsert;
 
@@ -31,13 +28,8 @@ export interface PaymentLinkResponse {
 type DrizzleDB = typeof db;
 
 export class OrderService {
-	private rabbitChannel: Channel | null = null;
-
-	constructor(database: DrizzleDB, rabbitChannel?: Channel) {
+	constructor(database: DrizzleDB) {
 		this.database = database;
-		if (rabbitChannel) {
-			this.rabbitChannel = rabbitChannel;
-		}
 	}
 
 	private readonly database: DrizzleDB;
@@ -64,43 +56,6 @@ export class OrderService {
 		return JSON.stringify(address);
 	}
 
-	// Helper: Send order expiry message to queue with 15-minute delay
-	private sendOrderExpiryMessage(orderId: string): boolean {
-		if (!this.rabbitChannel) {
-			console.warn(
-				`RabbitMQ channel not available. Order expiry timer not set for order ${orderId}`,
-			);
-			return false;
-		}
-
-		try {
-			const message = {
-				type: 'ORDER_EXPIRY_CHECK',
-				orderId: orderId,
-				timestamp: new Date().toISOString(),
-			};
-
-			// Send to the temporary queue with TTL
-			const sent = this.rabbitChannel.sendToQueue(
-				'queue_order_expiry_temp',
-				Buffer.from(JSON.stringify(message)),
-			);
-
-			if (sent) {
-				console.log(
-					`Sent order expiry message for order ${orderId} (will be delivered after 15 minutes)`,
-				);
-			} else {
-				console.error(`Failed to queue order expiry message for order ${orderId}`);
-			}
-
-			return sent;
-		} catch (error) {
-			console.error(`Error sending order expiry message for order ${orderId}:`, error);
-			return false;
-		}
-	}
-
 	// 1. Create Order
 	async createOrder(data: NewOrder) {
 		try {
@@ -122,12 +77,7 @@ export class OrderService {
 				throw new InternalServerError('Không thể tạo đơn hàng (Database Error).');
 			}
 
-			// If order status is PENDING, send expiry message for 15-minute auto-cancellation
-			if (newOrder.status === 'pending') {
-				this.sendOrderExpiryMessage(newOrder.id);
-			}
-
-			return newOrder;
+				return newOrder;
 		} catch (error) {
 			if (error instanceof HttpError) throw error;
 			console.error('Create Order Error:', error);
@@ -228,7 +178,7 @@ export class OrderService {
 		return items;
 	}
 
-	// 8. Create Payment Link (Gọi sang Payment Service)
+	// 8. Create Payment Link — Stubbed for demo (no external Payment Service)
 	async createPaymentLink(
 		orderId: string,
 		gateway: string = 'vnpay',
@@ -242,32 +192,17 @@ export class OrderService {
 			throw new BadRequestError('Đơn hàng đã bị hủy, không thể thanh toán.');
 		}
 
-		try {
-			const response = await fetch(`${PAYMENT_SERVICE_URL}/payments`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					'x-internal-secret': process.env.INTERNAL_HEADER_SECRET || '',
-				},
-				body: JSON.stringify({
-					order_id: order.id,
-					amount: Number(order.total_amount),
-					payment_gateway: gateway,
-				}),
-			});
+		// Demo stub: auto-mark order as paid and return no payment URL
+		await this.updateOrder(orderId, { status: 'paid' });
 
-			if (!response.ok) {
-				const errorData = response.json().catch(() => ({}));
-				throw new InternalServerError(`Lỗi từ Payment Service: ${JSON.stringify(errorData)}`);
-			}
-
-			const paymentData = (await response.json()) as PaymentLinkResponse;
-			return paymentData;
-		} catch (error) {
-			console.error('Call Payment Service Failed:', error);
-			if (error instanceof Error && (error as any).status) throw error;
-			throw new InternalServerError('Lỗi kết nối đến dịch vụ thanh toán.');
-		}
+		return {
+			id: `demo-payment-${orderId}`,
+			order_id: orderId,
+			amount: Number(order.total_amount),
+			payment_gateway: gateway,
+			status: 'paid',
+			paymentUrl: '', // No external payment URL in demo mode
+		};
 	}
 
 	// 9. Get all Orders (without filtering)
@@ -284,31 +219,24 @@ export class OrderService {
 		}
 	}
 
-	// 10. Fetch Product Details from Product Service
+	// 10. Fetch Product Details directly from Product DB (no HTTP call)
 	async getProductDetails(
 		productId: string,
 	): Promise<{ price: number; name: string; id: string; imageUrl: string }> {
 		try {
-			const response = await fetch(`${PRODUCT_SERVICE_URL}/products/${productId}`, {
-				method: 'GET',
-				headers: { 'Content-Type': 'application/json' },
+			const product = await productDb.query.products.findFirst({
+				where: (p, { eq }) => eq(p.id, productId),
 			});
 
-			if (!response.ok) {
-				const errorData = await response.json().catch(() => ({}));
-				console.error('Product Service Error:', errorData);
-				throw new InternalServerError(
-					`Lỗi từ Product Service khi lấy sản phẩm ${productId}: ${JSON.stringify(errorData)}`,
-				);
+			if (!product) {
+				throw new NotFoundError(`Không tìm thấy sản phẩm ${productId}.`);
 			}
 
-			const product = (await response.json()) as any;
 			return {
 				id: product.id,
 				name: product.name,
 				price: Number(product.price),
-				// Map đúng trường ảnh từ Product Service (thường là imageUrl hoặc image)
-				imageUrl: product.imageUrl || product.image || '',
+				imageUrl: product.imageUrl || '',
 			};
 		} catch (error) {
 			console.error(`Failed to fetch product ${productId}:`, error);

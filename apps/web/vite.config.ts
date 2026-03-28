@@ -25,13 +25,5 @@ export default defineConfig({
 	},
 	build: {
 		target: 'esnext',
-		rollupOptions: {
-			output: {
-				manualChunks: {
-					three: ['three'],
-					threlte: ['@threlte/core', '@threlte/extras'],
-				},
-			},
-		},
 	},
 });

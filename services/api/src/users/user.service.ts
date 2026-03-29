@@ -12,7 +12,7 @@ import type { BaziService } from '@user/bazi.service';
 import type { LoginSchema, SignUpSchema, UserAddressSchema } from '@user/user.model';
 import { refreshTokensTable, userAddressTable, usersTable } from '@user/user.model';
 import { comparePassword, hashPassword } from '@user/utils/passwordHash';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, like, or, sql } from 'drizzle-orm';
 import type { Static } from 'elysia';
 import { OAuth2Client } from 'google-auth-library';
 
@@ -236,44 +236,47 @@ export class UserService {
 		const search = options?.search?.toLowerCase() || '';
 		const role = options?.role || '';
 
-		// Build query with filters
-		let query = this.db.select().from(usersTable);
-
-		// Get all users first for filtering (SQLite doesn't support complex WHERE with OR easily)
-		const allUsers = await query;
-
-		// Apply filters in memory
-		let filteredUsers = allUsers;
+		// Build WHERE conditions at the SQL level instead of filtering in memory
+		const conditions: any[] = [];
 
 		if (search) {
-			filteredUsers = filteredUsers.filter(
-				(u: any) =>
-					u.id.toLowerCase().includes(search) ||
-					u.email.toLowerCase().includes(search) ||
-					u.username.toLowerCase().includes(search) ||
-					u.first_name.toLowerCase().includes(search) ||
-					u.last_name.toLowerCase().includes(search),
+			const searchPattern = `%${search}%`;
+			conditions.push(
+				or(
+					like(usersTable.id, searchPattern),
+					like(usersTable.email, searchPattern),
+					like(usersTable.username, searchPattern),
+					like(usersTable.first_name, searchPattern),
+					like(usersTable.last_name, searchPattern),
+				),
 			);
 		}
 
 		if (role) {
-			filteredUsers = filteredUsers.filter((u: any) => u.role === role);
+			conditions.push(eq(usersTable.role, role as 'user' | 'manager' | 'operator'));
 		}
 
-		// Sort by created_at descending
-		filteredUsers.sort(
-			(a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
-		);
+		const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-		// Calculate pagination
-		const total = filteredUsers.length;
+		// Count total matching users
+		const [countResult] = await this.db
+			.select({ count: sql<number>`count(*)` })
+			.from(usersTable)
+			.where(whereClause);
+		const total = Number(countResult?.count ?? 0);
 		const totalPages = Math.ceil(total / limit);
 
-		// Apply pagination
-		const paginatedUsers = filteredUsers.slice(offset, offset + limit);
+		// Fetch paginated results with SQL ORDER BY, LIMIT, OFFSET
+		const allUsers = await this.db
+			.select()
+			.from(usersTable)
+			.where(whereClause)
+			.orderBy(desc(usersTable.created_at))
+			.limit(limit)
+			.offset(offset);
 
 		// Remove password from response
-		const safeUsers = paginatedUsers.map(({ password, ...user }: any) => user);
+		const safeUsers = allUsers.map(({ password, ...user }: any) => user);
 
 		return {
 			users: safeUsers,

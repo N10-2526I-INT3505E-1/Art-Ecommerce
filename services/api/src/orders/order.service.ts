@@ -1,4 +1,4 @@
-import { desc, eq } from 'drizzle-orm';
+import { desc, eq, inArray } from 'drizzle-orm';
 import {
 	BadRequestError,
 	HttpError,
@@ -9,7 +9,6 @@ import type { db } from './db';
 import { ordersTable } from './order.model';
 import { orderItemsTable } from './order_item.model';
 import { randomUUIDv7 } from 'bun';
-import { UserAddressSchema } from './order.model';
 import { db as productDb } from '../products/db';
 import { products } from '../products/product.model';
 export type NewOrder = typeof ordersTable.$inferInsert;
@@ -245,33 +244,62 @@ export class OrderService {
 		}
 	}
 
-	// 11. Calculate Total Amount from Order Items
+	// 10b. Batch fetch multiple products in a single query
+	async getProductDetailsBatch(
+		productIds: string[],
+	): Promise<Map<string, { price: number; name: string; id: string; imageUrl: string }>> {
+		try {
+			const uniqueIds = [...new Set(productIds)];
+			const fetchedProducts = await productDb
+				.select({
+					id: products.id,
+					name: products.name,
+					price: products.price,
+					imageUrl: products.imageUrl,
+				})
+				.from(products)
+				.where(inArray(products.id, uniqueIds));
+
+			const map = new Map<string, { price: number; name: string; id: string; imageUrl: string }>();
+			for (const p of fetchedProducts) {
+				map.set(p.id, {
+					id: p.id,
+					name: p.name,
+					price: Number(p.price),
+					imageUrl: p.imageUrl || '',
+				});
+			}
+			return map;
+		} catch (error) {
+			console.error('Batch fetch products failed:', error);
+			throw new InternalServerError('Không thể lấy thông tin sản phẩm.');
+		}
+	}
+
+	// 11. Calculate Total Amount from Order Items — single batch query instead of N+1
 	async calculateTotalAmount(items: Array<{ product_id: string; quantity: number }>): Promise<{
 		total: number;
-		// Trả về map để dễ lookup: { "productId": { name, price, imageUrl } }
 		productMap: Record<string, { name: string; price: number; imageUrl: string }>;
 	}> {
-		let total = 0;
-		const productMap: Record<string, { name: string; price: number; imageUrl: string }> = {};
-
 		try {
-			// Dùng Promise.all để fetch song song cho nhanh
-			await Promise.all(
-				items.map(async (item) => {
-					const product = await this.getProductDetails(item.product_id);
-					const itemTotal = product.price * item.quantity;
+			const productIds = items.map((item) => item.product_id);
+			const batchResult = await this.getProductDetailsBatch(productIds);
 
-					// Cộng dồn tổng tiền (Mutex không cần thiết vì Node là single thread event loop ở đây)
-					total += itemTotal;
+			let total = 0;
+			const productMap: Record<string, { name: string; price: number; imageUrl: string }> = {};
 
-					// Lưu info sản phẩm để tí nữa dùng tạo snapshot
-					productMap[item.product_id] = {
-						name: product.name,
-						price: product.price,
-						imageUrl: product.imageUrl,
-					};
-				}),
-			);
+			for (const item of items) {
+				const product = batchResult.get(item.product_id);
+				if (!product) {
+					throw new NotFoundError(`Không tìm thấy sản phẩm ${item.product_id}.`);
+				}
+				total += product.price * item.quantity;
+				productMap[item.product_id] = {
+					name: product.name,
+					price: product.price,
+					imageUrl: product.imageUrl,
+				};
+			}
 
 			return { total, productMap };
 		} catch (error) {

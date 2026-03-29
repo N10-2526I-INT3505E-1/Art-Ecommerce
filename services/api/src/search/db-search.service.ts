@@ -30,12 +30,12 @@ export class DbSearchService {
 
 			// Parse: categoryName = "value"
 			const categoryMatch = filterStr.match(/categoryName\s*=\s*"([^"]+)"/);
-			if (categoryMatch) {
-				const categoryName = categoryMatch[1];
-				// Sub-query: find category ID by name, then filter products
-				const category = await db.query.categories.findFirst({
-					where: (c, { eq }) => eq(c.name, categoryName),
-				});
+				if (categoryMatch && categoryMatch[1]) {
+					const categoryName = categoryMatch[1] as string;
+					// Sub-query: find category ID by name, then filter products
+					const category = await db.query.categories.findFirst({
+						where: eq(categories.name, categoryName),
+					});
 				if (category) {
 					conditions.push(eq(products.categoryId, category.id));
 				} else {
@@ -59,7 +59,7 @@ export class DbSearchService {
 			// Parse: tags IN ["tag1", "tag2"]
 			const tagsMatch = filterStr.match(/tags\s+IN\s+$$([^$$]+)\]/);
 			if (tagsMatch) {
-				const tagNames = tagsMatch[1]
+				const tagNames = tagsMatch[1]!
 					.split(',')
 					.map((t) => t.trim().replace(/"/g, ''));
 				if (tagNames.length > 0) {
@@ -102,19 +102,27 @@ export class DbSearchService {
 
 		const startTime = Date.now();
 
-		const results = await db.query.products.findMany({
-			where: and(...conditions),
-			limit: limit,
-			orderBy: orderBy,
-			with: {
-				category: true,
-				productTags: {
-					with: { tag: true },
+		// Run data query and count query in parallel
+		const [results, countResult] = await Promise.all([
+			db.query.products.findMany({
+				where: and(...conditions),
+				limit: limit,
+				orderBy: orderBy,
+				with: {
+					category: true,
+					productTags: {
+						with: { tag: true },
+					},
 				},
-			},
-		});
+			}),
+			db
+				.select({ count: sql<number>`count(*)` })
+				.from(products)
+				.where(and(...conditions)),
+		]);
 
 		const processingTimeMs = Date.now() - startTime;
+		const totalHits = Number(countResult[0]?.count ?? 0);
 
 		const hits = results.map((p) => ({
 			id: p.id,
@@ -132,7 +140,7 @@ export class DbSearchService {
 		return {
 			hits,
 			processingTimeMs,
-			estimatedTotalHits: hits.length,
+			estimatedTotalHits: totalHits,
 			limit,
 		};
 	}

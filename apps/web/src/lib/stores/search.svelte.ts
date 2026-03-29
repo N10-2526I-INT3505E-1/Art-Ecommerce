@@ -105,7 +105,7 @@ class SearchStore {
 
 		try {
 			const response = await api
-				.get(`v1/search/suggestions?q=${encodeURIComponent(query)}&limit=${limit}`)
+				.get(`search/suggestions?q=${encodeURIComponent(query)}&limit=${limit}`)
 				.json<{ suggestions: SearchSuggestion[] }>();
 
 			this.suggestions = response.suggestions;

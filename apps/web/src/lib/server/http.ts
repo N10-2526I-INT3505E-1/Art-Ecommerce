@@ -17,7 +17,7 @@ export function api({ fetch }: Pick<RequestEvent, 'fetch'>, options: Options = {
 		(dev ? 'http://localhost:3000' : DEFAULT_PROD_API);
 
 	const ensureTrailingSlash = (u: string) => (u.endsWith('/') ? u : `${u}/`);
-	const defaultPrefix = ensureTrailingSlash(rawUrl);
+	const defaultPrefix = ensureTrailingSlash(rawUrl) + 'v1/';
 
 	// Optional: Log only in dev to keep Vercel logs clean
 	if (dev) console.log('API Prefix URL:', defaultPrefix);

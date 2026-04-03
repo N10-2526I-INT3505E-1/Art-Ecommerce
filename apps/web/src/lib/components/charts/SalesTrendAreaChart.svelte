@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	
 	import * as d3 from 'd3';
+import { onDestroy, onMount } from 'svelte';
 	import { fade } from 'svelte/transition';
 
 	// --- Types ---

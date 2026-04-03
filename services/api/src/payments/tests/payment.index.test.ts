@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import { Elysia, t } from 'elysia';
+import { errorHandler } from '@common/errors/errorHandler';
 import {
+	ForbiddenError,
 	InternalServerError,
 	NotFoundError,
 	UnauthorizedError,
-	ForbiddenError,
 } from '@common/errors/httpErrors';
-import { errorHandler } from '@common/errors/errorHandler';
+import { Elysia, t } from 'elysia';
 
 // 1. Mock the business logic services
 const mockPaymentService = {

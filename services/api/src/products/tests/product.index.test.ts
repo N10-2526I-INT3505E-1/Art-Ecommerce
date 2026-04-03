@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import { Elysia } from 'elysia';
-import { productsPlugin } from '../index';
+import { errorHandler } from '@common/errors/errorHandler';
 import {
 	BadRequestError,
 	ConflictError,
 	InternalServerError,
 	NotFoundError,
 } from '@common/errors/httpErrors';
-import { errorHandler } from '@common/errors/errorHandler';
+import { Elysia } from 'elysia';
+import { productsPlugin } from '../index';
 
 // ========================================================================
 // 1. CONFIGURATION - Change API_VERSION to update all tests at once

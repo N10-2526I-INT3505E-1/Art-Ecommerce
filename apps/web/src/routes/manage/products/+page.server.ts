@@ -1,6 +1,6 @@
-import { api } from '$lib/server/http';
 import { fail } from '@sveltejs/kit';
-import type { PageServerLoad, Actions } from './$types';
+import { api } from '$lib/server/http';
+import type { Actions, PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async ({ fetch, request, url }) => {
 	const client = api({ fetch, request });
@@ -62,9 +62,9 @@ export const actions: Actions = {
 		const tagsRaw = formData.get('tags') as string;
 		const tags = tagsRaw
 			? tagsRaw
-				.split(',')
-				.map((t) => t.trim())
-				.filter(Boolean)
+					.split(',')
+					.map((t) => t.trim())
+					.filter(Boolean)
 			: [];
 
 		if (!name || !price) {
@@ -99,9 +99,9 @@ export const actions: Actions = {
 		const tagsRaw = formData.get('tags') as string;
 		const tags = tagsRaw
 			? tagsRaw
-				.split(',')
-				.map((t) => t.trim())
-				.filter(Boolean)
+					.split(',')
+					.map((t) => t.trim())
+					.filter(Boolean)
 			: undefined;
 
 		if (!id) {

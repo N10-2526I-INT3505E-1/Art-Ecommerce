@@ -1,3 +1,4 @@
+import { jwtAuthDerive } from '@common/auth/jwtAuthDerive';
 import { ForbiddenError, UnauthorizedError } from '@common/errors/httpErrors';
 import { jwt } from '@elysiajs/jwt';
 import { BaziProfileResponseSchema, CreateBaziProfileSchema } from '@user/bazi.model';
@@ -166,381 +167,361 @@ export const usersPlugin = (dependencies: { userService: UserService }) =>
 				)
 
 				// PROTECTED ROUTES
-				// Nhiệm vụ: Đọc Header từ Gateway, không verify token
-				.guard(
-					{}, // Không cần beforeHandle verify token nữa
-					(app) =>
-						app
-							// Trích xuất thông tin User từ Header do Gateway gửi xuống
-							.derive(({ headers }) => {
-								const userId = headers['x-user-id'];
-								const userRole = headers['x-user-role'];
+				// Verify JWT from Authorization header and extract user info
+				.guard({}, (app) =>
+					app
+						.derive(jwtAuthDerive)
 
-								// Nếu không có header -> Ai đó đang gọi thẳng vào Service bỏ qua Gateway -> Chặn
-								if (!userId) {
-									throw new UnauthorizedError('Missing Gateway Headers (x-user-id)');
+						// USER MANAGEMENT
+
+						// GET /users - List all users (admin only) with pagination
+						.get(
+							'/',
+							async ({ user, userService, query }) => {
+								if (user.role !== 'manager') throw new ForbiddenError('Admins only');
+								const result = await userService.getAllUsers({
+									page: query.page,
+									limit: query.limit,
+									search: query.search,
+									role: query.role,
+								});
+								return result;
+							},
+							{
+								query: t.Object({
+									page: t.Optional(t.Numeric({ default: 1 })),
+									limit: t.Optional(t.Numeric({ default: 10 })),
+									search: t.Optional(t.String()),
+									role: t.Optional(t.String()),
+								}),
+								response: {
+									200: t.Object({
+										users: t.Array(SafeUserResponseSchema),
+										pagination: t.Object({
+											page: t.Number(),
+											limit: t.Number(),
+											total: t.Number(),
+											totalPages: t.Number(),
+										}),
+									}),
+									403: ErrorSchema,
+								},
+								detail: {
+									tags: ['Users'],
+									summary: 'Get all users with pagination (Admin only)',
+									description:
+										'Supports pagination, search (by id, email, username, name), and role filtering.',
+								},
+							},
+						)
+
+						// GET /users/profile - Get current user profile
+						.get(
+							'/profile',
+							async ({ user, userService }) => {
+								// Lấy thông tin chi tiết từ DB dựa trên ID từ Header
+								const currentUser = await userService.getUserById(user.id);
+								const { password, ...safeUser } = currentUser;
+								return { user: safeUser };
+							},
+							{
+								response: {
+									200: t.Object({ user: SafeUserResponseSchema }),
+									401: ErrorSchema,
+									404: ErrorSchema,
+								},
+								detail: { tags: ['Users'], summary: 'Get current user profile' },
+							},
+						)
+
+						// PATCH /users/profile - Update current user profile
+						.patch(
+							'/profile',
+							async ({ body, user, userService }) => {
+								const updatedUser = await userService.updateUser(user.id, body);
+								return { user: updatedUser };
+							},
+							{
+								response: {
+									200: t.Object({ user: SafeUserResponseSchema }),
+									404: ErrorSchema,
+								},
+								body: t.Partial(t.Omit(SignUpSchema, ['email', 'password'])),
+								detail: { tags: ['Users'], summary: 'Update current user profile' },
+							},
+						)
+
+						// GET /users/:user_id - Get user by ID
+						.get(
+							'/:user_id',
+							async ({ params, user, userService }) => {
+								if (user.role !== 'manager' && user.id !== params.user_id) {
+									throw new ForbiddenError('Access denied');
+								}
+								const foundUser = await userService.getUserById(params.user_id);
+								return { user: foundUser };
+							},
+							{
+								params: t.Object({ user_id: t.String() }),
+								response: {
+									200: t.Object({ user: SafeUserResponseSchema }),
+									403: ErrorSchema,
+									404: ErrorSchema,
+								},
+								detail: { tags: ['Users'], summary: 'Get user by ID' },
+							},
+						)
+
+						// PATCH /users/:user_id - Update user
+						.patch(
+							'/:user_id',
+							async ({ params, body, user, userService }) => {
+								const isManager = user.role === 'manager';
+								const isOwner = user.id === params.user_id;
+
+								// Must be manager or owner
+								if (!isManager && !isOwner) {
+									throw new ForbiddenError('Access denied');
 								}
 
+								// Non-managers cannot update role or email
+								if (!isManager && (body.role || body.email)) {
+									throw new ForbiddenError('Only managers can update role or email');
+								}
+
+								// Prevent manager self-demotion
+								if (isManager && isOwner && body.role && body.role !== 'manager') {
+									throw new ForbiddenError('Cannot demote yourself');
+								}
+
+								const updatedUser = await userService.updateUser(params.user_id, body);
+								const { password, ...safeUser } = updatedUser;
+								return { user: safeUser };
+							},
+							{
+								params: t.Object({ user_id: t.String() }),
+								body: t.Object({
+									first_name: t.Optional(t.String({ minLength: 1, maxLength: 50 })),
+									last_name: t.Optional(t.String({ minLength: 1, maxLength: 50 })),
+									username: t.Optional(t.String({ minLength: 5, maxLength: 30 })),
+									email: t.Optional(t.String({ format: 'email' })),
+									role: t.Optional(
+										t.Union([t.Literal('manager'), t.Literal('operator'), t.Literal('user')]),
+									),
+								}),
+								response: {
+									200: t.Object({ user: SafeUserResponseSchema }),
+									403: ErrorSchema,
+									404: ErrorSchema,
+									409: ErrorSchema,
+								},
+								detail: {
+									tags: ['Users'],
+									summary: 'Update user',
+									description:
+										'Managers can update role, email, username, name. Users can only update their own name and username.',
+								},
+							},
+						)
+
+						// DELETE /users/:user_id - Delete user (BLOCKED IN DEMO)
+						.delete(
+							'/:user_id',
+							async ({ set }) => {
+								set.status = 403;
 								return {
-									user: {
-										id: userId as string,
-										email: '', // Gateway thường không gửi email, service tự fetch nếu cần
-										role: (userRole as string) || 'user',
-									},
+									message: '⚠️ YOU CANNOT DO THIS IN DEMO VERSION. User deletion is disabled.',
 								};
-							})
+							},
+							{
+								params: t.Object({ user_id: t.String() }),
+								response: { 403: ErrorSchema },
+								detail: { tags: ['Users'], summary: 'Delete user (DEMO: BLOCKED)' },
+							},
+						)
 
-							// USER MANAGEMENT
+						// ADDRESS MANAGEMENT (Sub-resource of User)
 
-							// GET /users - List all users (admin only) with pagination
-							.get(
-								'/',
-								async ({ user, userService, query }) => {
-									if (user.role !== 'manager') throw new ForbiddenError('Admins only');
-									const result = await userService.getAllUsers({
-										page: query.page,
-										limit: query.limit,
-										search: query.search,
-										role: query.role,
-									});
-									return result;
+						// GET /users/profile/addresses
+						.get(
+							'/profile/addresses',
+							async ({ user, userService }) => {
+								const { addresses } = await userService.getUserAddresses(user.id);
+								return { addresses };
+							},
+							{
+								response: {
+									200: t.Object({ addresses: t.Array(UserAddressResponseSchema) }),
 								},
-								{
-									query: t.Object({
-										page: t.Optional(t.Numeric({ default: 1 })),
-										limit: t.Optional(t.Numeric({ default: 10 })),
-										search: t.Optional(t.String()),
-										role: t.Optional(t.String()),
-									}),
-									response: {
-										200: t.Object({
-											users: t.Array(SafeUserResponseSchema),
-											pagination: t.Object({
-												page: t.Number(),
-												limit: t.Number(),
-												total: t.Number(),
-												totalPages: t.Number(),
-											}),
-										}),
-										403: ErrorSchema,
-									},
-									detail: {
-										tags: ['Users'],
-										summary: 'Get all users with pagination (Admin only)',
-										description:
-											'Supports pagination, search (by id, email, username, name), and role filtering.',
-									},
-								},
-							)
+								detail: { tags: ['Addresses'], summary: 'Get current user addresses' },
+							},
+						)
 
-							// GET /users/profile - Get current user profile
-							.get(
-								'/profile',
-								async ({ user, userService }) => {
-									// Lấy thông tin chi tiết từ DB dựa trên ID từ Header
-									const currentUser = await userService.getUserById(user.id);
-									const { password, ...safeUser } = currentUser;
-									return { user: safeUser };
+						// POST /users/profile/addresses
+						.post(
+							'/profile/addresses',
+							async ({ body, set, user, userService }) => {
+								const newAddress = await userService.addUserAddress(user.id, body);
+								set.status = 201;
+								return { address: newAddress };
+							},
+							{
+								body: t.Omit(UserAddressSchema, ['id', 'user_id']),
+								response: {
+									201: t.Object({ address: UserAddressResponseSchema }),
+									404: ErrorSchema,
+									500: ErrorSchema,
 								},
-								{
-									response: {
-										200: t.Object({ user: SafeUserResponseSchema }),
-										401: ErrorSchema,
-										404: ErrorSchema,
-									},
-									detail: { tags: ['Users'], summary: 'Get current user profile' },
-								},
-							)
+								detail: { tags: ['Addresses'], summary: 'Add address for current user' },
+							},
+						)
 
-							// PATCH /users/profile - Update current user profile
-							.patch(
-								'/profile',
-								async ({ body, user, userService }) => {
-									const updatedUser = await userService.updateUser(user.id, body);
-									return { user: updatedUser };
+						// PATCH /users/profile/addresses/:address_id
+						.patch(
+							'/profile/addresses/:address_id',
+							async ({ params, body, user, userService }) => {
+								const updatedAddress = await userService.updateUserAddress(
+									user.id,
+									params.address_id,
+									body,
+								);
+								return { address: updatedAddress };
+							},
+							{
+								params: t.Object({ address_id: t.Numeric() }),
+								body: t.Partial(UserAddressSchema),
+								response: {
+									200: t.Object({ address: UserAddressResponseSchema }),
+									404: ErrorSchema,
+									500: ErrorSchema,
 								},
-								{
-									response: {
-										200: t.Object({ user: SafeUserResponseSchema }),
-										404: ErrorSchema,
-									},
-									body: t.Partial(t.Omit(SignUpSchema, ['email', 'password'])),
-									detail: { tags: ['Users'], summary: 'Update current user profile' },
-								},
-							)
+								detail: { tags: ['Addresses'], summary: 'Update current user address' },
+							},
+						)
 
-							// GET /users/:user_id - Get user by ID
-							.get(
-								'/:user_id',
-								async ({ params, user, userService }) => {
-									if (user.role !== 'manager' && user.id !== params.user_id) {
-										throw new ForbiddenError('Access denied');
-									}
-									const foundUser = await userService.getUserById(params.user_id);
-									return { user: foundUser };
+						// DELETE /users/profile/addresses/:address_id
+						.delete(
+							'/profile/addresses/:address_id',
+							async ({ set, params, user, userService }) => {
+								await userService.deleteUserAddress(user.id, params.address_id);
+								set.status = 204;
+							},
+							{
+								params: t.Object({ address_id: t.Numeric() }),
+								response: {
+									204: t.Void(),
+									404: ErrorSchema,
 								},
-								{
-									params: t.Object({ user_id: t.String() }),
-									response: {
-										200: t.Object({ user: SafeUserResponseSchema }),
-										403: ErrorSchema,
-										404: ErrorSchema,
-									},
-									detail: { tags: ['Users'], summary: 'Get user by ID' },
-								},
-							)
+								detail: { tags: ['Addresses'], summary: 'Delete current user address' },
+							},
+						)
 
-							// PATCH /users/:user_id - Update user
-							.patch(
-								'/:user_id',
-								async ({ params, body, user, userService }) => {
-									const isManager = user.role === 'manager';
-									const isOwner = user.id === params.user_id;
+						// GET /users/:user_id/addresses (Admin/Owner)
+						.get(
+							'/:user_id/addresses',
+							async ({ params, user, userService }) => {
+								if (user.role !== 'manager' && user.id !== params.user_id) {
+									throw new ForbiddenError('Access denied');
+								}
+								const { addresses } = await userService.getUserAddresses(params.user_id);
+								return { addresses };
+							},
+							{
+								params: t.Object({ user_id: t.String() }),
+								response: {
+									200: t.Object({ addresses: t.Array(UserAddressResponseSchema) }),
+									403: ErrorSchema,
+								},
+								detail: { tags: ['Addresses'], summary: 'Get user addresses (Admin/Owner)' },
+							},
+						)
 
-									// Must be manager or owner
-									if (!isManager && !isOwner) {
-										throw new ForbiddenError('Access denied');
-									}
+						// POST /users/:user_id/addresses (Admin/Owner)
+						.post(
+							'/:user_id/addresses',
+							async ({ params, body, set, user, userService }) => {
+								if (user.role !== 'manager' && user.id !== params.user_id) {
+									throw new ForbiddenError('Access denied');
+								}
+								const newAddress = await userService.addUserAddress(params.user_id, body);
+								set.status = 201;
+								return { address: newAddress };
+							},
+							{
+								params: t.Object({ user_id: t.String() }),
+								body: t.Omit(UserAddressSchema, ['id', 'user_id']),
+								response: {
+									201: t.Object({ address: UserAddressResponseSchema }),
+									403: ErrorSchema,
+									404: ErrorSchema,
+									500: ErrorSchema,
+								},
+								detail: { tags: ['Addresses'], summary: 'Add address for user (Admin/Owner)' },
+							},
+						)
 
-									// Non-managers cannot update role or email
-									if (!isManager && (body.role || body.email)) {
-										throw new ForbiddenError('Only managers can update role or email');
-									}
+						// BAZI PROFILE (Sub-resource of User)
+						// GET /users/profile/bazi
+						.get(
+							'/profile/bazi',
+							async ({ user, userService }) => {
+								const profile = await userService.getBaziProfile(user.id);
+								return { profile };
+							},
+							{
+								response: {
+									200: t.Object({ profile: BaziProfileResponseSchema }),
+									404: ErrorSchema,
+								},
+								detail: {
+									tags: ['Bazi'],
+									summary: 'Get current user Bazi profile',
+								},
+							},
+						)
 
-									// Prevent manager self-demotion
-									if (isManager && isOwner && body.role && body.role !== 'manager') {
-										throw new ForbiddenError('Cannot demote yourself');
-									}
+						// POST /users/profile/bazi
+						.post(
+							'/profile/bazi',
+							async ({ body, user, userService }) => {
+								const profile = await userService.createOrUpdateBaziProfile(user.id, body);
+								return { profile };
+							},
+							{
+								body: t.Omit(CreateBaziProfileSchema, ['id', 'user_id']),
+								response: {
+									200: t.Object({ profile: BaziProfileResponseSchema }),
+								},
+								detail: {
+									tags: ['Bazi'],
+									summary: 'Create or update current user Bazi profile',
+								},
+							},
+						)
 
-									const updatedUser = await userService.updateUser(params.user_id, body);
-									const { password, ...safeUser } = updatedUser;
-									return { user: safeUser };
+						// GET /users/:user_id/bazi (Admin/Owner)
+						.get(
+							'/:user_id/bazi',
+							async ({ params, user, userService }) => {
+								if (user.role !== 'manager' && user.id !== params.user_id) {
+									throw new ForbiddenError('Access denied');
+								}
+								const profile = await userService.getBaziProfile(params.user_id);
+								return { profile };
+							},
+							{
+								params: t.Object({ user_id: t.String() }),
+								response: {
+									200: t.Object({ profile: BaziProfileResponseSchema }),
+									403: ErrorSchema,
+									404: ErrorSchema,
 								},
-								{
-									params: t.Object({ user_id: t.String() }),
-									body: t.Object({
-										first_name: t.Optional(t.String({ minLength: 1, maxLength: 50 })),
-										last_name: t.Optional(t.String({ minLength: 1, maxLength: 50 })),
-										username: t.Optional(t.String({ minLength: 5, maxLength: 30 })),
-										email: t.Optional(t.String({ format: 'email' })),
-										role: t.Optional(
-											t.Union([t.Literal('manager'), t.Literal('operator'), t.Literal('user')]),
-										),
-									}),
-									response: {
-										200: t.Object({ user: SafeUserResponseSchema }),
-										403: ErrorSchema,
-										404: ErrorSchema,
-										409: ErrorSchema,
-									},
-									detail: {
-										tags: ['Users'],
-										summary: 'Update user',
-										description:
-											'Managers can update role, email, username, name. Users can only update their own name and username.',
-									},
+								detail: {
+									tags: ['Bazi'],
+									summary: 'Get user Bazi profile (Admin/Owner)',
 								},
-							)
-
-							// DELETE /users/:user_id - Delete user
-							.delete(
-								'/:user_id',
-								async ({ params, user, userService }) => {
-									if (user.role !== 'manager' && user.id !== params.user_id) {
-										throw new ForbiddenError('Access denied');
-									}
-									const result = await userService.deleteUser(params.user_id);
-									return { message: result.message };
-								},
-								{
-									params: t.Object({ user_id: t.String() }),
-									response: { 200: t.Object({ message: t.String() }), 404: ErrorSchema },
-									detail: { tags: ['Users'], summary: 'Delete user' },
-								},
-							)
-
-							// ADDRESS MANAGEMENT (Sub-resource of User)
-
-							// GET /users/profile/addresses
-							.get(
-								'/profile/addresses',
-								async ({ user, userService }) => {
-									const { addresses } = await userService.getUserAddresses(user.id);
-									return { addresses };
-								},
-								{
-									response: {
-										200: t.Object({ addresses: t.Array(UserAddressResponseSchema) }),
-									},
-									detail: { tags: ['Addresses'], summary: 'Get current user addresses' },
-								},
-							)
-
-							// POST /users/profile/addresses
-							.post(
-								'/profile/addresses',
-								async ({ body, set, user, userService }) => {
-									const newAddress = await userService.addUserAddress(user.id, body);
-									set.status = 201;
-									return { address: newAddress };
-								},
-								{
-									body: t.Omit(UserAddressSchema, ['id', 'user_id']),
-									response: {
-										201: t.Object({ address: UserAddressResponseSchema }),
-										404: ErrorSchema,
-										500: ErrorSchema,
-									},
-									detail: { tags: ['Addresses'], summary: 'Add address for current user' },
-								},
-							)
-
-							// PATCH /users/profile/addresses/:address_id
-							.patch(
-								'/profile/addresses/:address_id',
-								async ({ params, body, user, userService }) => {
-									const updatedAddress = await userService.updateUserAddress(
-										user.id,
-										params.address_id,
-										body,
-									);
-									return { address: updatedAddress };
-								},
-								{
-									params: t.Object({ address_id: t.Numeric() }),
-									body: t.Partial(UserAddressSchema),
-									response: {
-										200: t.Object({ address: UserAddressResponseSchema }),
-										404: ErrorSchema,
-										500: ErrorSchema,
-									},
-									detail: { tags: ['Addresses'], summary: 'Update current user address' },
-								},
-							)
-
-							// DELETE /users/profile/addresses/:address_id
-							.delete(
-								'/profile/addresses/:address_id',
-								async ({ set, params, user, userService }) => {
-									await userService.deleteUserAddress(user.id, params.address_id);
-									set.status = 204;
-								},
-								{
-									params: t.Object({ address_id: t.Numeric() }),
-									response: {
-										204: t.Void(),
-										404: ErrorSchema,
-									},
-									detail: { tags: ['Addresses'], summary: 'Delete current user address' },
-								},
-							)
-
-							// GET /users/:user_id/addresses (Admin/Owner)
-							.get(
-								'/:user_id/addresses',
-								async ({ params, user, userService }) => {
-									if (user.role !== 'manager' && user.id !== params.user_id) {
-										throw new ForbiddenError('Access denied');
-									}
-									const { addresses } = await userService.getUserAddresses(params.user_id);
-									return { addresses };
-								},
-								{
-									params: t.Object({ user_id: t.String() }),
-									response: {
-										200: t.Object({ addresses: t.Array(UserAddressResponseSchema) }),
-										403: ErrorSchema,
-									},
-									detail: { tags: ['Addresses'], summary: 'Get user addresses (Admin/Owner)' },
-								},
-							)
-
-							// POST /users/:user_id/addresses (Admin/Owner)
-							.post(
-								'/:user_id/addresses',
-								async ({ params, body, set, user, userService }) => {
-									if (user.role !== 'manager' && user.id !== params.user_id) {
-										throw new ForbiddenError('Access denied');
-									}
-									const newAddress = await userService.addUserAddress(params.user_id, body);
-									set.status = 201;
-									return { address: newAddress };
-								},
-								{
-									params: t.Object({ user_id: t.String() }),
-									body: t.Omit(UserAddressSchema, ['id', 'user_id']),
-									response: {
-										201: t.Object({ address: UserAddressResponseSchema }),
-										403: ErrorSchema,
-										404: ErrorSchema,
-										500: ErrorSchema,
-									},
-									detail: { tags: ['Addresses'], summary: 'Add address for user (Admin/Owner)' },
-								},
-							)
-
-							// BAZI PROFILE (Sub-resource of User)
-							// GET /users/profile/bazi
-							.get(
-								'/profile/bazi',
-								async ({ user, userService }) => {
-									const profile = await userService.getBaziProfile(user.id);
-									return { profile };
-								},
-								{
-									response: {
-										200: t.Object({ profile: BaziProfileResponseSchema }),
-										404: ErrorSchema,
-									},
-									detail: {
-										tags: ['Bazi'],
-										summary: 'Get current user Bazi profile',
-									},
-								},
-							)
-
-							// POST /users/profile/bazi
-							.post(
-								'/profile/bazi',
-								async ({ body, user, userService }) => {
-									const profile = await userService.createOrUpdateBaziProfile(user.id, body);
-									return { profile };
-								},
-								{
-									body: t.Omit(CreateBaziProfileSchema, ['id', 'user_id']),
-									response: {
-										200: t.Object({ profile: BaziProfileResponseSchema }),
-									},
-									detail: {
-										tags: ['Bazi'],
-										summary: 'Create or update current user Bazi profile',
-									},
-								},
-							)
-
-							// GET /users/:user_id/bazi (Admin/Owner)
-							.get(
-								'/:user_id/bazi',
-								async ({ params, user, userService }) => {
-									if (user.role !== 'manager' && user.id !== params.user_id) {
-										throw new ForbiddenError('Access denied');
-									}
-									const profile = await userService.getBaziProfile(params.user_id);
-									return { profile };
-								},
-								{
-									params: t.Object({ user_id: t.String() }),
-									response: {
-										200: t.Object({ profile: BaziProfileResponseSchema }),
-										403: ErrorSchema,
-										404: ErrorSchema,
-									},
-									detail: {
-										tags: ['Bazi'],
-										summary: 'Get user Bazi profile (Admin/Owner)',
-									},
-								},
-							),
+							},
+						),
 				),
 		);
 

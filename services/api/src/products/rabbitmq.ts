@@ -1,5 +1,5 @@
-import { Elysia } from 'elysia';
 import amqp from 'amqplib';
+import { Elysia } from 'elysia';
 
 // Use Environment Variables so you can change this in Docker/K8s later
 const RABBIT_URL = process.env.RABBIT_URL || 'amqp://localhost';

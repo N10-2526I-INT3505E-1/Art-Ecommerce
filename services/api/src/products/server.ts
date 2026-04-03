@@ -3,9 +3,10 @@ import { errorHandler } from '@common/errors/errorHandler';
 import { cors } from '@elysiajs/cors';
 import { openapi } from '@elysiajs/openapi';
 import { Elysia } from 'elysia';
+import { db } from './db';
 import { productsPlugin } from './index';
 import { ProductService } from './product.service';
-import { db } from './db';
+
 const app = new Elysia({})
 	.use(errorHandler)
 	.use(

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { ExternalLink } from 'lucide-svelte';
-	import ProductCard from './ProductCard.svelte';
 	import { marked } from 'marked';
+	import ProductCard from './ProductCard.svelte';
 
 	interface Props {
 		data: {

@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	
 	import * as d3 from 'd3';
+import { onDestroy, onMount } from 'svelte';
 
 	interface ProductData {
 		name: string;
@@ -191,7 +192,7 @@
 			.attr('height', yScale.bandwidth())
 			.attr('fill', 'transparent')
 			.style('cursor', 'pointer')
-			.on('mouseenter', function (event, d) {
+			.on('mouseenter', (event, d) => {
 				hoverData = d;
 				// Calculate position relative to container
 				tooltipY = yScale(d.name)! + margin.top;
@@ -206,7 +207,7 @@
 					.attr('font-weight', 'bold')
 					.attr('color', themeColor);
 			})
-			.on('mouseleave', function () {
+			.on('mouseleave', () => {
 				hoverData = null;
 				// Reset label styles
 				d3.select(container)

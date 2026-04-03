@@ -5,40 +5,39 @@
  */
 
 import { SolarDate } from '@nghiavuive/lunar_date_vi';
-import type { BaziInput } from './bazi.model';
-import type {
-	BaziResult,
-	BaziChart,
-	Pillar,
-	EnergyNode,
-	HeavenlyStem,
-	EarthlyBranch,
-	FiveElement,
-	TenGod,
-	CenterZoneAnalysis,
-	LimitScoreProfile,
-	Interaction,
-	PillarPosition,
-} from './bazi.types';
-
 import {
-	HIDDEN_STEMS,
-	ELEMENT_RELATIONS,
-	STEM_COMBINATIONS,
+	BRANCH_CLASHES,
+	BRANCH_SEASONAL_COMBINATIONS,
 	BRANCH_SIX_COMBINATIONS,
 	BRANCH_TRI_COMBINATIONS,
-	BRANCH_SEASONAL_COMBINATIONS,
-	BRANCH_CLASHES,
-	LIFE_CYCLE_TABLE,
-	TEN_GODS_MAPPING,
-	HEAVENLY_STEMS,
 	EARTHLY_BRANCHES,
-	SOLAR_TERM_TO_BRANCH_INDEX,
-	STEM_POLARITY,
-	MONTH_COMMANDER_RULES,
+	ELEMENT_RELATIONS,
+	HEAVENLY_STEMS,
+	HIDDEN_STEMS,
 	LIFE_CYCLE_SCORES,
+	LIFE_CYCLE_TABLE,
+	MONTH_COMMANDER_RULES,
 	PHYSICS, // Import cấu hình vật lý chuẩn hóa
+	SOLAR_TERM_TO_BRANCH_INDEX,
+	STEM_COMBINATIONS,
+	STEM_POLARITY,
+	TEN_GODS_MAPPING,
 } from './bazi.constants';
+import type { BaziInput } from './bazi.model';
+import type {
+	BaziChart,
+	BaziResult,
+	CenterZoneAnalysis,
+	EarthlyBranch,
+	EnergyNode,
+	FiveElement,
+	HeavenlyStem,
+	Interaction,
+	LimitScoreProfile,
+	Pillar,
+	PillarPosition,
+	TenGod,
+} from './bazi.types';
 
 export class BaziService {
 	// ====================================================================
@@ -385,13 +384,15 @@ export class BaziService {
 					enemyScore += finalScore;
 					break;
 
-				case 'BiKhac': // Tài (Vợ/Cha - Hao sức quản lý)
+				case 'BiKhac': {
+					// Tài (Vợ/Cha - Hao sức quản lý)
 					// Tài làm hao tổn khí lực. Tính vào phe địch.
 					// Vũ Long: Hệ số hao tài nhẹ hơn khắc quan.
 					const wealthDrain = finalScore * PHYSICS.LOSS_WEALTH_EXHAUSTION * weight;
 					// Lưu ý: wealthDrain là phần Nhật chủ mất đi, nên cộng vào EnemyScore (sức cản trở)
 					enemyScore += wealthDrain;
 					break;
+				}
 			}
 
 			// Log chi tiết các thành phần quan trọng (> 1.0 điểm)
@@ -459,7 +460,7 @@ export class BaziService {
 		const posName = { Year: 'Năm', Month: 'Tháng', Day: 'Ngày', Hour: 'Giờ' }[position];
 
 		switch (rel) {
-			case 'Hoa':
+			case 'Hoa': {
 				// [TỶ HÒA] - Can Chi đồng khí (VD: Kỷ Sửu -> Thổ Thổ)
 				// Cộng hưởng: Can được cường hóa
 				const resonance = branchTotalScore * 0.2;
@@ -473,8 +474,9 @@ export class BaziService {
 				});
 				logs.push(`   + Nội bộ trụ ${posName}: Can Chi đồng khí (+${resonance.toFixed(2)})`);
 				break;
+			}
 
-			case 'Sinh':
+			case 'Sinh': {
 				// [CHI SINH CAN] - Đắc Địa (VD: Giáp Tý -> Thủy sinh Mộc)
 				const gain = branchTotalScore * PHYSICS.GAIN_GENERATE_TARGET;
 				this.applyNodeModification(stemNode, gain, `Được chi ${posName} sinh`);
@@ -489,15 +491,17 @@ export class BaziService {
 				});
 				logs.push(`   + Nội bộ trụ ${posName}: Chi sinh Can (+${gain.toFixed(2)})`);
 				break;
+			}
 
-			case 'Khac':
+			case 'Khac': {
 				// [CHI KHẮC CAN] - Tiệt Cước (VD: Giáp Thân -> Kim khắc Mộc)
 				const damage = stemNode.currentScore * PHYSICS.LOSS_OVERCOME_TARGET;
 				this.applyNodeModification(stemNode, -damage, `Bị chi ${posName} khắc (Tiệt cước)`);
 				logs.push(`   - Nội bộ trụ ${posName}: Chi khắc Can (Tiệt cước) (-${damage.toFixed(2)})`);
 				break;
+			}
 
-			case 'DuocSinh':
+			case 'DuocSinh': {
 				// [CAN SINH CHI] - Tiết Khí (VD: Giáp Ngọ -> Mộc sinh Hỏa)
 				const drain = stemNode.currentScore * PHYSICS.LOSS_GENERATE_SOURCE;
 				this.applyNodeModification(stemNode, -drain, `Sinh xuất cho chi ${posName}`);
@@ -510,8 +514,9 @@ export class BaziService {
 				});
 				logs.push(`   - Nội bộ trụ ${posName}: Can sinh Chi (Tiết khí) (-${drain.toFixed(2)})`);
 				break;
+			}
 
-			case 'BiKhac':
+			case 'BiKhac': {
 				// [CAN KHẮC CHI] - Cái Đầu (VD: Giáp Tuất -> Mộc khắc Thổ)
 				const exertion = stemNode.currentScore * PHYSICS.LOSS_OVERCOME_SOURCE;
 				this.applyNodeModification(stemNode, -exertion, `Khắc chi ${posName} (Cái đầu)`);
@@ -524,6 +529,7 @@ export class BaziService {
 				});
 				logs.push(`   - Nội bộ trụ ${posName}: Can khắc Chi (Cái đầu) (-${exertion.toFixed(2)})`);
 				break;
+			}
 		}
 	}
 

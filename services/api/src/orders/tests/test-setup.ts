@@ -6,7 +6,7 @@ import { drizzle } from 'drizzle-orm/bun-sqlite';
 
 // Mock the database module to use an in-memory SQLite database for all tests
 mock.module('@order/db', () => {
-    const sqlite = new Database(':memory:');
-    const db = drizzle(sqlite, { schema: { ...orderSchema, ...itemSchema } });
-    return { db };
+	const sqlite = new Database(':memory:');
+	const db = drizzle(sqlite, { schema: { ...orderSchema, ...itemSchema } });
+	return { db };
 });

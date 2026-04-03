@@ -6,7 +6,7 @@ import { int, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-co
 import { createInsertSchema, createSelectSchema } from 'drizzle-typebox';
 import type { Static } from 'elysia';
 import { t } from 'elysia';
-import type { CenterZoneAnalysis, LimitScoreProfile, EnergyNode, Interaction } from './bazi.types'; // Import các type để định nghĩa cho cột JSON
+import type { CenterZoneAnalysis, EnergyNode, Interaction, LimitScoreProfile } from './bazi.types'; // Import các type để định nghĩa cho cột JSON
 
 export const baziProfilesTable = sqliteTable(
 	'bazi_profiles',

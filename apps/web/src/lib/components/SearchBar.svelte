@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Search, X, Loader2 } from 'lucide-svelte';
+	import { Loader2, Search, X } from 'lucide-svelte';
 	import { goto } from '$app/navigation';
-	import { searchStore, type SearchSuggestion } from '$lib/stores/search.svelte';
+	import { type SearchSuggestion, searchStore } from '$lib/stores/search.svelte';
 
 	let inputValue = $state('');
 	let isOpen = $state(false);

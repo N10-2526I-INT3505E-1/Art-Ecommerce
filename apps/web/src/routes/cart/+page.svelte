@@ -8,6 +8,7 @@
 		Clock,
 		CreditCard,
 		Heart,
+		LogIn,
 		MessageCircle,
 		Minus,
 		Package,
@@ -20,12 +21,11 @@
 		Trash2,
 		Truck,
 		User,
-		LogIn,
 	} from 'lucide-svelte';
 	import { flip } from 'svelte/animate';
 	import { fade, fly, slide } from 'svelte/transition';
-	import { cart } from '$lib/stores/cart.svelte';
 	import { page } from '$app/state';
+	import { cart } from '$lib/stores/cart.svelte';
 
 	// State
 	let currentUser = $derived(page.data.user);

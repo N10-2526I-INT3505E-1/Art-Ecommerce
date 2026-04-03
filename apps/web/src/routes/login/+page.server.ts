@@ -1,7 +1,7 @@
-import { api } from '$lib/server/http'; // Adjust path if needed
 import { fail, redirect } from '@sveltejs/kit';
-import type { Actions } from './$types';
 import { dev } from '$app/environment';
+import { api } from '$lib/server/http'; // Adjust path if needed
+import type { Actions } from './$types';
 
 const isProduction = !dev;
 
@@ -20,7 +20,52 @@ const refreshCookieOptions = {
 	maxAge: 60 * 60 * 24 * 7, // 7 days (example for refresh token)
 };
 
+const DEMO_ACCOUNTS: Record<string, string> = {
+	demo_user: 'demo123456',
+	demo_manager: 'demo123456',
+	demo_operator: 'demo123456',
+};
+
 export const actions = {
+	demoLogin: async ({ request, cookies, fetch }) => {
+		const formData = await request.formData();
+		const account = formData.get('account') as string;
+
+		const password = DEMO_ACCOUNTS[account];
+		if (!password) {
+			return fail(400, { message: 'Invalid demo account', type: 'error' });
+		}
+
+		const client = api({ fetch, request });
+
+		try {
+			const response = await client
+				.post('sessions', {
+					json: { username: account, password },
+				})
+				.json<{ accessToken: string; refreshToken?: string }>();
+
+			cookies.set('auth', response.accessToken, cookieOptions);
+
+			if (response.refreshToken) {
+				cookies.set('refresh_token', response.refreshToken, refreshCookieOptions);
+			}
+
+			return { success: true };
+		} catch (err: any) {
+			let message = 'Demo login failed';
+			if (err.response) {
+				try {
+					const body = await err.response.json();
+					message = body.message || message;
+				} catch (e) {
+					/* ignore */
+				}
+			}
+			return fail(400, { message, type: 'error' });
+		}
+	},
+
 	// Standard Login Action
 	login: async ({ request, cookies, fetch }) => {
 		const formData = await request.formData();

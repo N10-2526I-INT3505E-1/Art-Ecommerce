@@ -1,6 +1,6 @@
+import { and, asc, desc, eq, gte, inArray, isNull, like, lte, sql } from 'drizzle-orm';
 import { db } from '../products/db';
-import { products, categories, product_tags, tags } from '../products/product.model';
-import { like, and, gte, lte, isNull, desc, asc, eq, inArray, sql } from 'drizzle-orm';
+import { categories, product_tags, products, tags } from '../products/product.model';
 
 /**
  * DbSearchService - Replaces Meilisearch with direct DB queries via Turso
@@ -30,17 +30,22 @@ export class DbSearchService {
 
 			// Parse: categoryName = "value"
 			const categoryMatch = filterStr.match(/categoryName\s*=\s*"([^"]+)"/);
-				if (categoryMatch && categoryMatch[1]) {
-					const categoryName = categoryMatch[1] as string;
-					// Sub-query: find category ID by name, then filter products
-					const category = await db.query.categories.findFirst({
-						where: eq(categories.name, categoryName),
-					});
+			if (categoryMatch && categoryMatch[1]) {
+				const categoryName = categoryMatch[1] as string;
+				// Sub-query: find category ID by name, then filter products
+				const category = await db.query.categories.findFirst({
+					where: eq(categories.name, categoryName),
+				});
 				if (category) {
 					conditions.push(eq(products.categoryId, category.id));
 				} else {
 					// Category not found — return empty results
-					return { hits: [], processingTimeMs: 0, estimatedTotalHits: 0, limit: options.limit || 20 };
+					return {
+						hits: [],
+						processingTimeMs: 0,
+						estimatedTotalHits: 0,
+						limit: options.limit || 20,
+					};
 				}
 			}
 
@@ -59,9 +64,7 @@ export class DbSearchService {
 			// Parse: tags IN ["tag1", "tag2"]
 			const tagsMatch = filterStr.match(/tags\s+IN\s+$$([^$$]+)\]/);
 			if (tagsMatch) {
-				const tagNames = tagsMatch[1]!
-					.split(',')
-					.map((t) => t.trim().replace(/"/g, ''));
+				const tagNames = tagsMatch[1]!.split(',').map((t) => t.trim().replace(/"/g, ''));
 				if (tagNames.length > 0) {
 					const matchingTags = await db.query.tags.findMany({
 						where: (t, { inArray }) => inArray(t.name, tagNames),
@@ -76,10 +79,20 @@ export class DbSearchService {
 						if (productIds.length > 0) {
 							conditions.push(inArray(products.id, productIds));
 						} else {
-							return { hits: [], processingTimeMs: 0, estimatedTotalHits: 0, limit: options.limit || 20 };
+							return {
+								hits: [],
+								processingTimeMs: 0,
+								estimatedTotalHits: 0,
+								limit: options.limit || 20,
+							};
 						}
 					} else {
-						return { hits: [], processingTimeMs: 0, estimatedTotalHits: 0, limit: options.limit || 20 };
+						return {
+							hits: [],
+							processingTimeMs: 0,
+							estimatedTotalHits: 0,
+							limit: options.limit || 20,
+						};
 					}
 				}
 			}

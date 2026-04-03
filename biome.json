@@ -1,5 +1,5 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.3.8/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.4.10/schema.json",
 	"root": true,
 	"vcs": {
 		"enabled": true,
@@ -87,17 +87,10 @@
 	},
 	"overrides": [
 		{
-			"includes": [
-				"**/*.{config,rc}.{js,ts,cjs,mjs,cts,mts}",
-				"scripts/**",
-				"server/**",
-				"api/**"
-			]
+			"includes": ["**/*.{config,rc}.{js,ts,cjs,mjs,cts,mts}", "scripts/**", "server/**", "api/**"]
 		},
 		{
-			"includes": [
-				"**/*.{test,spec}.{js,ts,tsx}"
-			]
+			"includes": ["**/*.{test,spec}.{js,ts,tsx}"]
 		}
 	]
 }

@@ -129,7 +129,7 @@ export class ProductService {
 					}
 				}
 
-					return newProduct;
+				return newProduct;
 			});
 		} catch (error) {
 			console.error('Create Product Failed:', error);
@@ -372,7 +372,7 @@ export class ProductService {
 					}
 				}
 
-					return { message: `Product ${id} updated successfully` };
+				return { message: `Product ${id} updated successfully` };
 			});
 		} catch (error) {
 			if (error instanceof NotFoundError) throw error;
@@ -396,7 +396,7 @@ export class ProductService {
 				throw new NotFoundError('Product not found.');
 			}
 
-				return { message: `Soft deleted product ${id}` };
+			return { message: `Soft deleted product ${id}` };
 		} catch (error) {
 			if (error instanceof NotFoundError) throw error;
 			console.error('Delete Product Failed:', error);

@@ -1,5 +1,5 @@
-import type { LayoutServerLoad } from './$types';
 import { api } from '$lib/server/http';
+import type { LayoutServerLoad } from './$types';
 
 export const load: LayoutServerLoad = async ({ locals, fetch, request }) => {
 	let baziProfile = null;

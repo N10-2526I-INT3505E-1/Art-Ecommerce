@@ -1,37 +1,17 @@
+import { jwtAuthDerive } from '@common/auth/jwtAuthDerive';
+import { ForbiddenError } from '@common/errors/httpErrors';
+import { jwt } from '@elysiajs/jwt';
 import {
 	insertProductBody,
+	reduceStockBody,
 	selectProductSchema,
 	updateProductBody,
-	reduceStockBody,
 } from '@product/product.model';
 import { Elysia, t } from 'elysia';
 import { db } from './db';
-import { ProductService } from './product.service';
-import { UnauthorizedError, ForbiddenError } from '@common/errors/httpErrors';
+import type { ProductService } from './product.service';
 
 const ErrorSchema = t.Object({ message: t.String() });
-
-// ====================================================================================================
-// AUTH HELPERS
-// ====================================================================================================
-export const authDerive = ({ headers }: any) => {
-	const rawUserId = headers['x-user-id'];
-	const rawUserRole = headers['x-user-role'];
-
-	const userId = Array.isArray(rawUserId) ? rawUserId[0] : rawUserId;
-	const userRole = Array.isArray(rawUserRole) ? rawUserRole[0] : rawUserRole;
-
-	if (!userId) {
-		throw new UnauthorizedError('Missing Gateway Headers (x-user-id)');
-	}
-
-	return {
-		user: {
-			id: String(userId),
-			role: (userRole as string) ?? 'user',
-		},
-	};
-};
 
 export const ensureRole = (user: any, role: string) => {
 	if (!user || user.role !== role) {
@@ -45,6 +25,8 @@ export const ensureRole = (user: any, role: string) => {
 export const productsPlugin = async (dependencies: { productService: ProductService }) =>
 	new Elysia()
 		.decorate('productService', dependencies.productService)
+		.use(jwt({ name: 'jwt', secret: process.env.JWT_SECRET as string }))
+
 		// .use(await rabbitPlugin())
 
 		// ====================================================================================================
@@ -208,7 +190,7 @@ export const productsPlugin = async (dependencies: { productService: ProductServ
 				// ====================================================================================================
 				.guard({}, (protectedApp) =>
 					protectedApp
-						.derive(authDerive)
+						.derive(jwtAuthDerive)
 
 						// Create/Upsert Product (Crawler)
 						.post(

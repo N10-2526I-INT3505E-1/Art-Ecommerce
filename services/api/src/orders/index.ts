@@ -1,15 +1,18 @@
+import { jwtAuthDerive } from '@common/auth/jwtAuthDerive';
+import { ForbiddenError } from '@common/errors/httpErrors';
+import { jwt } from '@elysiajs/jwt';
 import { Elysia, t } from 'elysia';
 import { db } from './db';
-import { CreateOrderSchema, OrderResponseSchema, CreateOrderWithItemsSchema } from './order.model';
+import { CreateOrderSchema, CreateOrderWithItemsSchema, OrderResponseSchema } from './order.model';
 import { OrderService } from './order.service';
 import { CreateOrderItemSchema, OrderItemResponseSchema } from './order_item.model';
-import { ForbiddenError, UnauthorizedError } from '@common/errors/httpErrors';
 
 let orderService = new OrderService(db);
 
 export const ordersPlugin = async (dependencies: { orderService: OrderService }) =>
 	new Elysia({ name: 'orders-plugin' })
 		.decorate('orderService', dependencies.orderService)
+		.use(jwt({ name: 'jwt', secret: process.env.JWT_SECRET as string }))
 		.group('/v1/orders', (app) =>
 			app
 				// 1. Create Order with Items
@@ -95,25 +98,10 @@ export const ordersPlugin = async (dependencies: { orderService: OrderService })
 					},
 				)
 
-				// Guard to extract user from headers
+				// Guard to extract user from JWT Authorization header
 				.guard({}, (app) =>
 					app
-						.derive(({ headers }) => {
-							const userId = headers['x-user-id'];
-							const userRole = headers['x-user-role'];
-
-							if (!userId) {
-								throw new UnauthorizedError('Missing Gateway Headers (x-user-id)');
-							}
-
-							return {
-								user: {
-									id: userId as string,
-									email: '',
-									role: (userRole as string) || 'user',
-								},
-							};
-						})
+						.derive(jwtAuthDerive)
 						// 2. Get Orders by User ID
 						.get(
 							'/me',

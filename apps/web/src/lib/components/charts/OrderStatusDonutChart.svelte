@@ -1,9 +1,9 @@
 <!-- src/lib/components/charts/OrderStatusDonutChart.svelte -->
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import * as d3 from 'd3';
-	import { scale } from 'svelte/transition';
+	import { onMount } from 'svelte';
 	import { cubicOut } from 'svelte/easing';
+	import { scale } from 'svelte/transition';
 
 	interface StatusData {
 		status: string;

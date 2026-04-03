@@ -63,4 +63,3 @@ export const createVNPPaymentUrl = async (amount: number, id: string): Promise<s
 
 	return paymentUrl;
 };
-

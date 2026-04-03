@@ -1,6 +1,6 @@
-import { api } from '$lib/server/http';
 import { fail } from '@sveltejs/kit';
-import type { PageServerLoad, Actions } from './$types';
+import { api } from '$lib/server/http';
+import type { Actions, PageServerLoad } from './$types';
 
 interface UserInfo {
 	id: string;

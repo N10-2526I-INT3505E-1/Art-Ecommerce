@@ -1,29 +1,30 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
-	import { page } from '$app/stores';
-	import { goto } from '$app/navigation';
-	import { fade, scale } from 'svelte/transition';
+	
 	import {
-		Search,
-		Filter,
-		Eye,
-		Edit,
-		Trash2,
-		X,
-		ChevronLeft,
-		ChevronRight,
-		Users,
-		Shield,
-		User,
-		Mail,
+		AlertCircle,
 		Calendar,
 		CheckCircle2,
-		AlertCircle,
-		MoreHorizontal,
+		ChevronLeft,
+		ChevronRight,
 		Crown,
+		Edit,
+		Eye,
+		Filter,
+		Mail,
+		MoreHorizontal,
+		Search,
+		Shield,
+		Trash2,
+		User,
+		Users,
 		Wrench,
+		X,
 	} from 'lucide-svelte';
-	import type { PageData, ActionData } from './$types';
+	import { fade, scale } from 'svelte/transition';
+import { enhance } from '$app/forms';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
+	import type { ActionData, PageData } from './$types';
 
 	let { data, form }: { data: PageData; form: ActionData } = $props();
 
@@ -673,51 +674,29 @@
 	</div>
 {/if}
 
-<!-- 3. DELETE MODAL -->
+<!-- 3. DELETE MODAL (DEMO: BLOCKED) -->
 {#if showDeleteModal && selectedUser}
 	<div class="modal modal-open" transition:fade={{ duration: 150 }}>
 		<div class="modal-box" transition:scale={{ duration: 200, start: 0.95 }}>
 			<div class="flex gap-4">
 				<div
-					class="bg-error/10 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full"
+					class="bg-warning/10 flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full"
 				>
-					<AlertCircle class="text-error h-6 w-6" />
+					<Shield class="text-warning h-6 w-6" />
 				</div>
 				<div>
-					<h3 class="text-error text-lg font-bold">Xóa người dùng?</h3>
+					<h3 class="text-warning text-lg font-bold">⚠️ KHÔNG THỂ THỰC HIỆN</h3>
 					<p class="py-2 text-sm opacity-80">
-						Bạn có chắc chắn muốn xóa người dùng <span class="font-bold"
-							>{selectedUser.first_name} {selectedUser.last_name}</span
-						>
-						(@{selectedUser.username})? Hành động này không thể hoàn tác.
+						Chức năng xóa người dùng đã bị <strong>tắt</strong> trong phiên bản Demo. Người dùng
+						<span class="font-bold">{selectedUser.first_name} {selectedUser.last_name}</span>
+						(@{selectedUser.username}) không thể bị xóa.
 					</p>
 				</div>
 			</div>
 
-			<form
-				method="POST"
-				action="?/deleteUser"
-				use:enhance={() => {
-					isLoading = true;
-					return async ({ update }) => {
-						await update();
-						isLoading = false;
-					};
-				}}
-			>
-				<input type="hidden" name="id" value={selectedUser.id} />
-				<div class="modal-action">
-					<button type="button" class="btn btn-ghost" onclick={closeModals} disabled={isLoading}>
-						Hủy bỏ
-					</button>
-					<button type="submit" class="btn btn-error" disabled={isLoading}>
-						{#if isLoading}
-							<span class="loading loading-spinner"></span>
-						{/if}
-						Xóa vĩnh viễn
-					</button>
-				</div>
-			</form>
+			<div class="modal-action">
+				<button type="button" class="btn btn-primary" onclick={closeModals}> Đã hiểu </button>
+			</div>
 		</div>
 		<div
 			class="modal-backdrop bg-neutral/50 backdrop-blur-sm"

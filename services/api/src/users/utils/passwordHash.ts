@@ -1,5 +1,5 @@
 export const hashPassword = async (password: string) => {
-	return await Bun.password.hash(password, "argon2id");
+	return await Bun.password.hash(password, 'argon2id');
 };
 
 /**
@@ -11,5 +11,5 @@ export const hashPassword = async (password: string) => {
  * @throws Error
  */
 export async function comparePassword(plain: string, hash: string): Promise<boolean> {
-    return await Bun.password.verify(plain, hash, 'argon2id');
+	return await Bun.password.verify(plain, hash, 'argon2id');
 }

@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { MessageCircle, X, Send, Loader2 } from 'lucide-svelte';
-	import { currentProductStore, type CurrentProduct } from '$lib/stores/currentProduct.svelte';
+	import { Loader2, MessageCircle, Send, X } from 'lucide-svelte';
 	import { marked } from 'marked';
+	import { type CurrentProduct, currentProductStore } from '$lib/stores/currentProduct.svelte';
 
 	// Configure marked for safe rendering
 	marked.setOptions({
@@ -189,19 +189,26 @@
 <!-- Floating Button -->
 {#if !isOpen}
 	<button
-		class="btn btn-circle btn-primary btn-lg fixed right-6 bottom-6 z-50 shadow-lg"
+		class="group bg-primary text-primary-content fixed right-6 bottom-6 z-50 flex h-12 flex-row-reverse items-center overflow-hidden rounded-full shadow-lg transition-all duration-300 ease-in-out"
 		onclick={toggleChat}
 		aria-label="Open AI Chat"
 	>
-		<MessageCircle class="h-6 w-6" />
-		{#if currentProduct}
-			<span class="absolute -top-1 -right-1 flex h-3 w-3">
-				<span
-					class="bg-success absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
-				></span>
-				<span class="bg-success relative inline-flex h-3 w-3 rounded-full"></span>
-			</span>
-		{/if}
+		<div class="relative flex h-12 w-12 shrink-0 items-center justify-center">
+			<MessageCircle class="h-6 w-6" />
+			{#if currentProduct}
+				<span class="absolute top-1.5 right-1.5 flex h-3 w-3">
+					<span
+						class="bg-success absolute inline-flex h-full w-full animate-ping rounded-full opacity-75"
+					></span>
+					<span class="bg-success relative inline-flex h-3 w-3 rounded-full"></span>
+				</span>
+			{/if}
+		</div>
+		<span
+			class="inline-block max-w-0 overflow-hidden text-sm font-medium whitespace-nowrap opacity-0 transition-all duration-300 ease-in-out group-hover:max-w-48 group-hover:pr-2 group-hover:pl-4 group-hover:opacity-100"
+		>
+			Chat with Novice
+		</span>
 	</button>
 {/if}
 

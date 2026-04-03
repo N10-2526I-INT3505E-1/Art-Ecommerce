@@ -1,4 +1,4 @@
-import { MeiliSearch, type Index } from 'meilisearch';
+import { type Index, MeiliSearch } from 'meilisearch';
 
 /**
  * MeilisearchService - Singleton service for Meilisearch operations

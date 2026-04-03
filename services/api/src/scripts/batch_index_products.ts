@@ -1,8 +1,8 @@
-import { drizzle } from 'drizzle-orm/libsql';
 import { createClient } from '@libsql/client';
-import { MeiliSearch } from 'meilisearch';
-import { products, categories, product_tags, tags } from '../products/product.model';
 import { eq } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/libsql';
+import { MeiliSearch } from 'meilisearch';
+import { categories, product_tags, products, tags } from '../products/product.model';
 
 // Initialize database
 const client = createClient({

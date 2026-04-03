@@ -2,7 +2,7 @@ import { errorHandler } from '@common/errors/errorHandler';
 import { cors } from '@elysiajs/cors';
 import { openapi } from '@elysiajs/openapi';
 import { Elysia } from 'elysia';
-import { searchPlugin, meilisearchService } from './index';
+import { meilisearchService, searchPlugin } from './index';
 
 const app = new Elysia({})
 	.use(errorHandler)

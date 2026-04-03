@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Upload, Sparkles, Loader2, User } from 'lucide-svelte';
-	import ImageUploader from '$lib/components/ImageUploader.svelte';
+	import { Loader2, Sparkles, Upload, User } from 'lucide-svelte';
 	import AnalysisResult from '$lib/components/AnalysisResult.svelte';
+	import ImageUploader from '$lib/components/ImageUploader.svelte';
 
 	const { data } = $props();
 

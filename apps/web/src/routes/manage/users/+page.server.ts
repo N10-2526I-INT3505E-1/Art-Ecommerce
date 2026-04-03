@@ -1,6 +1,6 @@
-import { api } from '$lib/server/http';
 import { fail, redirect } from '@sveltejs/kit';
-import type { PageServerLoad, Actions } from './$types';
+import { api } from '$lib/server/http';
+import type { Actions, PageServerLoad } from './$types';
 
 interface User {
 	id: string;
@@ -110,21 +110,9 @@ export const actions: Actions = {
 		}
 	},
 
-	deleteUser: async ({ request, fetch }) => {
-		const client = api({ fetch, request });
-		const formData = await request.formData();
-		const id = formData.get('id') as string;
-
-		if (!id) {
-			return fail(400, { error: 'ID người dùng là bắt buộc' });
-		}
-
-		try {
-			await client.delete(`users/${id}`).json();
-			return { success: true, message: 'Xóa người dùng thành công' };
-		} catch (err: any) {
-			console.error('Lỗi xóa người dùng:', err);
-			return fail(500, { error: 'Không thể xóa người dùng' });
-		}
+	deleteUser: async () => {
+		return fail(403, {
+			error: '⚠️ YOU CANNOT DO THIS IN DEMO VERSION. User deletion is disabled.',
+		});
 	},
 };

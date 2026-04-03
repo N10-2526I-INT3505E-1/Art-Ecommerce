@@ -1,21 +1,22 @@
 <script lang="ts">
-	import type { PageData } from './$types';
-	import RevenueLineChart from '$lib/components/charts/RevenueLineChart.svelte';
-	import OrderStatusDonutChart from '$lib/components/charts/OrderStatusDonutChart.svelte';
-	import TopProductsBarChart from '$lib/components/charts/TopProductsBarChart.svelte';
-	import SalesTrendAreaChart from '$lib/components/charts/SalesTrendAreaChart.svelte';
+	
 
 	import {
-		TrendingUp,
-		TrendingDown,
-		DollarSign,
-		ShoppingCart,
-		Package,
+		AlertCircle,
 		BarChart3,
 		Calendar,
-		AlertCircle,
+		DollarSign,
+		Package,
+		ShoppingCart,
+		TrendingDown,
+		TrendingUp,
 	} from 'lucide-svelte';
 	import { fade } from 'svelte/transition';
+	import OrderStatusDonutChart from '$lib/components/charts/OrderStatusDonutChart.svelte';
+	import RevenueLineChart from '$lib/components/charts/RevenueLineChart.svelte';
+	import SalesTrendAreaChart from '$lib/components/charts/SalesTrendAreaChart.svelte';
+	import TopProductsBarChart from '$lib/components/charts/TopProductsBarChart.svelte';
+import type { PageData } from './$types';
 
 	export let data: PageData;
 

@@ -1,24 +1,25 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
-	import { page } from '$app/stores';
+	
 	import {
-		Copy,
-		Check,
-		Plus,
-		Search,
-		X,
-		Package,
-		DollarSign,
+		AlertCircle,
 		Boxes,
+		Check,
+		Copy,
+		DollarSign,
+		FileText,
 		FolderOpen,
 		Image,
-		Tags,
-		FileText,
-		AlertCircle,
+		Package,
 		Pencil,
+		Plus,
+		Search,
+		Tags,
 		Trash2,
+		X,
 	} from 'lucide-svelte';
-	import type { PageData, ActionData } from './$types';
+import { enhance } from '$app/forms';
+	import { page } from '$app/stores';
+	import type { ActionData, PageData } from './$types';
 
 	export let data: PageData;
 	export let form: ActionData;

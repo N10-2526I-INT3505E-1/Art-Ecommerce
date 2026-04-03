@@ -1,23 +1,23 @@
 <script lang="ts">
 	import {
-		CreditCard,
-		ShoppingBag,
-		Truck,
-		Shield,
-		Package,
-		CheckCircle,
 		AlertCircle,
 		ArrowLeft,
+		CheckCircle,
 		Clock,
+		CreditCard,
 		Lock,
+		Package,
+		Shield,
+		ShoppingBag,
+		Truck,
 	} from 'lucide-svelte';
-	import { slide, fade } from 'svelte/transition';
-	import { cart } from '$lib/stores/cart.svelte';
-	import { api } from '$lib/api-client';
-	import { page } from '$app/state';
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
+	import { fade, slide } from 'svelte/transition';
 	import { enhance } from '$app/forms';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/state';
+	import { api } from '$lib/api-client';
+	import { cart } from '$lib/stores/cart.svelte';
 
 	// --- CONSTANTS ---
 	const FREE_SHIPPING_THRESHOLD = 10_000_000;

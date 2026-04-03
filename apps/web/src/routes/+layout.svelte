@@ -10,12 +10,14 @@
 	import { Spring } from 'svelte/motion';
 	import { browser } from '$app/environment';
 	import { page } from '$app/state';
+	import { PUBLIC_API_URL } from '$env/static/public';
+	import { BookOpenText } from 'lucide-svelte';
 
 	import favicon from '$lib/assets/favicon.png';
-	import Footer from '$lib/components/Footer.svelte';
-	import ToastContainer from '$lib/components/ToastContainer.svelte';
-	import NavigationBar from '$lib/components/NavigationBar.svelte';
 	import AIChatWidget from '$lib/components/AIChatWidget.svelte';
+	import Footer from '$lib/components/Footer.svelte';
+	import NavigationBar from '$lib/components/NavigationBar.svelte';
+	import ToastContainer from '$lib/components/ToastContainer.svelte';
 	import type { LayoutProps } from './$types';
 
 	let { children, data }: LayoutProps = $props();
@@ -209,6 +211,25 @@
 		<Footer />
 	{/if}
 </div>
+
+{#if PUBLIC_API_URL}
+	<a
+		href="{PUBLIC_API_URL}/openapi"
+		target="_blank"
+		rel="noopener noreferrer"
+		class="group bg-primary fixed right-6 bottom-21 z-50 flex h-12 flex-row-reverse items-center overflow-hidden rounded-full shadow-md transition-all duration-300 ease-in-out"
+		aria-label="API Documentation"
+	>
+		<div class="text-primary-content flex h-12 w-12 shrink-0 items-center justify-center">
+			<BookOpenText class="size-6" />
+		</div>
+		<span
+			class="text-primary-content inline-block max-w-0 overflow-hidden text-sm font-medium whitespace-nowrap opacity-0 transition-all duration-300 ease-in-out group-hover:max-w-48 group-hover:pr-2 group-hover:pl-4 group-hover:opacity-100"
+		>
+			API Documentation
+		</span>
+	</a>
+{/if}
 
 {#if !isAuthPage}
 	<AIChatWidget {baziProfile} />

@@ -1,14 +1,16 @@
 <script lang="ts">
-	import { Lock, type Icon as LucideIcon, Mail, User } from 'lucide-svelte';
+	import { Eye, EyeOff, Lock, Mail, User } from 'lucide-svelte';
 	import { onMount } from 'svelte';
 	import { enhance } from '$app/forms';
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { PUBLIC_GOOGLE_CLIENT_ID } from '$env/static/public';
-	import { showToast } from '$lib/toastStore';
 	import { api } from '$lib/api-client';
+	import { showToast } from '$lib/toastStore';
 
 	let submitting = $state(false);
+	let showPassword = $state(false);
+	let showConfirmPassword = $state(false);
 
 	let googleBtn = $state<HTMLDivElement>();
 	let submitBtn = $state<HTMLButtonElement>();
@@ -98,6 +100,7 @@
 	minLength: number | undefined = undefined,
 	maxLength: number | undefined = undefined,
 	hint: string | undefined = undefined,
+	passwordToggle: { show: boolean; toggle: () => void } | undefined = undefined,
 )}
 	<div class="form-control" style:view-transition-name={`auth-${id}`}>
 		<div class="relative w-full">
@@ -109,8 +112,9 @@
 			<input
 				{id}
 				name={id}
-				{type}
+				type={passwordToggle ? (passwordToggle.show ? 'text' : 'password') : type}
 				class="input validator peer input-bordered w-full pl-10"
+				class:pr-10={passwordToggle}
 				{required}
 				{readonly}
 				{pattern}
@@ -124,10 +128,26 @@
 				title={hint}
 			/>
 
+			{#if passwordToggle}
+				<button
+					type="button"
+					class="absolute top-3 right-3 z-10 cursor-pointer text-gray-500 transition-colors hover:text-gray-700"
+					onclick={passwordToggle.toggle}
+					aria-label={passwordToggle.show ? 'Hide password' : 'Show password'}
+					tabindex={-1}
+				>
+					{#if passwordToggle.show}
+						<EyeOff class="size-5" />
+					{:else}
+						<Eye class="size-5" />
+					{/if}
+				</button>
+			{/if}
+
 			<p
-				class="validator-hint max-h-0 overflow-hidden text-xs opacity-0 transition-all duration-300 ease-in-out
-                      peer-[&.touched:invalid]:mt-1 peer-[&.touched:invalid]:max-h-[5rem] peer-[&.touched:invalid]:opacity-100
-                      peer-[&:not(:placeholder-shown):invalid]:mt-1 peer-[&:not(:placeholder-shown):invalid]:max-h-[5rem] peer-[&:not(:placeholder-shown):invalid]:opacity-100"
+				class="text-error max-h-0 overflow-hidden text-xs opacity-0 transition-all duration-300 ease-in-out
+                      peer-[&.touched:invalid]:mt-1 peer-[&.touched:invalid]:max-h-20 peer-[&.touched:invalid]:opacity-100
+                      peer-[&:not(:placeholder-shown):invalid]:mt-1 peer-[&:not(:placeholder-shown):invalid]:max-h-20 peer-[&:not(:placeholder-shown):invalid]:opacity-100"
 			>
 				{hint || `${label} is invalid`}
 			</p>
@@ -255,6 +275,7 @@
 					6,
 					undefined,
 					'Password must be at least 6 characters.',
+					{ show: showPassword, toggle: () => (showPassword = !showPassword) },
 				)}
 
 				{@render inputField(
@@ -273,6 +294,7 @@
 					6,
 					undefined,
 					'Passwords do not match.',
+					{ show: showConfirmPassword, toggle: () => (showConfirmPassword = !showConfirmPassword) },
 				)}
 
 				<div

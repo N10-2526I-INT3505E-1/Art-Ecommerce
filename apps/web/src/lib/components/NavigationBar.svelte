@@ -4,13 +4,13 @@
 		ChevronDown,
 		Icon,
 		LogOut,
+		Menu,
 		Package,
+		Search,
 		Settings,
 		ShoppingCart,
 		User,
-		Menu,
 		UserPlus,
-		Search,
 	} from 'lucide-svelte';
 	import { page } from '$app/state';
 	import { cart } from '$lib/stores/cart.svelte';
@@ -303,13 +303,14 @@
 					{/if}
 
 					<div class="divider my-0"></div>
-					<li class="p-1">
-						<form action="/login?/logout" method="POST" class="w-full p-0">
+					<li class="w-full p-1">
+						<form action="/login?/logout" method="POST" class="m-0 block w-full p-0">
 							<button
 								type="submit"
-								class="text-error hover:bg-error/10 hover:text-error flex w-full gap-3 rounded-lg px-4 py-2.5 font-medium"
+								class="text-error hover:bg-error/10 flex w-full items-center gap-3 rounded-lg px-4 py-2.5 font-medium"
 							>
-								<LogOut class="h-4 w-4" /> <span>Đăng xuất</span>
+								<LogOut class="h-4 w-4" />
+								<span>Đăng xuất</span>
 							</button>
 						</form>
 					</li>

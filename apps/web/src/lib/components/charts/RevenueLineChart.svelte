@@ -1,7 +1,8 @@
 <!-- src/lib/components/charts/RevenueLineChart.svelte -->
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	
 	import * as d3 from 'd3';
+import { onDestroy, onMount } from 'svelte';
 	import { fade } from 'svelte/transition';
 
 	// --- Types ---
@@ -255,7 +256,7 @@
 				focus.style('display', 'none');
 				tooltip = null;
 			})
-			.on('pointermove', function (event) {
+			.on('pointermove', (event) => {
 				const x0 = xScale.invert(d3.pointer(event)[0]);
 				const i = bisectDate(parsedData, x0);
 				const d = parsedData[i];

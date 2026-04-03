@@ -3,9 +3,9 @@ import { errorHandler } from '@common/errors/errorHandler';
 import { cors } from '@elysiajs/cors';
 import { openapi } from '@elysiajs/openapi';
 import { Elysia } from 'elysia';
-import { paymentsPlugin, vnpayIpnHandler } from './index';
 import { db } from './db';
-import { PaymentService, PaymentIPN } from './payment.service';
+import { paymentsPlugin, vnpayIpnHandler } from './index';
+import { PaymentIPN, PaymentService } from './payment.service';
 
 const app = new Elysia()
 	.use(errorHandler)

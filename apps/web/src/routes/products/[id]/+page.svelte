@@ -18,11 +18,11 @@
 		Truck,
 		X,
 	} from 'lucide-svelte';
-	import { onMount, onDestroy } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { cart } from '$lib/stores/cart.svelte';
-	import { currentProductStore, type CurrentProduct } from '$lib/stores/currentProduct.svelte';
+	import { type CurrentProduct, currentProductStore } from '$lib/stores/currentProduct.svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();

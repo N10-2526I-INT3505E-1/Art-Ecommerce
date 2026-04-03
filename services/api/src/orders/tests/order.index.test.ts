@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import { Elysia } from 'elysia';
-import { NotFoundError, ForbiddenError, BadRequestError } from '@common/errors/httpErrors';
 import { errorHandler } from '@common/errors/errorHandler';
+import { BadRequestError, ForbiddenError, NotFoundError } from '@common/errors/httpErrors';
+import { Elysia } from 'elysia';
 import { OrderService } from '../order.service';
 
 // ========================================================================
@@ -66,10 +66,10 @@ const resetMocks = () => {
 // 3. SIMPLE PLUGIN FOR TESTING (without RabbitMQ)
 // ========================================================================
 
+import { UnauthorizedError } from '@common/errors/httpErrors';
 import { t } from 'elysia';
 import { CreateOrderWithItemsSchema, OrderResponseSchema } from '../order.model';
 import { CreateOrderItemSchema, OrderItemResponseSchema } from '../order_item.model';
-import { UnauthorizedError } from '@common/errors/httpErrors';
 
 // ========================================================================
 // CONFIGURATION - Change API_VERSION to update all tests at once

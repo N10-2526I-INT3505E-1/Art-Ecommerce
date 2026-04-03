@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { Lock, type Icon as LucideIcon, User } from 'lucide-svelte';
 	import { onMount } from 'svelte';
-	import { enhance, applyAction, deserialize } from '$app/forms'; // Import deserialize
+	import { applyAction, deserialize, enhance } from '$app/forms'; // Import deserialize
 	import { goto, invalidateAll } from '$app/navigation';
 	import { page } from '$app/state';
 	import { PUBLIC_GOOGLE_CLIENT_ID } from '$env/static/public';
 	import { showToast } from '$lib/toastStore';
 
 	let submitting = $state(false);
+	let demoSubmitting = $state(false);
 
 	let googleBtn = $state<HTMLDivElement>();
 	let submitBtn = $state<HTMLButtonElement>();
@@ -71,18 +72,18 @@
 </script>
 
 {#snippet inputField(
-    id: string,
-    label: string,
-    value: string,
-    oninput: (e: Event) => void,
-    Icon: typeof User,
-    type: string = 'text',
-    required = true,
-    readonly = false,
-    pattern: string | undefined = undefined,
-    minLength: number | undefined = undefined,
-    maxLength: number | undefined = undefined,
-    hint: string | undefined = undefined
+	id: string,
+	label: string,
+	value: string,
+	oninput: (e: Event) => void,
+	Icon: typeof User,
+	type: string = 'text',
+	required = true,
+	readonly = false,
+	pattern: string | undefined = undefined,
+	minLength: number | undefined = undefined,
+	maxLength: number | undefined = undefined,
+	hint: string | undefined = undefined,
 )}
 	<div class="form-control" style:view-transition-name={`auth-${id}`}>
 		<div class="relative w-full">
@@ -111,8 +112,8 @@
 
 			<p
 				class="text-error max-h-0 overflow-hidden text-xs opacity-0 transition-all duration-300 ease-in-out
-                      peer-[&.touched:invalid]:mt-1 peer-[&.touched:invalid]:max-h-[5rem] peer-[&.touched:invalid]:opacity-100
-                      peer-[&:not(:placeholder-shown):invalid]:mt-1 peer-[&:not(:placeholder-shown):invalid]:max-h-[5rem] peer-[&:not(:placeholder-shown):invalid]:opacity-100"
+                      peer-[&.touched:invalid]:mt-1 peer-[&.touched:invalid]:max-h-20 peer-[&.touched:invalid]:opacity-100
+                      peer-[&:not(:placeholder-shown):invalid]:mt-1 peer-[&:not(:placeholder-shown):invalid]:max-h-20 peer-[&:not(:placeholder-shown):invalid]:opacity-100"
 			>
 				{hint || `${label} is invalid`}
 			</p>
@@ -236,9 +237,48 @@
 
 			<div
 				bind:this={googleBtn}
-				class="flex !w-full justify-center overflow-hidden"
+				class="flex w-full! justify-center overflow-hidden"
 				aria-label="Continue with Google"
 			></div>
+
+			<div class="divider text-sm">TÀI KHOẢN DEMO</div>
+
+			<div class="grid grid-cols-3 gap-2">
+				{#each [{ account: 'demo_user', label: '👤 User', desc: 'Mua và quản lý đơn hàng' }, { account: 'demo_operator', label: '🔧 Operator', desc: 'Quản lý sản phẩm và đơn hàng' }, { account: 'demo_manager', label: '👔 Manager', desc: 'Quản lý toàn bộ nền tảng' }] as demo}
+					<form
+						method="POST"
+						action="?/demoLogin"
+						use:enhance={() => {
+							demoSubmitting = true;
+							return async ({ result }) => {
+								demoSubmitting = false;
+								if (result.type === 'success') {
+									showToast({ message: 'Welcome back!', type: 'success' });
+									await invalidateAll();
+									await goto('/');
+								} else if (result.type === 'failure') {
+									const msg = (result.data as any)?.message || 'Demo login failed';
+									showToast({ message: msg, type: 'error' });
+								}
+							};
+						}}
+					>
+						<input type="hidden" name="account" value={demo.account} />
+						<button
+							type="submit"
+							class="btn btn-outline tooltip btn-sm w-full"
+							data-tip={demo.desc}
+							disabled={submitting || demoSubmitting}
+						>
+							{#if demoSubmitting}
+								<span class="loading loading-spinner loading-xs"></span>
+							{:else}
+								{demo.label}
+							{/if}
+						</button>
+					</form>
+				{/each}
+			</div>
 
 			<div class="mt-4 text-sm">
 				Chưa có tài khoản?

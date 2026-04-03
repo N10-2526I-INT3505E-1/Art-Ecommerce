@@ -2,9 +2,9 @@
 import { errorHandler } from '@common/errors/errorHandler';
 import { cors } from '@elysiajs/cors';
 import { openapi } from '@elysiajs/openapi';
-import { Elysia } from 'elysia';
-import { db } from '@user/db';
 import { BaziService } from '@user/bazi.service';
+import { db } from '@user/db';
+import { Elysia } from 'elysia';
 import { usersPlugin } from './index';
 import { UserService } from './user.service';
 

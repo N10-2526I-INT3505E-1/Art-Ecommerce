@@ -1,8 +1,8 @@
 // Standalone Orders Service Server (Port 4001)
 import { errorHandler } from '@common/errors/errorHandler';
-import { db } from '@order/db';
 import { cors } from '@elysiajs/cors';
 import { openapi } from '@elysiajs/openapi';
+import { db } from '@order/db';
 import { Elysia } from 'elysia';
 import { ordersPlugin } from './index';
 import { OrderService } from './order.service';

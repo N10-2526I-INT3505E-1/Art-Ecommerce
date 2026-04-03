@@ -55,8 +55,7 @@ async function refreshAccessToken(event: Parameters<Handle>[0]['event']): Promis
  */
 async function fetchUser(event: Parameters<Handle>[0]['event'], token?: string): Promise<boolean> {
 	try {
-		// Create client with explicit token if provided
-		const client = api(event, { token });
+		const client = api(event, token ? { token } : {});
 		const responseData: unknown = await client.get('users/profile').json();
 
 		if (

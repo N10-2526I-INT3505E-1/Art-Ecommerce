@@ -11,20 +11,18 @@
 	} from 'lucide-svelte';
 	import { animate, stagger } from 'motion';
 	import { onDestroy, onMount } from 'svelte';
-	import type { PageData } from './$types';
-	import { cart } from '$lib/stores/cart.svelte';
-
 	// Background Images (Keep these for Hero Section)
 	import LanBg from '$lib/assets/images/Lan.webp';
 	import LongBg from '$lib/assets/images/Long.webp';
 	import PhungBg from '$lib/assets/images/Phung.webp';
 	import QuyBg from '$lib/assets/images/Quy.webp';
-
 	// Title SVGs (Keep these for Hero Section)
 	import LanTitle from '$lib/assets/titles/Lan.svg';
 	import LongTitle from '$lib/assets/titles/Long.svg';
 	import PhungTitle from '$lib/assets/titles/Phung.svg';
 	import QuyTitle from '$lib/assets/titles/Quy.svg';
+	import { cart } from '$lib/stores/cart.svelte';
+	import type { PageData } from './$types';
 
 	// Receive data from +page.server.ts
 	let { data }: { data: PageData } = $props();

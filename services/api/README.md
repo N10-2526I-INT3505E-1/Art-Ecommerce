@@ -1,10 +1,10 @@
 ## Tech Stack
 
--   **Framework**: [ElysiaJS](https://elysiajs.com/)
--   **Runtime**: [Bun](https://bun.sh/)
--   **Database**: [Turso](https://turso.tech/)
--   **ORM**: [Drizzle ORM](https://orm.drizzle.team/)
--   **API Documentation**: OpenAPI (via `@elysiajs/openapi`)
+- **Framework**: [ElysiaJS](https://elysiajs.com/)
+- **Runtime**: [Bun](https://bun.sh/)
+- **Database**: [Turso](https://turso.tech/)
+- **ORM**: [Drizzle ORM](https://orm.drizzle.team/)
+- **API Documentation**: OpenAPI (via `@elysiajs/openapi`)
 
 ### Set Up Environment Variables
 
@@ -31,16 +31,16 @@ This project uses `@elysiajs/openapi` to automatically generate a Swagger UI for
 
 ## Database Management
 
--   **Schema**: The database schema is defined in `src/db/schema.ts`.
--   **Generate Migrations**: After changing the schema, generate a new migration file:
-    ```bash
-    bunx drizzle-kit generate
-    ```
--   **Apply Migrations**: To apply migrations to the database:
-    ```bash
-    bunx drizzle-kit migrate
-    ```
--   **Push Schema (for development)**: To quickly sync database with the schema without generating migration files:
-    ```bash
-    bunx drizzle-kit push
-    ```
+- **Schema**: The database schema is defined in `src/db/schema.ts`.
+- **Generate Migrations**: After changing the schema, generate a new migration file:
+  ```bash
+  bunx drizzle-kit generate
+  ```
+- **Apply Migrations**: To apply migrations to the database:
+  ```bash
+  bunx drizzle-kit migrate
+  ```
+- **Push Schema (for development)**: To quickly sync database with the schema without generating migration files:
+  ```bash
+  bunx drizzle-kit push
+  ```

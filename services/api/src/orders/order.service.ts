@@ -1,3 +1,4 @@
+import { randomUUIDv7 } from 'bun';
 import { desc, eq, inArray } from 'drizzle-orm';
 import {
 	BadRequestError,
@@ -5,12 +6,11 @@ import {
 	InternalServerError,
 	NotFoundError,
 } from '../common/errors/httpErrors';
+import { db as productDb } from '../products/db';
+import { products } from '../products/product.model';
 import type { db } from './db';
 import { ordersTable } from './order.model';
 import { orderItemsTable } from './order_item.model';
-import { randomUUIDv7 } from 'bun';
-import { db as productDb } from '../products/db';
-import { products } from '../products/product.model';
 export type NewOrder = typeof ordersTable.$inferInsert;
 export type NewOrderItem = typeof orderItemsTable.$inferInsert;
 
@@ -76,7 +76,7 @@ export class OrderService {
 				throw new InternalServerError('Không thể tạo đơn hàng (Database Error).');
 			}
 
-				return newOrder;
+			return newOrder;
 		} catch (error) {
 			if (error instanceof HttpError) throw error;
 			console.error('Create Order Error:', error);

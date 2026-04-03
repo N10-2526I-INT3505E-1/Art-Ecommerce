@@ -1,9 +1,10 @@
 <script lang="ts">
-	import { page } from '$app/state';
+	
+	import { ChevronDown, Filter, ShoppingCart, X } from 'lucide-svelte';
 	import { onMount } from 'svelte';
-	import { ShoppingCart, Filter, X, ChevronDown } from 'lucide-svelte';
-	import { searchStore, type SearchHit } from '$lib/stores/search.svelte';
+import { page } from '$app/state';
 	import { cart } from '$lib/stores/cart.svelte';
+	import { type SearchHit, searchStore } from '$lib/stores/search.svelte';
 	import { showToast } from '$lib/toastStore';
 
 	// Get query from URL

@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it, mock, spyOn } from 'bun:test';
 import { BadRequestError, InternalServerError, NotFoundError } from '@common/errors/httpErrors';
 import { ordersTable } from '@order/order.model';
-import { orderItemsTable } from '@order/order_item.model';
 import { OrderService } from '@order/order.service';
+import { orderItemsTable } from '@order/order_item.model';
 
 // ========================================================================
 // 1. MOCK DATA FIXTURES

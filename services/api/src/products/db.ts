@@ -8,8 +8,8 @@ import * as schema from './product.model';
 
 // 2. Tự tạo kết nối đến Turso (đọc từ file .env)
 const client = createClient({
-  url: process.env.TURSO_PRODUCTS_DATABASE_URL!,
-  authToken: process.env.TURSO_PRODUCTS_AUTH_TOKEN!,
+	url: process.env.TURSO_PRODUCTS_DATABASE_URL!,
+	authToken: process.env.TURSO_PRODUCTS_AUTH_TOKEN!,
 });
 
 export const db = drizzle(client, { schema });

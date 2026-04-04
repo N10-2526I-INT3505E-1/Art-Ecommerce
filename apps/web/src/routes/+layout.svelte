@@ -22,20 +22,17 @@
 
 	let { children, data }: LayoutProps = $props();
 
-	// Bazi profile for AI chat personalization
 	const baziProfile = $derived(data.baziProfile);
 
-	// Constants
 	const INTERACTIVE_SELECTOR =
 		'a, button, input, textarea, select, label, [role="button"], [role="link"], [tabindex]:not([tabindex="-1"]), .cursor-pointer';
 
-	// Cursor State
 	const mouse = new Spring(
 		{ x: 0, y: 0 },
 		{
 			stiffness: 0.15,
 			damping: 0.8,
-			precision: 0.1, // Increased precision for smoother stopping
+			precision: 0.1,
 		},
 	);
 
@@ -52,50 +49,35 @@
 	let lastInteractiveCheck = 0;
 	const INTERACTIVE_CHECK_INTERVAL = 50;
 
-	// Cache for interactive element detection
 	let cachedElement: Element | null = null;
 	let cachedResult = false;
 
-	// Interactive Element Detection
 	function checkInteractive(target: EventTarget | null): boolean {
 		if (!target || !(target instanceof Element)) return false;
-
 		const interactiveParent = target.closest(INTERACTIVE_SELECTOR);
-
-		if (interactiveParent === cachedElement) {
-			return cachedResult;
-		}
-
+		if (interactiveParent === cachedElement) return cachedResult;
 		cachedElement = interactiveParent;
 		cachedResult = interactiveParent !== null;
 		return cachedResult;
 	}
 
-	// Batched cursor update
 	function flushCursorUpdate() {
 		rafId = null;
 		mouse.target = { x: pendingX, y: pendingY };
-
 		const now = performance.now();
 		if (now - lastInteractiveCheck >= INTERACTIVE_CHECK_INTERVAL) {
 			lastInteractiveCheck = now;
 			const newInteractive = checkInteractive(pendingTarget);
-			if (newInteractive !== overInteractive) {
-				overInteractive = newInteractive;
-			}
+			if (newInteractive !== overInteractive) overInteractive = newInteractive;
 		}
 	}
 
-	// Event Handlers
-	function handleMouseMove(event: MouseEvent) {
+	function handleMouseMove(event: PointerEvent) {
 		if (!isPageVisible) return;
 		pendingX = event.clientX;
 		pendingY = event.clientY;
 		pendingTarget = event.target;
-
-		if (rafId === null) {
-			rafId = requestAnimationFrame(flushCursorUpdate);
-		}
+		if (rafId === null) rafId = requestAnimationFrame(flushCursorUpdate);
 		if (!showCursor) showCursor = true;
 	}
 
@@ -112,11 +94,9 @@
 	function handleMouseEnter() {
 		showCursor = true;
 	}
-
 	function handleMouseDown() {
 		cursorDown = true;
 	}
-
 	function handleMouseUp() {
 		cursorDown = false;
 	}
@@ -138,28 +118,21 @@
 
 	onMount(() => {
 		if (!browser) return;
-
-		// Platform detection
 		if (navigator.userAgent.includes('Firefox')) {
 			document.documentElement.classList.add('platform-firefox');
 		}
-
-		// Custom cursor detection
 		const hasFineCursor = window.matchMedia('(pointer: fine)').matches;
 		if (hasFineCursor) {
 			showCursor = true;
 			document.documentElement.classList.add('has-custom-cursor');
 		}
-
 		document.addEventListener('visibilitychange', handleVisibilityChange);
-
 		return () => {
 			document.removeEventListener('visibilitychange', handleVisibilityChange);
 			if (rafId !== null) cancelAnimationFrame(rafId);
 		};
 	});
 
-	// Derived State
 	const isAuthPage = $derived(['/login', '/register'].includes(page.url.pathname));
 	const isManagePage = $derived(page.url.pathname.startsWith('/manage'));
 	const isHomePage = $derived(page.url.pathname === '/');
@@ -170,7 +143,7 @@
 </svelte:head>
 
 <svelte:window
-	onmousemove={handleMouseMove}
+	onpointermove={handleMouseMove}
 	onmouseleave={handleMouseLeave}
 	onmouseenter={handleMouseEnter}
 	onmousedown={handleMouseDown}

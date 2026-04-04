@@ -107,7 +107,7 @@
 			bind:this={inputElement}
 			type="text"
 			placeholder="Tìm kiếm sản phẩm..."
-			class="input input-bordered h-10 w-full pr-10 pl-10 text-sm focus:outline-none"
+			class="input input-bordered h-10 w-full rounded-2xl pr-10 pl-10 text-sm focus:outline-none"
 			value={inputValue}
 			oninput={handleInput}
 			onkeydown={handleKeydown}

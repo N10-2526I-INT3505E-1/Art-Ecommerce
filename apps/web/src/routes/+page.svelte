@@ -57,25 +57,25 @@
 	const slides = [
 		{
 			titleSvg: LongTitle,
-			subtitle: 'Biểu tượng cho quyền lực tối cao, tài lộc và công danh',
+			subtitle: 'Quyền lực tối cao',
 			link: '/collection/long',
 			image: LongBg,
 		},
 		{
 			titleSvg: LanTitle,
-			subtitle: 'Trí tuệ, đức hạnh, trấn trạch và giữ yên gia đạo.',
+			subtitle: 'Trí tuệ, đức hạnh',
 			link: '/collection/lan',
 			image: LanBg,
 		},
 		{
 			titleSvg: QuyTitle,
-			subtitle: 'Trường thọ, chiêu tài và sức khỏe dồi dào',
+			subtitle: 'Trường thọ, thanh tuệ',
 			link: '/collection/quy',
 			image: QuyBg,
 		},
 		{
 			titleSvg: PhungTitle,
-			subtitle: 'Phẩm hạnh cao quý, trường tồn bất diệt',
+			subtitle: 'Trường tồn bất diệt',
 			link: '/collection/phung',
 			image: PhungBg,
 		},
@@ -212,7 +212,7 @@
 						class="relative z-20 flex h-full flex-col items-center px-6 text-center text-white md:px-8"
 					>
 						<div class="flex w-full flex-1 flex-col items-center justify-center">
-							<div class="mb-6 w-full max-w-[240px] md:mb-8 md:max-w-[380px] lg:max-w-[480px]">
+							<div class=" w-full max-w-[240px] md:max-w-[330px] lg:max-w-[440px]">
 								<img
 									src={slide.titleSvg}
 									alt="Title"
@@ -222,8 +222,8 @@
 
 							{#if slide.subtitle}
 								<p
-									class="font-raleway flex min-h-[3.5rem] max-w-2xl items-center justify-center text-base
-                          font-medium text-white/90 md:min-h-[4rem] md:text-xl lg:text-2xl"
+									class="font-comorant flex min-h-[3.5rem] max-w-2xl items-center justify-center text-2xl
+                          font-medium text-white/90 md:min-h-[4rem] md:text-3xl lg:text-4xl"
 								>
 									{slide.subtitle}
 								</p>
@@ -282,10 +282,39 @@
 	</div>
 </section>
 
+<div
+	class="group flex h-8 w-full items-center overflow-hidden border-b border-amber-300 bg-amber-200 text-[11px] font-bold tracking-wider text-amber-900 uppercase"
+>
+	<div class="animate-marquee flex whitespace-nowrap group-hover:[animation-play-state:paused]">
+		<div class="flex items-center px-12">
+			<span class="mr-2 text-amber-700">DEMO PREVIEW:</span> Features are streamlined for showcase.
+			Full functionality is currently limited.
+			<span class="mx-6 text-amber-500/50">|</span>
+			<span class="mr-2 text-amber-700">BẢN DEMO:</span> Hệ thống được cấu hình sẵn để trình bày. Một
+			số tính năng sẽ bị giới hạn.
+		</div>
+	</div>
+
+	<div
+		class="animate-marquee flex whitespace-nowrap group-hover:[animation-play-state:paused]"
+		aria-hidden="true"
+	>
+		<div class="flex items-center px-12">
+			<span class="mr-2 text-amber-700">DEMO PREVIEW:</span> Features are streamlined for showcase.
+			Full functionality is currently limited.
+			<span class="mx-6 text-amber-500/50">|</span>
+			<span class="mr-2 text-amber-700">BẢN DEMO:</span> Hệ thống được cấu hình sẵn để trình bày. Một
+			số tính năng sẽ bị giới hạn.
+		</div>
+	</div>
+</div>
+
 <div class="snap-section">
 	<!-- PRODUCTS CAROUSEL 1: COLLECTION -->
-	<section class="products-section products-section-1 flex flex-col justify-center bg-gray-50">
-		<div class="container mx-auto w-full max-w-[1600px] px-4 py-10 md:px-6 md:py-12 lg:px-8">
+	<section
+		class="products-section products-section-1 mt-0 flex flex-col justify-center bg-gray-50 pt-0"
+	>
+		<div class="container mx-auto w-full max-w-400 px-4 py-10 md:px-6 md:py-12 lg:px-8">
 			<div
 				class="mb-8 flex flex-col gap-4 md:mb-10 md:flex-row md:items-end md:justify-between md:gap-6"
 			>
@@ -671,5 +700,19 @@
 
 	.product-card {
 		opacity: 0;
+	}
+
+	@keyframes marquee {
+		0% {
+			transform: translate3d(0, 0, 0);
+		}
+		100% {
+			transform: translate3d(-100%, 0, 0);
+		}
+	}
+
+	.animate-marquee {
+		display: inline-block;
+		animation: marquee 20s linear infinite;
 	}
 </style>

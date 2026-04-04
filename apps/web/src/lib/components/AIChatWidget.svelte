@@ -112,7 +112,7 @@
 					aiResponse = `Bạn chưa có hồ sơ Bát Tự. Hãy tạo hồ sơ tại trang [Bát Tự](/bazi) để nhận tư vấn cá nhân hóa!\n\n💡 *Đây là bản demo.*`;
 				}
 			} else {
-				aiResponse = `Cảm ơn câu hỏi của bạn! Tôi là AI phong thủy Novice.\n\nTrong bản demo này, tôi có thể hỗ trợ:\n- Phân tích sản phẩm (mở trang sản phẩm rồi hỏi)\n- Tư vấn theo mệnh ngũ hành\n\n💡 *Tính năng AI đầy đủ có trong phiên bản production.*`;
+				aiResponse = `Cảm ơn câu hỏi của bạn! Tôi là AI phong thủy Novice.\n\nVì đây là phiên bản demo, tính năng AI sẽ bị tắt để tiết kiệm chi phí duy trì. Mong bạn thông cảm.`;
 			}
 
 			messages = [...messages, { role: 'ai', content: aiResponse }];
@@ -233,7 +233,7 @@
 						{:else if isTyping}
 							⏳ Đang trả lời...
 						{:else}
-							🟢 Sẵn sàng
+							🟢 DEMO
 						{/if}
 					</p>
 				</div>

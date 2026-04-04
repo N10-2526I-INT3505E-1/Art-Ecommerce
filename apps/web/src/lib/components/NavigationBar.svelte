@@ -105,7 +105,7 @@
 				width="32"
 				height="32"
 				viewBox="0 0 100 100"
-				class="h-9 w-9 transition-transform duration-500 ease-out group-hover:rotate-[10deg] md:h-10 md:w-10"
+				class="h-9 w-9 transition-transform duration-500 ease-out group-hover:scale-110 md:h-10 md:w-10"
 			>
 				<g fill-rule="evenodd">
 					<!-- Dynamic fill for Logo: White on transparent, Black on glass -->
@@ -121,7 +121,11 @@
 					/>
 				</g>
 			</svg>
-			<span class="font-montserrat text-xl font-bold tracking-tight md:text-2xl"> Novus </span>
+			<span
+				class="font-montserrat text-xl font-bold tracking-tight transition-transform duration-200 group-hover:scale-101 md:text-2xl"
+			>
+				Novus
+			</span>
 		</a>
 	</div>
 
@@ -129,7 +133,7 @@
 	<div class="navbar-center hidden gap-2 lg:flex">
 		<!-- Navigation Pills -->
 		<nav
-			class="flex items-center gap-1 rounded-full p-1 transition-colors duration-300 {isTransparent
+			class="flex items-center gap-1 rounded-xl p-1 transition-colors duration-300 {isTransparent
 				? 'bg-white/10 backdrop-blur-sm'
 				: 'bg-base-200/50'}"
 		>
@@ -137,7 +141,7 @@
 				{@const isActive = currentPath.startsWith(category.href)}
 				<a
 					href={category.href}
-					class="btn btn-sm rounded-full border-none px-4 text-sm font-medium transition-all
+					class="btn btn-sm rounded-xl border-none px-4 text-sm font-medium transition-all
                     {isActive
 						? 'bg-primary hover:bg-primary text-white shadow-sm'
 						: `btn-ghost hover:bg-white/20 ${isTransparent ? 'text-white' : 'text-base-content/80 hover:bg-base-200'}`}"
@@ -192,8 +196,8 @@
 				class="card card-compact dropdown-content bg-base-100 text-base-content border-base-200 z-[1] mt-4 w-80 border shadow-lg ring-1 ring-black/5 md:w-96"
 			>
 				<div class="card-body gap-4 p-5">
-					<div class="border-base-200 flex items-baseline justify-between border-b pb-3">
-						<span class="text-base font-bold">
+					<div class="border-base-300 flex items-baseline justify-between border-b pb-3">
+						<span class="font-josefin text-base font-bold lg:text-lg">
 							Giỏ hàng <span class="text-primary font-normal">({cartCount})</span>
 						</span>
 					</div>
@@ -338,13 +342,13 @@
 					</li>
 
 					<li class="p-1">
-						<a href="/login" class="justify-start gap-3 rounded-lg px-4 py-3">
+						<a href="/login" class="justify-start gap-3 rounded-xl px-4 py-3">
 							<User class="h-5 w-5 opacity-70" />
 							<span class="font-medium">Đăng nhập</span>
 						</a>
 					</li>
 					<li class="p-1">
-						<a href="/register" class="justify-start gap-3 rounded-lg px-4 py-3">
+						<a href="/register" class="justify-start gap-3 rounded-xl px-4 py-3">
 							<UserPlus class="h-5 w-5 opacity-70" />
 							<span class="font-bold">Đăng ký</span>
 						</a>
@@ -356,13 +360,13 @@
 			<div class="hidden items-center gap-3 md:flex">
 				<a
 					href="/login"
-					class="btn btn-ghost btn-sm h-10 min-h-[40px] px-4 font-medium hover:bg-white/10"
+					class="btn btn-ghost btn-sm h-10 min-h-10 rounded-xl px-4 font-medium hover:bg-white/80"
 				>
 					Đăng nhập
 				</a>
 				<a
 					href="/register"
-					class="btn btn-primary btn-sm h-10 min-h-[40px] rounded-full px-6 font-bold text-white shadow-md transition-transform hover:scale-105"
+					class="btn btn-primary btn-sm h-10 min-h-10 rounded-2xl px-6 font-bold text-white shadow-md transition-transform hover:scale-105"
 				>
 					Đăng ký
 				</a>

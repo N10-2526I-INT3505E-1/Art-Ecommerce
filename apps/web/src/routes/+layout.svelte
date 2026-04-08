@@ -185,7 +185,7 @@
 	{/if}
 </div>
 
-{#if PUBLIC_API_URL}
+{#if PUBLIC_API_URL && !isAuthPage}
 	<a
 		href="{PUBLIC_API_URL}/openapi"
 		target="_blank"

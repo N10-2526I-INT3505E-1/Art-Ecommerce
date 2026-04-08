@@ -506,20 +506,34 @@ export class UserService {
 		};
 
 		try {
-			const [result] = await this.db
-				.insert(baziProfilesTable)
-				.values(dataToUpsert)
-				.onConflictDoUpdate({
-					target: baziProfilesTable.user_id,
-					set: dataToUpsert, // Update toàn bộ field nếu đã tồn tại
-				})
-				.returning();
+			// Check if profile already exists for this user
+			const [existing] = await this.db
+				.select({ id: baziProfilesTable.id })
+				.from(baziProfilesTable)
+				.where(eq(baziProfilesTable.user_id, userId));
+
+			let result;
+			if (existing) {
+				// Update existing profile
+				[result] = await this.db
+					.update(baziProfilesTable)
+					.set(dataToUpsert)
+					.where(eq(baziProfilesTable.user_id, userId))
+					.returning();
+			} else {
+				// Insert new profile
+				[result] = await this.db
+					.insert(baziProfilesTable)
+					.values(dataToUpsert)
+					.returning();
+			}
 
 			if (!result) {
 				throw new InternalServerError('Failed to create or update Bazi profile.');
 			}
 			return result;
 		} catch (error) {
+			if (error instanceof InternalServerError || error instanceof NotFoundError) throw error;
 			console.error('Database upsert error:', error);
 			throw new InternalServerError('A database error occurred while saving the Bazi profile.');
 		}

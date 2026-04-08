@@ -2,7 +2,7 @@
 
 import { usersTable } from '@user/user.model';
 import { sql } from 'drizzle-orm';
-import { int, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { int, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { createInsertSchema, createSelectSchema } from 'drizzle-typebox';
 import type { Static } from 'elysia';
 import { t } from 'elysia';
@@ -16,6 +16,7 @@ export const baziProfilesTable = sqliteTable(
 			.$defaultFn(() => Bun.randomUUIDv7()),
 		user_id: text('user_id')
 			.notNull()
+			.unique()
 			.references(() => usersTable.id, { onDelete: 'cascade' }),
 		profile_name: text('profile_name').notNull(),
 
@@ -82,9 +83,6 @@ export const baziProfilesTable = sqliteTable(
 			.default(sql`(CURRENT_TIMESTAMP)`)
 			.$onUpdate(() => sql`(CURRENT_TIMESTAMP)`),
 	},
-	(table) => ({
-		userIdIdx: uniqueIndex('bazi_profiles_user_id_unique').on(table.user_id),
-	}),
 );
 
 // Schema Validation

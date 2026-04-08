@@ -1,0 +1,5 @@
+- [ ] Rate Limiting
+- [ ] Seed products
+- [ ] Seed orders
+- [ ] Fix search on mobile
+- [ ] Improve AI chat UI on mobile

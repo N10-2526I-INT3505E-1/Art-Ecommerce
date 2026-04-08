@@ -58,25 +58,25 @@
 		{
 			titleSvg: LongTitle,
 			subtitle: 'Quyền lực tối cao',
-			link: '/collection/long',
+			link: '/c/long',
 			image: LongBg,
 		},
 		{
 			titleSvg: LanTitle,
 			subtitle: 'Trí tuệ, đức hạnh',
-			link: '/collection/lan',
+			link: '/c/lan',
 			image: LanBg,
 		},
 		{
 			titleSvg: QuyTitle,
 			subtitle: 'Trường thọ, thanh tuệ',
-			link: '/collection/quy',
+			link: '/c/quy',
 			image: QuyBg,
 		},
 		{
 			titleSvg: PhungTitle,
 			subtitle: 'Trường tồn bất diệt',
-			link: '/collection/phung',
+			link: '/c/phung',
 			image: PhungBg,
 		},
 	];

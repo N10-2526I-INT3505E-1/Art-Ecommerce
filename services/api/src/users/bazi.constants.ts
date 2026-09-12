@@ -61,6 +61,128 @@ export const PHYSICS = {
 };
 
 // =============================================================================
+// 1b. VŨ LONG PHYSICS (GIẢI MÃ TỨ TRỤ)
+// Mô hình suy hao khoảng cách (Decay) thay cho trọng số nhân phóng đại (Weighting).
+// =============================================================================
+
+export const VULONG_PHYSICS = {
+	// --- TỶ LỆ SUY HAO KHI TỪ VÙNG NGOÀI NHẬP VÙNG TÂM (PDF 4, Trang 11, Mục 8) ---
+	// Can Tháng, Can Ngày, Can Giờ, Chi Ngày nằm TRONG Vùng Tâm -> giữ nguyên 100%.
+	DECAY_INTO_CENTER: {
+		YearStem: 3 / 5, // Can Năm giảm 2/5
+		YearBranch: 1 / 2, // Chi Năm giảm 1/2
+		MonthBranch: 3 / 5, // Chi Tháng giảm 2/5
+		HourBranch: 3 / 5, // Chi Giờ giảm 2/5
+	},
+
+	// --- MỨC SÁT THƯƠNG DO KHẮC THEO KHOẢNG CÁCH (PDF 4, Trang 9-10) ---
+	DAMAGE: {
+		DIRECT: 1 / 2, // Khắc trực tiếp cùng trụ -> Còn 50% -> KHÓA hành động
+		NEAR: 1 / 3, // Khắc gần kề cận -> Còn 66.67% -> KHÓA hành động
+		GAP_1: 1 / 5, // Khắc cách 1 ngôi -> Còn 80%
+		GAP_2: 1 / 10, // Khắc cách 2 ngôi -> Còn 90%
+		GAP_3: 1 / 20, // Khắc cách 3 ngôi (Năm - Giờ) -> Còn 95%
+	},
+
+	// --- ĐIỂM ĐẮC ĐỊA CHO NHẬT CHỦ (PDF 4, Trang 14 & 20) ---
+	LOC_SCORE: 4.05, // Đắc Lộc (Lâm Quan)
+	KINH_DUONG_SCORE: 4.3, // Đắc Kình Dương (Đế Vượng)
+
+	// --- TIÊU CHUẨN CƯỜNG NHƯỢC (PDF 4, Trang 12, Mục 12) ---
+	// Thân phải lớn hơn hành đối nghịch mạnh nhất ít nhất 1.0 đv.
+	THRESHOLD_OVERCOME: 1.0,
+	THRESHOLD_BLOCK: 0.1,
+
+	// --- HÓA CỤC ---
+	FACTOR_TRANSFORM_BONUS: 1.5,
+	LOSS_COMBINE_BINDING: 0.8,
+};
+
+// =============================================================================
+// 1c. ÁNH XẠ CHI -> CAN QUY CHUẨN VŨ LONG (PDF 4, Trang 20 & 22)
+// Địa Chi cặp cố định với Dương Can / Âm Can cùng hành để tra bảng 12 trạng thái.
+// Ví dụ: Ngọ luôn tính theo Bính (Đế Vượng = 10), không theo Tư Lệnh.
+// =============================================================================
+export const VULONG_BRANCH_TO_STEM: Record<EarthlyBranch, HeavenlyStem> = {
+	Dần: 'Giáp',
+	Mão: 'Ất',
+	Tỵ: 'Đinh',
+	Ngọ: 'Bính',
+	Thìn: 'Mậu',
+	Tuất: 'Mậu',
+	Sửu: 'Kỷ',
+	Mùi: 'Kỷ',
+	Thân: 'Canh',
+	Dậu: 'Tân',
+	Hợi: 'Quý',
+	Tý: 'Nhâm',
+};
+
+// =============================================================================
+// 9. THẦN SÁT (SHEN SHA) LOOKUP TABLES
+// =============================================================================
+
+// Thiên Ất Quý Nhân (tra theo Can Năm và Can Ngày) - Chuẩn sách Vũ Long
+export const THIEN_AT_QUY_NHAN: Record<HeavenlyStem, EarthlyBranch[]> = {
+	Giáp: ['Sửu', 'Mùi'],
+	Mậu: ['Sửu', 'Mùi'],
+	Canh: ['Dần', 'Ngọ'],
+	Ất: ['Tý', 'Thân'],
+	Kỷ: ['Tý', 'Thân'],
+	Bính: ['Hợi', 'Dậu'],
+	Đinh: ['Hợi', 'Dậu'],
+	Nhâm: ['Mão', 'Tỵ'],
+	Quý: ['Mão', 'Tỵ'],
+	Tân: ['Dần', 'Ngọ'],
+};
+
+// Văn Xương Quý Nhân (tra theo Can Ngày)
+export const VAN_XUONG: Record<HeavenlyStem, EarthlyBranch> = {
+	Giáp: 'Tỵ',
+	Ất: 'Ngọ',
+	Bính: 'Thân',
+	Đinh: 'Dậu',
+	Mậu: 'Thân',
+	Kỷ: 'Dậu',
+	Canh: 'Hợi',
+	Tân: 'Tý',
+	Nhâm: 'Dần',
+	Quý: 'Mão',
+};
+
+// Dịch Mã (tra theo Chi Năm hoặc Chi Ngày - Tam Hợp cục)
+export const DICH_MA: Record<EarthlyBranch, EarthlyBranch> = {
+	Thân: 'Dần',
+	Tý: 'Dần',
+	Thìn: 'Dần',
+	Dần: 'Thân',
+	Ngọ: 'Thân',
+	Tuất: 'Thân',
+	Tỵ: 'Hợi',
+	Dậu: 'Hợi',
+	Sửu: 'Hợi',
+	Hợi: 'Tỵ',
+	Mão: 'Tỵ',
+	Mùi: 'Tỵ',
+};
+
+// Đào Hoa / Hàm Trì (tra theo Chi Năm hoặc Chi Ngày - Tam Hợp cục)
+export const DAO_HOA: Record<EarthlyBranch, EarthlyBranch> = {
+	Thân: 'Dậu',
+	Tý: 'Dậu',
+	Thìn: 'Dậu',
+	Dần: 'Mão',
+	Ngọ: 'Mão',
+	Tuất: 'Mão',
+	Tỵ: 'Ngọ',
+	Dậu: 'Ngọ',
+	Sửu: 'Ngọ',
+	Hợi: 'Tý',
+	Mão: 'Tý',
+	Mùi: 'Tý',
+};
+
+// =============================================================================
 // 2. CÁC BẢNG TRA CỨU CƠ BẢN (Lookup Tables)
 // =============================================================================
 
@@ -454,6 +576,25 @@ export const BRANCH_SEASONAL_COMBINATIONS: Record<
 	Dậu: { group: ['Thân', 'Dậu', 'Tuất'], result: 'Kim' },
 	Tuất: { group: ['Thân', 'Dậu', 'Tuất'], result: 'Kim' },
 };
+
+// =============================================================================
+// 7b. ĐỊA CHI BÁN HỢP (HALF TRI-COMBINATIONS)
+// Hai chi trong bộ Tam Hợp, hóa cục mạnh nếu có Dẫn Thần thấu lộ.
+// =============================================================================
+export const BRANCH_HALF_COMBINATIONS: Array<{
+	pair: [EarthlyBranch, EarthlyBranch];
+	result: FiveElement;
+	requiredLead: FiveElement;
+}> = [
+	{ pair: ['Dần', 'Ngọ'], result: 'Hỏa', requiredLead: 'Hỏa' },
+	{ pair: ['Ngọ', 'Tuất'], result: 'Hỏa', requiredLead: 'Hỏa' },
+	{ pair: ['Thân', 'Tý'], result: 'Thủy', requiredLead: 'Thủy' },
+	{ pair: ['Tý', 'Thìn'], result: 'Thủy', requiredLead: 'Thủy' },
+	{ pair: ['Tỵ', 'Dậu'], result: 'Kim', requiredLead: 'Kim' },
+	{ pair: ['Dậu', 'Sửu'], result: 'Kim', requiredLead: 'Kim' },
+	{ pair: ['Hợi', 'Mão'], result: 'Mộc', requiredLead: 'Mộc' },
+	{ pair: ['Mão', 'Mùi'], result: 'Mộc', requiredLead: 'Mộc' },
+];
 
 // =============================================================================
 // 8. ĐỊA CHI LỤC XUNG (BRANCH CLASHES)

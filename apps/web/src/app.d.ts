@@ -31,7 +31,7 @@ declare global {
 			updated_at: string;
 		}
 
-		interface UserAddress = {
+		interface UserAddress {
 			id: number;
 			user_id: string;
 			address: string;
@@ -42,10 +42,86 @@ declare global {
 			is_default: number; // 0 hoặc 1
 			created_at: string;
 			updated_at: string;
-		};
+		}
+
+		interface BaziEnergyModification {
+			reason: string;
+			valueChange: number;
+			factor?: number;
+		}
+
+		interface BaziEnergyNode {
+			id: string;
+			source: 'Year' | 'Month' | 'Day' | 'Hour';
+			type: 'Stem' | 'Branch';
+			name: string;
+			element: string;
+			branchOwner?: string;
+			mainStem?: string;
+			lifeCycleStage: string;
+			baseScore: number;
+			currentScore: number;
+			isBlocked: boolean;
+			isActionLocked: boolean;
+			isCombined: boolean;
+			transformTo?: string;
+			modifications: BaziEnergyModification[];
+		}
+
+		interface BaziCenterAnalysis {
+			dayMasterScore: number;
+			selfElement: string;
+			elementScores: Record<string, number>;
+			locScore: number;
+			partyScore: number;
+			enemyScore: number;
+			maxEnemyElement: string;
+			maxEnemyScore: number;
+			diffScore: number;
+			isVwang: boolean;
+			isStrongVwang: boolean;
+			isWeakVwang: boolean;
+		}
+
+		interface BaziLimitScoreProfile {
+			pattern: string;
+			dungThan: string[];
+			hyThan: string[];
+			kyThan: string[];
+			hungThan: string[];
+			scores: Record<string, number>;
+		}
+
+		interface BaziInteraction {
+			type: 'TamHoi' | 'TamHop' | 'LucHop' | 'LucXung' | 'CanHop';
+			participants: string[];
+			result: string;
+			score?: number;
+			description?: string;
+		}
+
+		interface BaziAuditLogItem {
+			type: string;
+			level: string;
+			title: string;
+			content: string;
+			tag?: string;
+			pillar?: string;
+			scoreChange?: number;
+			currentScore?: number;
+			metadata?: Record<string, any>;
+		}
+
+		interface BaziAuditLogSection {
+			step: number;
+			name: string;
+			badge: string;
+			description?: string;
+			items: BaziAuditLogItem[];
+		}
+
 		/**
 		 * Represents the full Bazi profile object returned from the API.
-		 * This aligns with your `BaziProfileResponseSchema`.
 		 */
 		interface BaziProfile {
 			id: string;
@@ -62,46 +138,37 @@ declare global {
 			longitude?: number | null;
 			timezone_offset?: number | null;
 
-			// Calculated Bazi Data
-			year_stem: number;
-			year_branch: number;
-			month_stem: number;
-			month_branch: number;
-			day_stem: number;
-			day_branch: number;
-			hour_stem: number;
-			hour_branch: number;
+			// Calculated Bazi Data (Stems & Branches as text names)
+			year_stem: string;
+			year_branch: string;
+			month_stem: string;
+			month_branch: string;
+			day_stem: string;
+			day_branch: string;
+			hour_stem: string;
+			hour_branch: string;
 
-			// Analysis Results (can be null if not yet calculated)
+			// Analysis Results (Vu Long Engine)
 			day_master_status?: string | null;
 			structure_type?: string | null;
 			structure_name?: string | null;
 			analysis_reason?: string | null;
 			shen_sha?: string[] | null;
-			god_scores?: Record<string, number> | null;
-			score_details?: Array<{
-				source: string;
-				element: string;
-				score: number;
-				notes: string;
-			}> | null;
+
+			// Complex JSON Data
+			center_analysis?: BaziCenterAnalysis | null;
+			energy_flow?: BaziEnergyNode[] | null;
+			limit_score?: BaziLimitScoreProfile | null;
+			interactions?: BaziInteraction[] | null;
+
+			// Summary & Legacy fields
+			favorable_elements?: string[] | null;
 			party_score?: number | null;
 			enemy_score?: number | null;
-			percentage_self?: number | null;
-			interactions?: {
-				tamHoi: string | null;
-				sanHe: string | null;
-				lucXung: number[];
-				isMonthChanged: boolean;
-			} | null;
-			favorable_elements?: {
-				dung_than: string[];
-				hy_than: string[];
-				ky_than: string[];
-				cuu_than: string[];
-				nhan_than: string[];
-			} | null;
 			element_scores?: Record<string, number> | null;
+			god_scores?: Record<string, number> | null;
+			score_details?: BaziAuditLogSection[] | any | null;
+			percentage_self?: number | null;
 			luck_start_age?: number | null;
 
 			// Timestamps

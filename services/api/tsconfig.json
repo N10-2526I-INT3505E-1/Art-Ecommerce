@@ -22,14 +22,13 @@
 		"noUnusedLocals": false,
 		"noUnusedParameters": false,
 		"noPropertyAccessFromIndexSignature": false,
-		"baseUrl": "./src",
 		"paths": {
-			"@user/*": ["users/*"],
-			"@product/*": ["products/*"],
-			"@order/*": ["orders/*"],
-			"@payment/*": ["payments/*"],
-			"@common/*": ["common/*"],
-			"@main/*": ["*"]
+			"@user/*": ["./src/users/*"],
+			"@product/*": ["./src/products/*"],
+			"@order/*": ["./src/orders/*"],
+			"@payment/*": ["./src/payments/*"],
+			"@common/*": ["./src/common/*"],
+			"@main/*": ["./src/*"]
 		}
 	}
 }

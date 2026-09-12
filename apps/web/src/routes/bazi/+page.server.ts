@@ -12,7 +12,9 @@ export const load: PageServerLoad = async ({ locals, fetch, request }) => {
 	let baziProfile = null;
 	try {
 		const client = api({ fetch, request });
-		const response = await client.get(`users/profile/bazi`).json();
+		const response = (await client.get(`users/profile/bazi`).json()) as {
+			profile: App.BaziProfile;
+		};
 		baziProfile = response.profile;
 	} catch (error) {
 		// Profile doesn't exist yet - this is expected for new users
@@ -38,6 +40,16 @@ export const actions: Actions = {
 		const gender = data.get('gender')?.toString();
 		const birth_date = data.get('birth_date')?.toString(); // Format: YYYY-MM-DD
 		const birth_time = data.get('birth_time')?.toString(); // Format: HH:mm
+		const rawLongitude = data.get('longitude')?.toString();
+
+		// Parse longitude if provided
+		let longitude: number | undefined = undefined;
+		if (rawLongitude) {
+			const parsed = parseFloat(rawLongitude);
+			if (!isNaN(parsed) && parsed >= -180 && parsed <= 180) {
+				longitude = parsed;
+			}
+		}
 
 		// Validate required fields
 		if (!profile_name || !gender || !birth_date || !birth_time) {
@@ -70,7 +82,7 @@ export const actions: Actions = {
 
 		try {
 			const client = api({ fetch, request });
-			const response = await client
+			const response = (await client
 				.post(`users/profile/bazi`, {
 					json: {
 						profile_name,
@@ -80,9 +92,10 @@ export const actions: Actions = {
 						birth_year: year,
 						birth_hour: hour,
 						birth_minute: minute,
+						...(longitude !== undefined ? { longitude } : {}),
 					},
 				})
-				.json();
+				.json()) as { profile: App.BaziProfile };
 
 			return {
 				success: true,

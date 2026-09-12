@@ -496,6 +496,8 @@ export class UserService {
 			energy_flow: calculatedData.energy_flow,
 			limit_score: calculatedData.limit_score,
 			interactions: calculatedData.interactions,
+			shen_sha: calculatedData.shen_sha,
+			score_details: calculatedData.score_details,
 
 			// Legacy/Extra fields (Map từ kết quả mới sang)
 			favorable_elements: calculatedData.favorable_elements,

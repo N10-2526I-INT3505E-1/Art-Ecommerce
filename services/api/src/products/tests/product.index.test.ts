@@ -9,6 +9,31 @@ import {
 import { Elysia } from 'elysia';
 import { productsPlugin } from '../index';
 
+// The plugin signs and verifies JWTs, so the secret must be defined before it is built.
+process.env.JWT_SECRET = process.env.JWT_SECRET ?? 'test-secret';
+
+const base64Url = (input: string | Uint8Array) => Buffer.from(input).toString('base64url');
+
+async function signToken(payload: Record<string, unknown>): Promise<string> {
+	const encodedHeader = base64Url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+	const encodedPayload = base64Url(JSON.stringify(payload));
+	const key = await crypto.subtle.importKey(
+		'raw',
+		new TextEncoder().encode(process.env.JWT_SECRET as string),
+		{ name: 'HMAC', hash: 'SHA-256' },
+		false,
+		['sign'],
+	);
+	const signature = await crypto.subtle.sign(
+		'HMAC',
+		key,
+		new TextEncoder().encode(`${encodedHeader}.${encodedPayload}`),
+	);
+	return `${encodedHeader}.${encodedPayload}.${base64Url(new Uint8Array(signature))}`;
+}
+
+const TEST_TOKEN = await signToken({ id: 'user-123', email: 'user@example.com', role: 'manager' });
+
 // ========================================================================
 // 1. CONFIGURATION - Change API_VERSION to update all tests at once
 // ========================================================================
@@ -55,6 +80,7 @@ const MOCK_PRODUCT = {
 	slug: 'vintage-artwork',
 	stock: 10,
 	categoryId: 'cat-123',
+	category: null,
 	sourceUrl: 'http://source.com/art',
 	createdAt: new Date(),
 	deletedAt: null,
@@ -76,8 +102,7 @@ const MOCK_TAG = {
 
 const AUTH_HEADERS = {
 	'Content-Type': 'application/json',
-	'x-user-id': 'user-123',
-	'x-user-role': 'admin',
+	Authorization: `Bearer ${TEST_TOKEN}`,
 };
 
 // ========================================================================

@@ -66,6 +66,8 @@ export type PillarPosition = 'Year' | 'Month' | 'Day' | 'Hour';
 
 export interface Pillar {
 	position: PillarPosition;
+	canIndex: number;
+	chiIndex: number;
 	stem: HeavenlyStem;
 	branch: EarthlyBranch;
 	stemElement: FiveElement;
@@ -88,20 +90,25 @@ export interface NodeModification {
 	factor: number; // Hệ số tác động (nếu có, để tham khảo)
 }
 
+// Loại node theo Vũ Long: chỉ có Thiên Can (Stem) và Địa Chi (Branch, chấm theo Bản Khí).
+export type EnergyNodeType = 'Stem' | 'Branch';
+
 // Node năng lượng
 export interface EnergyNode {
-	id: string; // Deterministic ID: Pos_Type_Name
+	id: string; // Deterministic ID: Pos_Type
 	source: PillarPosition;
-	type: 'Stem' | 'HiddenStem';
-	name: string;
+	type: EnergyNodeType;
+	name: string; // Tên Can hoặc Chi ('Canh', 'Tuất'...)
 	element: FiveElement;
-	branchOwner?: EarthlyBranch;
+	branchOwner?: EarthlyBranch; // Chi gốc (với node Branch)
+	mainStem?: HeavenlyStem; // Bản khí của Chi (với node Branch)
 
 	lifeCycleStage: LifeCycleStage;
 	baseScore: number;
 	currentScore: number;
 
-	isBlocked: boolean; // True nếu năng lượng quá yếu hoặc bị khắc chết
+	isBlocked: boolean; // True nếu năng lượng triệt tiêu (điểm về 0)
+	isActionLocked: boolean; // True nếu bị khắc trực tiếp/khắc gần -> không sinh/khắc được nữa
 	isCombined: boolean; // True nếu đã tham gia hợp hóa
 	transformTo?: FiveElement; // Hành sau khi hóa
 
@@ -122,20 +129,71 @@ export interface Interaction {
 
 export interface CenterZoneAnalysis {
 	dayMasterScore: number;
-	partyScore: number;
-	enemyScore: number;
-	diffScore: number;
+	selfElement: FiveElement;
+	elementScores: Record<FiveElement, number>; // Điểm 5 hành trong Vùng Tâm
+	locScore: number; // Điểm đắc địa (Lộc/Kình Dương) đã cộng
+	partyScore: number; // = Điểm Thân (self)
+	enemyScore: number; // = Điểm hành địch mạnh nhất
+	maxEnemyElement: FiveElement;
+	maxEnemyScore: number;
+	diffScore: number; // Thân - max(địch)
 	isVwang: boolean;
 	isStrongVwang: boolean;
 	isWeakVwang: boolean;
 }
 
 export interface LimitScoreProfile {
+	pattern: string; // Tên mẫu áp dụng (Mẫu 1..5)
 	dungThan: FiveElement[];
 	hyThan: FiveElement[];
 	kyThan: FiveElement[];
 	hungThan: FiveElement[];
 	scores: Record<string, number>;
+}
+
+export type AuditLogItemType =
+	| 'init'
+	| 'interaction'
+	| 'overcome'
+	| 'strike'
+	| 'flow'
+	| 'decay'
+	| 'center'
+	| 'structure'
+	| 'pattern'
+	| 'dungthan'
+	| 'shensha'
+	| 'conclusion';
+
+export type AuditLogLevel =
+	| 'info'
+	| 'success'
+	| 'good'
+	| 'warning'
+	| 'error'
+	| 'danger'
+	| 'accent'
+	| 'neutral';
+
+export interface AuditLogItem {
+	type: AuditLogItemType;
+	level: AuditLogLevel;
+	title: string;
+	content: string;
+	tag?: string;
+	scoreChange?: number;
+	factor?: number;
+	pillar?: PillarPosition;
+}
+
+export interface AuditLogSection {
+	step: number;
+	title: string;
+	name?: string;
+	badge?: string;
+	summary?: string;
+	description?: string;
+	items: AuditLogItem[];
 }
 
 export interface BaziResult {
@@ -146,5 +204,7 @@ export interface BaziResult {
 	structure: string;
 	structureType: string; // 'Nội Cách' | 'Ngoại Cách'
 	limitScore: LimitScoreProfile;
+	shenSha: string[];
 	auditLogs: string[];
+	auditSections: AuditLogSection[];
 }

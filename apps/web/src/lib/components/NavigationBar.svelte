@@ -50,6 +50,7 @@
 <svelte:window bind:scrollY={y} />
 
 <div
+	data-transparent={isTransparent}
 	class="navbar fixed inset-x-0 top-0 z-50 h-16 w-full border-b px-2 transition-all duration-500 ease-in-out md:px-6
     {isTransparent
 		? 'border-transparent bg-transparent text-white'
@@ -360,7 +361,9 @@
 			<div class="hidden items-center gap-3 md:flex">
 				<a
 					href="/login"
-					class="btn btn-ghost btn-sm h-10 min-h-10 rounded-xl px-4 font-medium hover:bg-white/80"
+					class="btn btn-ghost btn-sm h-10 min-h-10 rounded-xl px-4 font-medium {isTransparent
+						? 'hover:bg-white/20'
+						: 'hover:bg-white/80'}"
 				>
 					Đăng nhập
 				</a>
@@ -374,3 +377,11 @@
 		{/if}
 	</div>
 </div>
+
+<style>
+	/* daisyUI's .btn-ghost sets its own color, so ghost controls don't inherit the
+	   navbar's text-white in transparent mode. Force white while transparent. */
+	:global(.navbar[data-transparent='true'] .btn-ghost) {
+		color: #fff;
+	}
+</style>

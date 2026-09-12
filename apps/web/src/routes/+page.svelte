@@ -384,11 +384,11 @@
 										decoding="async"
 										fetchpriority={idx < 2 ? 'high' : 'auto'}
 									/>
-									{#if product.categoryId}
+									{#if product.category?.name}
 										<div
 											class="badge badge-sm badge-neutral md:badge-md absolute top-2 left-2 border-none bg-black/70 text-[10px] text-white backdrop-blur-md md:top-3 md:left-3 md:text-xs"
 										>
-											{product.categoryId}
+											{product.category.name}
 										</div>
 									{/if}
 
@@ -507,11 +507,11 @@
 										loading="lazy"
 										decoding="async"
 									/>
-									{#if product.categoryId}
+									{#if product.category?.name}
 										<div
 											class="badge badge-sm badge-neutral md:badge-md absolute top-2 left-2 border-none bg-black/70 text-[10px] text-white backdrop-blur-md md:top-3 md:left-3 md:text-xs"
 										>
-											{product.categoryId}
+											{product.category.name}
 										</div>
 									{/if}
 
@@ -630,11 +630,11 @@
 										loading="lazy"
 										decoding="async"
 									/>
-									{#if product.categoryId}
+									{#if product.category?.name}
 										<div
 											class="badge badge-sm badge-neutral md:badge-md absolute top-2 left-2 border-none bg-black/70 text-[10px] text-white backdrop-blur-md md:top-3 md:left-3 md:text-xs"
 										>
-											{product.categoryId}
+											{product.category.name}
 										</div>
 									{/if}
 

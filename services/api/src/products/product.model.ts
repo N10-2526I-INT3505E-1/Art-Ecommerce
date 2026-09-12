@@ -81,6 +81,7 @@ export const insertProductBody = t.Object({
 
 export const updateProductBody = t.Partial(insertProductBody);
 export const selectProductSchema = createSelectSchema(products);
+export const selectCategorySchema = createSelectSchema(categories);
 
 export const productsRelations = relations(products, ({ one, many }) => ({
 	category: one(categories, { fields: [products.categoryId], references: [categories.id] }),

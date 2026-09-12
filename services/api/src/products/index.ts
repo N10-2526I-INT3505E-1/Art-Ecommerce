@@ -4,6 +4,7 @@ import { jwt } from '@elysiajs/jwt';
 import {
 	insertProductBody,
 	reduceStockBody,
+	selectCategorySchema,
 	selectProductSchema,
 	updateProductBody,
 } from '@product/product.model';
@@ -12,6 +13,7 @@ import { db } from './db';
 import type { ProductService } from './product.service';
 
 const ErrorSchema = t.Object({ message: t.String() });
+const productCategorySchema = t.Union([selectCategorySchema, t.Null()]);
 
 export const ensureRole = (user: any, role: string) => {
 	if (!user || user.role !== role) {
@@ -93,7 +95,7 @@ export const productsPlugin = async (dependencies: { productService: ProductServ
 						response: {
 							200: t.Object({
 								data: t.Array(
-									t.Composite([selectProductSchema, t.Object({ tags: t.Array(t.String()) })]),
+									t.Composite([selectProductSchema, t.Object({ tags: t.Array(t.String()), category: productCategorySchema })]),
 								),
 								pagination: t.Object({
 									page: t.Number(),
@@ -160,7 +162,7 @@ export const productsPlugin = async (dependencies: { productService: ProductServ
 					{
 						params: t.Object({ id: t.String() }),
 						response: {
-							200: t.Composite([selectProductSchema, t.Object({ tags: t.Array(t.String()) })]),
+							200: t.Composite([selectProductSchema, t.Object({ tags: t.Array(t.String()), category: productCategorySchema })]),
 							404: ErrorSchema,
 							500: ErrorSchema,
 						},

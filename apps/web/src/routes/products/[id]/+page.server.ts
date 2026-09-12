@@ -34,11 +34,8 @@ export const load: PageServerLoad = async ({ params, fetch, request }) => {
 			// Ensure price is positive (API example showed negative)
 			price: Math.abs(productData.price),
 			stock: Math.abs(productData.stock),
-			// Create a fallback category object
-			category: {
-				name: productData.categoryId || 'Sản phẩm',
-				slug: productData.categoryId || 'product',
-			},
+			// Use the category from the API, with a generic fallback
+			category: productData.category ?? { name: 'Sản phẩm', slug: 'product' },
 			images: images.length > 0 ? images : ['/placeholder.jpg'],
 			tags,
 			// Mock rating data as it's missing from API response

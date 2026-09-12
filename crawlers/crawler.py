@@ -1,16 +1,69 @@
-import requests
-from bs4 import BeautifulSoup
-import time
-import random
-import json
+"""
+Crawl demo products and load them into the Novus products database.
 
-# Link trang danh mục (ví dụ: Tranh phong cảnh vùng cao)
-BASE_URL = "https://bantranh.com"
-LIST_URL = "https://bantranh.com/pc/tranh-phong-canh-vung-cao/page/{}/" # Trang này có thể không phân trang kiểu ?page=1, cần kiểm tra kỹ
-API_URL = "http://localhost:3000/products"
+Source: Wikimedia Commons (https://commons.wikimedia.org).
+
+Why this source is safe:
+- Commons only hosts public-domain or freely-licensed media, and its API exposes a
+  machine-readable license per file. We skip anything flagged `Copyrighted: true` and
+  anything that is not a permissive license.
+- Both the Commons API (commons.wikimedia.org) and the image CDN used for the returned
+  thumbnail URLs (thumb.wikimedia.org / upload.wikimedia.org) reply with
+  `Access-Control-Allow-Origin: *`. Every image URL is checked for that header before
+  it is inserted, so `imageUrl` is safe to load cross-origin from the web app and from
+  the AI service.
+
+Note: Wikimedia only serves a fixed set of thumbnail widths. Do not rewrite the
+thumbnail URL by hand; use the exact `thumburl` the API returns (we request 960px).
+
+Usage:
+    python crawler.py --limit 12            # crawl + insert
+    python crawler.py --limit 12 --dry-run  # preview, no API/DB writes
+    python crawler.py --search "filetype:bitmap watercolor"
+
+Environment variables (flags win):
+    API_BASE_URL   default http://localhost:3000
+    API_USERNAME   default demo_manager
+    API_PASSWORD   default demo123456
+"""
+
+import argparse
+import json
+import os
+import random
+import re
+import sys
+import time
+from urllib.parse import urlparse, urlunparse
+
+import requests
+
+# Windows consoles default to cp1252, which cannot encode the Vietnamese/emoji output.
+for _stream in (sys.stdout, sys.stderr):
+	if hasattr(_stream, "reconfigure"):
+		_stream.reconfigure(encoding="utf-8", errors="replace")
+
+COMMONS_API = "https://commons.wikimedia.org/w/api.php"
+DEFAULT_SEARCH = "filetype:bitmap oil painting landscape"
+DEFAULT_CATEGORY = "Tranh nghệ thuật"
+CORS_ORIGIN = "https://novus.io.vn"
+THUMB_WIDTH = "960"
+
+ALLOWED_LICENSE_HINTS = ("public domain", "cc0", "cc-by", "cc by", "pd-")
+BLOCKED_LICENSE_HINTS = (
+	"non-commercial",
+	"noncommercial",
+	"nocreativecommons",
+	"fair use",
+	"non-free",
+	"all rights reserved",
+)
+
+# Giá bán demo (VND) — chọn ngẫu nhiên để sản phẩm trông tự nhiên.
+PRICE_TIERS = [450_000, 690_000, 890_000, 1_290_000, 1_890_000, 2_490_000]
 
 HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+	"User-Agent": "NovusDemoCrawler/1.0 (demo seeding; contact: demo_manager@novus.io.vn)"
 }
 
 # --- TỪ ĐIỂN PHONG THỦY (Để sinh Tags cho AI) ---
@@ -204,6 +257,7 @@ TOPIC_KEYS = [
     "thien_nhien", "canh_thien_nhien_chau_a"
 ]
 
+
 def generate_tags(text):
     text = text.lower()
     tags = []
@@ -249,6 +303,7 @@ def generate_tags(text):
                     break
 
                 # 8. Bố cục
+                elif key in COMPOSITION_KEYS:
                     tags.append(f"bo_cuc_{key}")
                     break
 
@@ -259,81 +314,239 @@ def generate_tags(text):
 
     return list(set(tags))
 
+
 # ----------------------------------------
-# 1. Crawler
+# 1. Wikimedia Commons source
 # ----------------------------------------
-def get_product_links(page):
-    print(f"🟦 Đang tải trang danh sách: {LIST_URL}")
-    url = LIST_URL.format(page)
-    res = requests.get(url, headers=HEADERS)
-    soup = BeautifulSoup(res.text, "html.parser")
-
-    product_links = []
-
-    cnt = 0
-    copy_href = ""
-    for a in soup.find_all("a", href=True):
-        href = a["href"]
-        if "/pd" in href and copy_href != href:
-            print(href)
-            product_links.append(href)
-            copy_href = href
-            cnt += 1
-    print(cnt)
-        
-    return product_links[:20]
-
-def get_product_detail(url):
-    time.sleep(random.uniform(0.5, 1.5))
-    res = requests.get(url, headers=HEADERS)
-    soup = BeautifulSoup(res.text, "html.parser")
-
-    title = soup.find("h1")
-    title = title.text.strip() if title else "Untitle"
-
-    price_tag = soup.select_one(".price") # Class .price phổ biến ở bantranh.com
-    price_raw = price_tag.text.strip() if price_tag else "0"
-    
-    try:
-        clean_price = float(price_raw.replace('.', '').replace(',', '').replace('₫', '').replace('vnđ', '').strip())
-    except:
-        clean_price = 0.0
-
-    img_tag = soup.find("img", class_="wp-post-image skip-lazy")
-    img_url = img_tag["src"] if img_tag else ""
-    if img_url and not img_url.startswith("http"):
-        img_url = "https:" + img_url # Xử lý nếu link thiếu https
-
-    category = "tranh phong cảnh vùng cao"
-    auto_tags = generate_tags(f"{title} {category}")
-
-    return {
-        "name": title,
-        "price": clean_price,
-        "imageUrl": img_url,
-        "categoryName": category,
-        "tags": auto_tags,
-        "description": f"Crawl from {url}",
-        "sourceUrl": url
-    }
-
-links = get_product_links(1)
-print(links)
-print(f"Find {len(links)} products")
-
-for link in links:
-    print("-> crawl:", link)
-    try:
-        data=get_product_detail(link)
-        print(json.dumps(data, ensure_ascii=False, indent=2))
+def strip_html(value):
+	return re.sub(r"<[^>]+>", " ", value or "").strip()
 
 
-        resp = requests.post(API_URL, json=data)
-        if resp.status_code != 201:
-            print(f"    ❌ Lỗi API: {resp.text}")
-    except Exception as e:
-        print(e)
-    
-    
+def strip_query(url):
+	"""Drop tracking query params (e.g. ?utm_source=...) from a URL."""
+	return urlunparse(urlparse(url)._replace(query=""))
 
 
+def clean_date(value):
+	"""Strip Commons' hidden Wikidata markup (e.g. '1831 date QS:P571,...') from a date."""
+	return re.split(r"\s*(?:date |label )?QS:", strip_html(value))[0].strip(" ,;")
+
+
+def commons_request(params):
+	params = {**params, "format": "json", "origin": "*"}
+	res = requests.get(COMMONS_API, params=params, headers=HEADERS, timeout=30)
+	res.raise_for_status()
+	return res.json()
+
+
+def parse_artwork(page):
+	"""Map a Commons API page to product fields, or None if not reusable."""
+	info = (page.get("imageinfo") or [{}])[0]
+	meta = info.get("extmetadata") or {}
+
+	license_name = strip_html(meta.get("LicenseShortName", {}).get("value"))
+	lowered = license_name.lower()
+	copyrighted = strip_html(meta.get("Copyrighted", {}).get("value")).lower()
+
+	if copyrighted == "true":
+		return None
+	if any(bad in lowered for bad in BLOCKED_LICENSE_HINTS):
+		return None
+	if license_name and not any(hint in lowered for hint in ALLOWED_LICENSE_HINTS):
+		return None
+
+	image_url = strip_query(info.get("thumburl") or info.get("url") or "")
+	source_url = info.get("descriptionurl")
+	if not image_url or not source_url:
+		return None
+
+	title = strip_html(page.get("title", ""))
+	title = re.sub(r"^File:", "", title)
+	title = re.sub(r"\.(jpe?g|png|webp|tiff?|gif)$", "", title, flags=re.IGNORECASE).strip()
+
+	categories = strip_html(meta.get("Categories", {}).get("value"))
+
+	return {
+		"name": title or "Untitled artwork",
+		"imageUrl": image_url,
+		"sourceUrl": source_url,
+		"artist": strip_html(meta.get("Artist", {}).get("value")),
+		"medium": strip_html(meta.get("Medium", {}).get("value")),
+		"date": clean_date(meta.get("DateTimeOriginal", {}).get("value")),
+		"license": license_name or "Free license",
+		"categories": [c for c in categories.split("|") if c],
+	}
+
+
+def fetch_artworks(limit, search):
+	artworks = []
+	offset = None
+
+	while len(artworks) < limit:
+		params = {
+			"action": "query",
+			"generator": "search",
+			"gsrsearch": search,
+			"gsrnamespace": "6",  # File: namespace
+			"gsrlimit": str(min(50, limit - len(artworks))),
+			"prop": "imageinfo",
+			"iiprop": "url|extmetadata",
+			"iiurlwidth": THUMB_WIDTH,
+		}
+		if offset is not None:
+			params["gsroffset"] = str(offset)
+
+		data = commons_request(params)
+		pages = (data.get("query") or {}).get("pages") or {}
+		if not pages:
+			break
+
+		for page in pages.values():
+			art = parse_artwork(page)
+			if art:
+				artworks.append(art)
+				if len(artworks) >= limit:
+					break
+
+		offset = (data.get("continue") or {}).get("gsroffset")
+		if offset is None:
+			break
+		time.sleep(0.2)
+
+	return artworks
+
+
+def is_cors_enabled(url):
+	"""Return True when the image host allows cross-origin reads."""
+	try:
+		res = requests.get(
+			url, headers={**HEADERS, "Origin": CORS_ORIGIN}, stream=True, timeout=30
+		)
+		res.close()
+		allowed = res.headers.get("Access-Control-Allow-Origin")
+		return allowed in ("*", CORS_ORIGIN)
+	except requests.RequestException as exc:
+		print(f"    ! Không kiểm tra được CORS: {exc}")
+		return False
+
+
+# ----------------------------------------
+# 2. Build the product payload
+# ----------------------------------------
+def slugify(value):
+	return re.sub(r"[^a-z0-9]+", "-", value.lower()).strip("-")
+
+
+def build_product(art, category):
+	haystack = " ".join(
+		[art["name"], art["artist"], art["medium"], " ".join(art["categories"])]
+	)
+	tags = generate_tags(haystack)
+	tags.append(f"giay_phep_{slugify(art['license'])}")
+	tags.append("nguon_wikimedia-commons")
+	if art["artist"]:
+		tags.append(f"tac_gia_{slugify(art['artist'])}")
+	if art["medium"]:
+		tags.append(f"chat_lieu_{slugify(art['medium'])}")
+
+	description = [art["name"]]
+	if art["artist"]:
+		description.append(f"bởi {art['artist']}")
+	if art["date"]:
+		description.append(art["date"])
+	if art["medium"]:
+		description.append(art["medium"])
+
+	return {
+		"name": art["name"][:180],
+		"price": random.choice(PRICE_TIERS),
+		"imageUrl": art["imageUrl"],
+		"description": ", ".join(description)
+		+ f". Nguồn ảnh: Wikimedia Commons ({art['license']}).",
+		"sourceUrl": art["sourceUrl"],
+		"categoryName": category,
+		"tags": sorted(set(tags))[:25],
+		"stock": random.randint(1, 20),
+	}
+
+
+# ----------------------------------------
+# 3. Novus API client
+# ----------------------------------------
+def login(session, base_url, username, password):
+	res = session.post(
+		f"{base_url}/v1/sessions",
+		json={"username": username, "password": password},
+		timeout=30,
+	)
+	if res.status_code not in (200, 201):
+		raise SystemExit(f"❌ Đăng nhập thất bại ({res.status_code}): {res.text}")
+	return res.json()["accessToken"]
+
+
+def push_product(session, base_url, token, product):
+	return session.post(
+		f"{base_url}/v1/products",
+		json=product,
+		headers={"Authorization": f"Bearer {token}"},
+		timeout=30,
+	)
+
+
+# ----------------------------------------
+# 4. Entry point
+# ----------------------------------------
+def main():
+	parser = argparse.ArgumentParser(
+		description="Crawl ảnh public-domain từ Wikimedia Commons vào API Novus."
+	)
+	parser.add_argument("--limit", type=int, default=12, help="Số sản phẩm cần crawl.")
+	parser.add_argument("--search", default=DEFAULT_SEARCH, help="Từ khóa tìm trên Commons.")
+	parser.add_argument("--category", default=DEFAULT_CATEGORY, help="categoryName gửi lên API.")
+	parser.add_argument(
+		"--api-base-url", default=os.environ.get("API_BASE_URL", "http://localhost:3000")
+	)
+	parser.add_argument("--username", default=os.environ.get("API_USERNAME", "demo_manager"))
+	parser.add_argument("--password", default=os.environ.get("API_PASSWORD", "demo123456"))
+	parser.add_argument("--dry-run", action="store_true", help="Chỉ in dữ liệu, không ghi API/DB.")
+	parser.add_argument("--skip-cors-check", action="store_true", help="Bỏ qua kiểm tra CORS.")
+	args = parser.parse_args()
+
+	print(f"🔎 Tìm {args.limit} tác phẩm trên Wikimedia Commons: {args.search!r}")
+	artworks = fetch_artworks(args.limit, args.search)
+	if not artworks:
+		sys.exit("❌ Không tìm thấy tác phẩm nào phù hợp (thử đổi --search).")
+
+	base_url = args.api_base_url.rstrip("/")
+	session = requests.Session()
+	token = None
+	if not args.dry_run:
+		token = login(session, base_url, args.username, args.password)
+
+	inserted = 0
+	for art in artworks:
+		product = build_product(art, args.category)
+		print(f"\n→ {product['name']}  [{art['license']}]")
+		print(f"  {product['imageUrl']}")
+
+		if not args.skip_cors_check and not is_cors_enabled(product["imageUrl"]):
+			print("  ⏭  Bỏ qua: ảnh không cho phép CORS.")
+			continue
+
+		if args.dry_run:
+			print(json.dumps(product, ensure_ascii=False, indent=2))
+			inserted += 1
+			continue
+
+		res = push_product(session, base_url, token, product)
+		if res.status_code == 201:
+			print(f"  ✅ Đã thêm vào DB (id={res.json().get('id')})")
+			inserted += 1
+		else:
+			print(f"  ❌ API {res.status_code}: {res.text}")
+
+	print(f"\n🎉 Hoàn tất: {inserted}/{len(artworks)} sản phẩm.")
+
+
+if __name__ == "__main__":
+	main()

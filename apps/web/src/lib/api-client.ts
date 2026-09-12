@@ -13,7 +13,7 @@ const defaultPrefix =
 	) + 'v1/';
 
 export const api = ky.create({
-	prefixUrl: defaultPrefix,
+	prefix: defaultPrefix,
 	credentials: 'include',
 	timeout: 10000,
 	retry: 0,

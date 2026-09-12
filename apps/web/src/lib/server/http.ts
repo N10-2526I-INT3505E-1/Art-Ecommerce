@@ -53,7 +53,7 @@ export function api(
 	}
 
 	const defaultOptions: Options = {
-		prefixUrl: defaultPrefix,
+		prefix: defaultPrefix,
 		credentials: 'include',
 		fetch: event.fetch as typeof globalThis.fetch,
 		timeout: 10000,

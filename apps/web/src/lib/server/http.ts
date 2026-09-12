@@ -61,7 +61,7 @@ export function api(
 		headers,
 		hooks: {
 			afterResponse: [
-				async (_request, _options, response) => {
+				async ({ response }) => {
 					if (!response.ok) {
 						const errBody = await response.clone().text();
 						console.error(`API Error [${response.status}]: ${response.url}`, errBody);

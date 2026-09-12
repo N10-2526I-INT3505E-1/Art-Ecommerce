@@ -432,7 +432,7 @@
 	}
 
 	:global(.font-montserrat) {
-		font-family: 'Montserrat', 'Inter', sans-serif;
+		font-family: 'Montserrat Variable', 'Inter', sans-serif;
 	}
 
 	/* Prose styling for content */

@@ -6,12 +6,14 @@
 	import '@fontsource/cormorant-sc';
 	import '@fontsource-variable/montserrat';
 
-	import { onMount } from 'svelte';
-	import { Spring } from 'svelte/motion';
 	import { browser } from '$app/environment';
 	import { page } from '$app/state';
 	import { PUBLIC_API_URL } from '$env/static/public';
 	import { BookOpenText } from 'lucide-svelte';
+
+	// Svelte 5 Motion & Reactivity Utilities
+	import { Spring, prefersReducedMotion } from 'svelte/motion';
+	import { MediaQuery } from 'svelte/reactivity';
 
 	import favicon from '$lib/assets/favicon.png';
 	import AIChatWidget from '$lib/components/AIChatWidget.svelte';
@@ -21,158 +23,136 @@
 	import type { LayoutProps } from './$types';
 
 	let { children, data }: LayoutProps = $props();
-
 	const baziProfile = $derived(data.baziProfile);
 
 	const INTERACTIVE_SELECTOR =
 		'a, button, input, textarea, select, label, [role="button"], [role="link"], [tabindex]:not([tabindex="-1"]), .cursor-pointer';
 
-	const mouse = new Spring(
-		{ x: 0, y: 0 },
-		{
-			stiffness: 0.15,
-			damping: 0.8,
-			precision: 0.1,
-		},
+	// Reactive detection: fine pointer & reduced motion (built-in Svelte 5)
+	const finePointer = new MediaQuery('(pointer: fine)', false);
+	const hasCustomCursor = $derived(finePointer.current && !prefersReducedMotion.current);
+
+	// Spring for the outer trailing ring (fluid & elastic)
+	const ring = new Spring(
+		{ x: -100, y: -100 },
+		{ stiffness: 0.18, damping: 0.72, precision: 0.02 }
 	);
 
-	let showCursor = $state(false);
-	let cursorDown = $state(false);
-	let overInteractive = $state(false);
-	let isPageVisible = $state(true);
-	let cursorEl: HTMLDivElement | null = $state(null);
+	// Instant pinpoint coordinates (0ms lag for accurate clicking)
+	let dotX = $state(-100);
+	let dotY = $state(-100);
 
-	let rafId: number | null = null;
-	let pendingX = 0;
-	let pendingY = 0;
-	let pendingTarget: EventTarget | null = null;
-	let lastInteractiveCheck = 0;
-	const INTERACTIVE_CHECK_INTERVAL = 50;
+	let isVisible = $state(false);
+	let isDown = $state(false);
+	let isInteractive = $state(false);
 
-	let cachedElement: Element | null = null;
-	let cachedResult = false;
+	let cachedTarget: EventTarget | null = null;
 
-	function checkInteractive(target: EventTarget | null): boolean {
-		if (!target || !(target instanceof Element)) return false;
-		const interactiveParent = target.closest(INTERACTIVE_SELECTOR);
-		if (interactiveParent === cachedElement) return cachedResult;
-		cachedElement = interactiveParent;
-		cachedResult = interactiveParent !== null;
-		return cachedResult;
+	function checkInteractive(target: EventTarget | null) {
+		if (target === cachedTarget) return;
+		cachedTarget = target;
+		isInteractive = target instanceof Element && target.closest(INTERACTIVE_SELECTOR) !== null;
 	}
 
-	function flushCursorUpdate() {
-		rafId = null;
-		mouse.target = { x: pendingX, y: pendingY };
-		const now = performance.now();
-		if (now - lastInteractiveCheck >= INTERACTIVE_CHECK_INTERVAL) {
-			lastInteractiveCheck = now;
-			const newInteractive = checkInteractive(pendingTarget);
-			if (newInteractive !== overInteractive) overInteractive = newInteractive;
-		}
+	function handlePointerMove(e: PointerEvent) {
+		if (!hasCustomCursor) return;
+
+		dotX = e.clientX;
+		dotY = e.clientY;
+		ring.target = { x: e.clientX, y: e.clientY };
+
+		if (!isVisible) isVisible = true;
+		checkInteractive(e.target);
 	}
 
-	function handleMouseMove(event: PointerEvent) {
-		if (!isPageVisible) return;
-		pendingX = event.clientX;
-		pendingY = event.clientY;
-		pendingTarget = event.target;
-		if (rafId === null) rafId = requestAnimationFrame(flushCursorUpdate);
-		if (!showCursor) showCursor = true;
+	function handlePointerDown() {
+		isDown = true;
 	}
 
-	function handleMouseLeave() {
-		showCursor = false;
-		overInteractive = false;
-		cachedElement = null;
-		if (rafId !== null) {
-			cancelAnimationFrame(rafId);
-			rafId = null;
-		}
+	function handlePointerUp() {
+		isDown = false;
 	}
 
 	function handleMouseEnter() {
-		showCursor = true;
+		isVisible = true;
 	}
-	function handleMouseDown() {
-		cursorDown = true;
-	}
-	function handleMouseUp() {
-		cursorDown = false;
+
+	function handleMouseLeave() {
+		isVisible = false;
+		cachedTarget = null;
+		isInteractive = false;
 	}
 
 	function handleVisibilityChange() {
-		isPageVisible = !document.hidden;
-		if (document.hidden && rafId !== null) {
-			cancelAnimationFrame(rafId);
-			rafId = null;
-		}
+		if (document.hidden) isVisible = false;
 	}
 
+	// Synchronize html class with reactivity
 	$effect(() => {
-		if (!cursorEl) return;
-		const x = mouse.current.x;
-		const y = mouse.current.y;
-		cursorEl.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%)`;
-	});
-
-	onMount(() => {
 		if (!browser) return;
-		if (navigator.userAgent.includes('Firefox')) {
-			document.documentElement.classList.add('platform-firefox');
-		}
-		const hasFineCursor = window.matchMedia('(pointer: fine)').matches;
-		if (hasFineCursor) {
-			showCursor = true;
-			document.documentElement.classList.add('has-custom-cursor');
-		}
-		document.addEventListener('visibilitychange', handleVisibilityChange);
-		return () => {
-			document.removeEventListener('visibilitychange', handleVisibilityChange);
-			if (rafId !== null) cancelAnimationFrame(rafId);
-		};
+		document.documentElement.classList.toggle('has-custom-cursor', hasCustomCursor);
 	});
 
 	const isAuthPage = $derived(['/login', '/register'].includes(page.url.pathname));
 	const isManagePage = $derived(page.url.pathname.startsWith('/manage'));
-	const isHomePage = $derived(page.url.pathname === '/');
 </script>
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
 </svelte:head>
 
+<!-- Declarative event listeners with automatic lifecycle cleanup -->
 <svelte:window
-	onpointermove={handleMouseMove}
-	onmouseleave={handleMouseLeave}
+	onpointermove={handlePointerMove}
+	onpointerdown={handlePointerDown}
+	onpointerup={handlePointerUp}
+/>
+<svelte:body
 	onmouseenter={handleMouseEnter}
-	onmousedown={handleMouseDown}
-	onmouseup={handleMouseUp}
+	onmouseleave={handleMouseLeave}
+/>
+<svelte:document
+	onvisibilitychange={handleVisibilityChange}
 />
 
 <ToastContainer />
 
-{#if showCursor}
+{#if hasCustomCursor}
 	<div
-		bind:this={cursorEl}
-		class="circle-cursor"
-		class:is-down={cursorDown}
-		class:is-interactive={overInteractive}
+		class="cursor-root"
+		class:is-hidden={!isVisible}
 		aria-hidden="true"
-	></div>
+	>
+		<!-- Trailing Spring Ring -->
+		<div
+			class="cursor-tracker"
+			style:transform="translate3d({ring.current.x}px, {ring.current.y}px, 0)"
+		>
+			<div
+				class="ring-visual"
+				class:is-interactive={isInteractive}
+				class:is-down={isDown}
+			></div>
+		</div>
+
+		<!-- Zero-Latency Interaction Dot -->
+		<div
+			class="cursor-tracker"
+			style:transform="translate3d({dotX}px, {dotY}px, 0)"
+		>
+			<div
+				class="dot-visual"
+				class:is-interactive={isInteractive}
+				class:is-down={isDown}
+			></div>
+		</div>
+	</div>
 {/if}
 
-<!-- 
-    App Shell Structure
-    - h-dvh: Uses dynamic viewport height (mobile friendly)
-    - bg-base-100: Ensures background color matches theme
-    - antialiased: Better font rendering
--->
 <div
 	class="bg-base-100 text-base-content selection:bg-primary flex min-h-dvh w-full flex-col antialiased selection:text-white"
 >
 	{#if !isAuthPage}
-		<!-- Navbar handles its own positioning (Sticky vs Fixed) -->
 		<NavigationBar />
 	{/if}
 
@@ -219,7 +199,7 @@
 	}
 
 	main::-webkit-scrollbar-thumb {
-		background-color: rgba(156, 163, 175, 0.3); /* gray-400/30 */
+		background-color: rgba(156, 163, 175, 0.3);
 		border-radius: 20px;
 	}
 
@@ -229,10 +209,7 @@
 
 	/* Global Cursor Reset */
 	:global(html.has-custom-cursor),
-	:global(html.has-custom-cursor body) {
-		cursor: none;
-	}
-
+	:global(html.has-custom-cursor body),
 	:global(html.has-custom-cursor a),
 	:global(html.has-custom-cursor button),
 	:global(html.has-custom-cursor [role='button']),
@@ -246,71 +223,80 @@
 		scroll-snap-align: start;
 	}
 
-	/* Optimized Cursor */
-	.circle-cursor {
+	/* Cursor System */
+	.cursor-root {
 		position: fixed;
 		top: 0;
 		left: 0;
-		z-index: 9999;
-
-		/* Hardware Acceleration */
-		will-change: transform, width, height, border-width;
-		backface-visibility: hidden;
-		transform: translate3d(0, 0, 0); /* Initial state handled by JS */
-
-		/* Appearance */
-		width: 24px;
-		height: 24px;
-		border-radius: 50%;
-		border: 1.5px solid white;
-		background-color: transparent;
-
-		/* Interaction */
+		z-index: 99999;
 		pointer-events: none;
 		user-select: none;
 		mix-blend-mode: difference;
-
-		/* Transitions */
-		transition:
-			width 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-			height 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-			border-width 0.2s ease,
-			background-color 0.2s ease,
-			opacity 0.2s ease;
+		opacity: 1;
+		transition: opacity 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 	}
 
-	.circle-cursor.is-down {
+	.cursor-root.is-hidden {
+		opacity: 0;
+	}
+
+	/* Fast Positioner (handles translate3d only) */
+	.cursor-tracker {
+		position: fixed;
+		top: 0;
+		left: 0;
+		will-change: transform;
+	}
+
+	/* Visual Child Elements (handles scale, color, opacity only) */
+	.dot-visual {
+		width: 6px;
+		height: 6px;
+		margin: -3px 0 0 -3px;
+		border-radius: 50%;
+		background-color: #ffffff;
+		will-change: transform, opacity;
+		transition: transform 0.15s ease-out, opacity 0.15s ease;
+	}
+
+	.dot-visual.is-down {
+		transform: scale(0.6);
+	}
+
+	.dot-visual.is-interactive {
+		opacity: 0;
+		transform: scale(0);
+	}
+
+	.ring-visual {
 		width: 32px;
 		height: 32px;
-		border-width: 2px;
-		background-color: rgba(255, 255, 255, 0.1);
+		margin: -16px 0 0 -16px;
+		border-radius: 50%;
+		border: 1.5px solid #ffffff;
+		background-color: transparent;
+		will-change: transform;
+		transform-origin: center center;
+		transition:
+			transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+			background-color 0.2s ease,
+			border-color 0.2s ease;
 	}
 
-	.circle-cursor.is-interactive {
-		width: 48px;
-		height: 48px;
-		border-width: 1px;
-		background-color: rgba(255, 255, 255, 0.1);
-		backdrop-filter: blur(1px); /* Subtle glass effect inside cursor */
-		border-color: rgba(255, 255, 255, 0.8);
+	/* Pure Compositor Scaling */
+	.ring-visual.is-down {
+		transform: scale(0.8);
+		background-color: rgba(255, 255, 255, 0.25);
 	}
 
-	.circle-cursor.is-interactive.is-down {
-		width: 40px;
-		height: 40px;
-		border-width: 2px;
-		background-color: rgba(255, 255, 255, 0.3);
+	.ring-visual.is-interactive {
+		transform: scale(1.6);
+		background-color: rgba(255, 255, 255, 0.18);
+		border-color: rgba(255, 255, 255, 0.95);
 	}
 
-	@media (prefers-reduced-motion: reduce) {
-		.circle-cursor {
-			transition: none;
-		}
-	}
-
-	@media (pointer: coarse) {
-		.circle-cursor {
-			display: none !important;
-		}
+	.ring-visual.is-interactive.is-down {
+		transform: scale(1.3);
+		background-color: rgba(255, 255, 255, 0.35);
 	}
 </style>

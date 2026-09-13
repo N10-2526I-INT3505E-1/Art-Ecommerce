@@ -23,9 +23,8 @@ async function refreshAccessToken(event: Parameters<Handle>[0]['event']): Promis
 			.json<{ accessToken: string }>();
 
 		const newAccessToken = response.accessToken;
-		console.log('Refreshed access token:', newAccessToken);
 
-		const cookieDomain = isProduction ? '.novus.io.vn' : 'localhost';
+		const cookieDomain = isProduction ? '.novus.io.vn' : undefined;
 
 		event.cookies.set('auth', newAccessToken, {
 			path: '/',
@@ -38,22 +37,37 @@ async function refreshAccessToken(event: Parameters<Handle>[0]['event']): Promis
 
 		return newAccessToken;
 	} catch (error) {
-		console.error('Token refresh failed:', error);
+		// Distinguish a rejected token from an unreachable API. A timeout or 5xx
+		// (e.g. a free-tier cold start) does NOT mean the refresh token is invalid,
+		// so keep the cookies — only clear them when the API explicitly rejects it.
+		const rejected = error instanceof HTTPError && [401, 403].includes(error.response.status);
+		const cookieDomain = isProduction ? '.novus.io.vn' : undefined;
 
-		const cookieDomain = isProduction ? '.novus.io.vn' : 'localhost';
-		const clearOptions = { path: '/', domain: cookieDomain };
+		if (rejected) {
+			console.error(
+				`Token refresh rejected (${error.response.status}), clearing session cookies`,
+			);
+			const clearOptions = { path: '/', domain: cookieDomain };
+			event.cookies.delete('auth', clearOptions);
+			event.cookies.delete('refresh_token', clearOptions);
+		} else {
+			console.error('Token refresh failed (transient, keeping session):', error);
+		}
 
-		event.cookies.delete('auth', clearOptions);
-		event.cookies.delete('refresh_token', clearOptions);
 		return null;
 	}
 }
+
+type FetchUserResult = 'ok' | 'unauthorized' | 'error';
 
 /**
  * Fetch and set user from /profile endpoint
  * @param token - Explicit token to use (overrides cookie)
  */
-async function fetchUser(event: Parameters<Handle>[0]['event'], token?: string): Promise<boolean> {
+async function fetchUser(
+	event: Parameters<Handle>[0]['event'],
+	token?: string,
+): Promise<FetchUserResult> {
 	try {
 		const client = api(event, token ? { token } : {});
 		const responseData: unknown = await client.get('users/profile').json();
@@ -65,17 +79,17 @@ async function fetchUser(event: Parameters<Handle>[0]['event'], token?: string):
 			responseData.user
 		) {
 			event.locals.user = responseData.user as App.User;
-			return true;
+			return 'ok';
 		}
 
 		console.log('Invalid API response structure:', responseData);
-		return false;
+		return 'error';
 	} catch (error) {
 		if (error instanceof HTTPError && error.response.status === 401) {
-			return false; // Unauthorized
+			return 'unauthorized';
 		}
 		console.error('Error fetching user:', error);
-		return false;
+		return 'error';
 	}
 }
 
@@ -95,20 +109,26 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// Step 2: If we have a token (existing or just refreshed), try to fetch user
 	if (token) {
 		// Pass the token explicitly to ensure we use the current token
-		const success = await fetchUser(event, token);
+		const result = await fetchUser(event, token);
 
-		// Step 3: If unauthorized (success is false), try to refresh and retry once
-		if (!success) {
+		// Step 3: Only a definitive 401 means the access token is stale, so refresh
+		// once and retry. A transient failure (timeout, 5xx, network) must not trigger
+		// a refresh cascade — that just piles more doomed requests onto a struggling
+		// API and can end up clearing a perfectly valid session.
+		if (result === 'unauthorized') {
 			const refreshedToken = await refreshAccessToken(event);
 
 			if (refreshedToken) {
-				const retrySuccess = await fetchUser(event, refreshedToken);
-				if (!retrySuccess) {
+				const retryResult = await fetchUser(event, refreshedToken);
+				if (retryResult !== 'ok') {
 					event.locals.user = null;
 				}
 			} else {
 				event.locals.user = null;
 			}
+		} else if (result === 'error') {
+			// API unreachable — keep the session cookies for the next request.
+			event.locals.user = null;
 		}
 	}
 
